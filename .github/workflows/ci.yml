@@ -1,0 +1,159 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run build
+      - run: bun run test:cov
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run e2e
+
+  rust:
+    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - if: runner.os == 'Windows'
+        run: |
+          choco install nasm --version=2.16.3 --yes --no-progress
+          echo 'C:\Program Files\NASM' >> "$GITHUB_PATH"
+      - if: runner.os == 'Windows'
+        run: |
+          echo 'OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe' >> "$GITHUB_ENV"
+          echo 'C:\Strawberry\perl\bin' >> "$GITHUB_PATH"
+      - if: runner.os == 'Windows'
+        run: |
+          test -x "$OPENSSL_SRC_PERL"
+          "$OPENSSL_SRC_PERL" -e "use Locale::Maketext::Simple; print 1"
+          "$OPENSSL_SRC_PERL" -v
+          nasm -v
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libsecret-1-dev libayatana-appindicator3-dev librsvg2-dev build-essential pkg-config libssl-dev gnome-keyring dbus dbus-x11 xvfb
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: 1.100.0
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
+        with:
+          workspaces: src-tauri
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - id: rust-unit-test
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - if: failure() && steps.rust-unit-test.outcome == 'failure' && runner.os == 'Windows'
+        run: |
+          for exe in src-tauri/target/debug/deps/spa_app_lib-*.exe; do
+            [ -e "$exe" ] || continue
+            echo "running ${exe}"
+            "${exe}" --nocapture || echo "exit code $?"
+          done
+      - run: |
+          if [ -n "$(git status --porcelain -- src/lib/bindings.ts)" ]; then
+            git --no-pager diff --stat -- src/lib/bindings.ts
+            git --no-pager diff --ignore-space-at-eol --stat -- src/lib/bindings.ts
+            git --no-pager diff --ignore-space-at-eol -- src/lib/bindings.ts | head -40
+            git --no-pager diff -- src/lib/bindings.ts | head -40 | cat -A | head -40
+            exit 1
+          fi
+      - if: runner.os == 'macOS'
+        run: |
+          keychain_password="$(openssl rand -hex 24)"
+          echo "::add-mask::${keychain_password}"
+          keychain_path="${RUNNER_TEMP}/ci.keychain-db"
+          security create-keychain -p "${keychain_password}" "${keychain_path}"
+          security default-keychain -s "${keychain_path}"
+          security unlock-keychain -p "${keychain_password}" "${keychain_path}"
+          security set-keychain-settings -lut 21600 "${keychain_path}"
+      - if: runner.os == 'Linux'
+        run: |
+          dbus-run-session -- bash -c 'echo "" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && xvfb-run -a cargo test --locked --manifest-path src-tauri/Cargo.toml --features real-keyring'
+      - if: runner.os != 'Linux'
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features real-keyring
+      - run: bunx tauri build --debug --no-bundle -- --locked
+
+  deps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun audit
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39
+        with:
+          tool: cargo-deny@0.20.2
+      - run: cd src-tauri && cargo deny --locked check
+
+  core-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libsecret-1-dev libayatana-appindicator3-dev librsvg2-dev build-essential pkg-config libssl-dev
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: 1.100.0
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
+        with:
+          workspaces: src-tauri
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39
+        with:
+          tool: cargo-llvm-cov@0.9.1
+      - run: cargo llvm-cov --locked --manifest-path src-tauri/Cargo.toml --ignore-filename-regex '(_test\.rs$|src-tauri/tests/|src-tauri/src/main\.rs$)' --fail-under-lines 80

@@ -1,0 +1,13 @@
+.codegraph/
+.next
+out
+coverage
+test-results
+playwright-report
+node_modules
+next-env.d.ts
+*.tsbuildinfo
+.env*
+!.env.example
+src-tauri/target
+src-tauri/gen

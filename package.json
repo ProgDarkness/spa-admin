@@ -1,0 +1,62 @@
+{
+  "name": "spa-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "e2e": "playwright test",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^7.0.6",
+    "@tanstack/react-query": "^5.107.1",
+    "@tauri-apps/api": "2.12.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.72.0",
+    "next": "^16.4.6",
+    "radix-ui": "^1.8.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-hook-form": "^7.92.0",
+    "tailwind-merge": "^3.7.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.65.0",
+    "@tailwindcss/postcss": "^4.3.5",
+    "@tauri-apps/cli": "2.12.4",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.10",
+    "@types/node": "^20.19.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "@vitest/coverage-v8": "^4.1.12",
+    "eslint": "^10.14.0",
+    "eslint-config-next": "^16.4.6",
+    "jsdom": "^27.4.0",
+    "postcss": "^8.5.32",
+    "serve": "14.2.7",
+    "tailwindcss": "^4.3.5",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12",
+    "yaml": "^2.9.1"
+  },
+  "overrides": {
+    "compression": "^1.8.2",
+    "minimatch": "^11.0.1"
+  }
+}

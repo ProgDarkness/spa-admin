@@ -1,0 +1,99 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import { freezeDate } from '@/test/clock'
+import { createSeed } from './seed'
+import { appendRow, commit, findById, getState, nextId, replaceById, resetStore } from './store'
+
+beforeEach(() => {
+  freezeDate('2026-11-12T09:00')
+  resetStore()
+})
+
+describe('getState / resetStore', () => {
+  it('arranca con el seed de la fecha local actual y sin sesión', () => {
+    expect(getState()).toEqual(createSeed('2026-11-12'))
+    expect(getState().sessionUserId).toBeNull()
+  })
+
+  it('resetStore restaura el seed tras una mutación', () => {
+    const mutated = { ...getState(), clients: [] }
+    commit(mutated)
+    expect(getState().clients).toHaveLength(0)
+    resetStore()
+    expect(getState().clients.length).toBeGreaterThan(0)
+    expect(getState()).toEqual(createSeed('2026-11-12'))
+  })
+
+  it('resetStore usa la fecha congelada vigente', () => {
+    freezeDate('2026-12-20T09:00')
+    resetStore()
+    expect(getState()).toEqual(createSeed('2026-12-20'))
+  })
+})
+
+describe('commit', () => {
+  it('reemplaza la referencia sin mutar el estado previo', () => {
+    const previous = getState()
+    const previousClients = previous.clients
+    const next = { ...previous, sessionUserId: 2 }
+    const committed = commit(next)
+    expect(committed).toBe(next)
+    expect(getState()).toBe(next)
+    expect(previous.sessionUserId).toBeNull()
+    expect(previous.clients).toBe(previousClients)
+  })
+})
+
+describe('nextId', () => {
+  it('devuelve 1 para colecciones vacías', () => {
+    expect(nextId([])).toBe(1)
+  })
+
+  it('devuelve máximo + 1 aunque haya huecos y desorden', () => {
+    expect(nextId([{ id: 3 }, { id: 9 }, { id: 4 }])).toBe(10)
+  })
+
+  it('es consistente con el seed', () => {
+    const { clients } = getState()
+    expect(nextId(clients)).toBe(Math.max(...clients.map((client) => client.id)) + 1)
+  })
+})
+
+describe('findById', () => {
+  const rows = [{ id: 1, name: 'a' }, { id: 2, name: 'b' }]
+
+  it('encuentra la fila', () => {
+    expect(findById(rows, 2)).toBe(rows[1])
+  })
+
+  it('devuelve undefined si no existe', () => {
+    expect(findById(rows, 7)).toBeUndefined()
+  })
+})
+
+describe('replaceById', () => {
+  it('devuelve una colección nueva con la fila reemplazada', () => {
+    const rows = [{ id: 1, name: 'a' }, { id: 2, name: 'b' }]
+    const next = replaceById(rows, { id: 2, name: 'z' })
+    expect(next).toEqual([{ id: 1, name: 'a' }, { id: 2, name: 'z' }])
+    expect(next).not.toBe(rows)
+    expect(rows[1]).toEqual({ id: 2, name: 'b' })
+    expect(next[0]).toBe(rows[0])
+  })
+
+  it('si el id no existe deja las filas iguales en una copia', () => {
+    const rows = [{ id: 1, name: 'a' }]
+    const next = replaceById(rows, { id: 5, name: 'x' })
+    expect(next).toEqual(rows)
+    expect(next).not.toBe(rows)
+  })
+})
+
+describe('appendRow', () => {
+  it('devuelve una colección nueva con la fila al final', () => {
+    const rows = [1, 2]
+    const next = appendRow(rows, 3)
+    expect(next).toEqual([1, 2, 3])
+    expect(rows).toEqual([1, 2])
+    expect(next).not.toBe(rows)
+  })
+})

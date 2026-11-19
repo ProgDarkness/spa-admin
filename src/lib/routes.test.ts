@@ -1,0 +1,55 @@
+import { describe, expect, it } from 'vitest'
+import { PERMISSION_KEYS } from './model'
+import { NAV_ITEMS, ROUTES, clientRecordHref } from './routes'
+
+describe('ROUTES', () => {
+  it('mantiene las URLs en español del diseño', () => {
+    expect(ROUTES).toEqual({
+      home: '/',
+      login: '/login',
+      appointments: '/citas',
+      clients: '/clientes',
+      clientRecord: '/clientes/ficha',
+      catalog: '/catalogo',
+      metrics: '/metricas',
+      resources: '/ajustes/recursos',
+      rates: '/ajustes/tasas',
+    })
+  })
+})
+
+describe('clientRecordHref', () => {
+  it('arma la ficha con query id', () => {
+    expect(clientRecordHref(7)).toBe('/clientes/ficha?id=7')
+  })
+})
+
+describe('NAV_ITEMS', () => {
+  it('mapea cada entrada a su permiso', () => {
+    const permissionByHref = Object.fromEntries(NAV_ITEMS.map((item) => [item.href, item.permission]))
+    expect(permissionByHref).toEqual({
+      [ROUTES.appointments]: 'appointments.read',
+      [ROUTES.clients]: 'clients.read',
+      [ROUTES.catalog]: 'catalog.read',
+      [ROUTES.metrics]: 'metrics.read',
+      [ROUTES.resources]: 'resources.manage',
+      [ROUTES.rates]: 'rates.manage',
+    })
+  })
+
+  it('usa permisos válidos, etiquetas únicas y hrefs únicos', () => {
+    for (const item of NAV_ITEMS) {
+      expect(PERMISSION_KEYS).toContain(item.permission)
+      expect(item.label.trim()).not.toBe('')
+    }
+    expect(new Set(NAV_ITEMS.map((item) => item.label)).size).toBe(NAV_ITEMS.length)
+    expect(new Set(NAV_ITEMS.map((item) => item.href)).size).toBe(NAV_ITEMS.length)
+  })
+
+  it('solo enlaza rutas conocidas', () => {
+    const knownRoutes: readonly string[] = Object.values(ROUTES)
+    for (const item of NAV_ITEMS) {
+      expect(knownRoutes).toContain(item.href)
+    }
+  })
+})

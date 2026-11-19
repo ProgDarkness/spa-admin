@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+:root {
+  --radius: 0.375rem;
+  --slot-height: 4.5rem;
+  --background: #EEF0EA;
+  --foreground: #1B211D;
+  --card: #FAFAF7;
+  --card-foreground: #1B211D;
+  --popover: #FAFAF7;
+  --popover-foreground: #1B211D;
+  --primary: #1F2A24;
+  --primary-foreground: #FAFAF7;
+  --secondary: #E1E6DC;
+  --secondary-foreground: #1F2A24;
+  --muted: #E6EAE1;
+  --muted-foreground: #4F5A52;
+  --accent: #DCE3D7;
+  --accent-foreground: #1F2A24;
+  --destructive: #A8483C;
+  --destructive-foreground: #FAFAF7;
+  --border: #8A9A86;
+  --input: #6F8069;
+  --ring: #A67C3B;
+  --warning: #F1E7D2;
+  --warning-foreground: #7F5C25;
+  --status-scheduled: #A67C3B;
+  --status-in-progress: #8A9A86;
+  --status-completed: #1F2A24;
+  --status-cancelled: #6B726D;
+  --status-no-show: #A8483C;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-status-scheduled: var(--status-scheduled);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-completed: var(--status-completed);
+  --color-status-cancelled: var(--status-cancelled);
+  --color-status-no-show: var(--status-no-show);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
+  --font-sans: var(--font-hanken-grotesk), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
