@@ -34,6 +34,12 @@ export type SessionUser ={
   permissions: PermissionKey[]
 }
 
+export type SessionViewStatus = 'active' | 'locked'
+export type SessionView = {
+  status: SessionViewStatus
+  user: SessionUser | null
+}
+
 export type Client = {
   id: Id
   firstName: string
@@ -141,6 +147,7 @@ export type MonthlyMetrics = {
 export type AppErrorCode =
   | 'unauthenticated'
   | 'forbidden'
+  | 'sessionLocked'
   | 'validation'
   | 'notFound'
   | 'invalidCredentials'

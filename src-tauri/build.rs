@@ -2,7 +2,24 @@ use std::path::PathBuf;
 
 use tauri_build::{AppManifest, Attributes, WindowsAttributes};
 
-const APP_COMMANDS: &[&str] = &["login", "logout", "current_session"];
+const APP_COMMANDS: &[&str] = &[
+    "login",
+    "logout",
+    "current_session",
+    "record_activity",
+    "unlock",
+    "setup_status",
+    "setup_owner",
+    "recover_password",
+    "list_users",
+    "create_user",
+    "update_user",
+    "reset_user_password",
+    "list_roles",
+    "create_role",
+    "set_role_permissions",
+    "list_audit",
+];
 const WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
 
 fn targets_msvc() -> bool {

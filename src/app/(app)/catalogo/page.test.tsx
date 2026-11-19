@@ -1,8 +1,9 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { commit, getState, resetStore } from '@/lib/mock/store'
+import { getState, resetStore } from '@/lib/mock/store'
 import { freezeDate } from '@/test/clock'
 import { renderWithProviders } from '@/test/render'
+import { dropMockSessionKeepingRustActive } from '@/test/session'
 import CatalogPage from './page'
 
 beforeEach(() => {
@@ -116,11 +117,11 @@ describe('CatalogPage propietaria', () => {
   })
 
   it('muestra como alerta el error del api al desactivar sin sesión', async () => {
-    const { user } = renderWithProviders(<CatalogPage />, { as: 'propietaria' })
+    renderWithProviders(<CatalogPage />, { as: 'propietaria' })
     const button = await screen.findByRole('button', { name: 'Desactivar Limpieza facial (ejemplo)' })
-    commit({ ...getState(), sessionUserId: null })
+    dropMockSessionKeepingRustActive()
 
-    await user.click(button)
+    fireEvent.click(button)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Debes iniciar sesión')
   })

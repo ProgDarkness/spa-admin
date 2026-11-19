@@ -170,8 +170,9 @@ describe('current_session', () => {
 
     const result = await commands.currentSession()
 
-    expect(result.status === 'ok' && result.data?.username).toBe('lectura')
-    expect(result.status === 'ok' && result.data && 'password' in result.data).toBe(false)
+    expect(result.status === 'ok' && result.data?.status).toBe('active')
+    expect(result.status === 'ok' && result.data?.user?.username).toBe('lectura')
+    expect(result.status === 'ok' && result.data?.user && 'password' in result.data.user).toBe(false)
   })
 
   it('devuelve null si el usuario de la sesión ya no existe', async () => {

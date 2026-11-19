@@ -185,3 +185,42 @@ fn find_active_user_by_id_returns_role_and_skips_inactive() {
     assert!(find_active_user_by_id(&conn, inactive).unwrap().is_none());
     assert!(find_active_user_by_id(&conn, 999).unwrap().is_none());
 }
+
+#[test]
+fn find_credentials_by_id_returns_the_row_including_inactive_users() {
+    let conn = migrated();
+    let active = insert_user(&conn, &new_user("ana", RECEPTION_ROLE_ID)).unwrap();
+    let inactive = insert_user(&conn, &new_user("beto", OWNER_ROLE_ID)).unwrap();
+    deactivate(&conn, inactive);
+
+    let found = find_credentials_by_id(&conn, active).unwrap().unwrap();
+    assert_eq!(
+        (found.id, found.username.as_str(), found.is_active),
+        (active, "ana", true)
+    );
+    assert_eq!(found.password_hash, "hash-de-ana");
+    assert_eq!(found.role_name, "Recepción");
+
+    let dormant = find_credentials_by_id(&conn, inactive).unwrap().unwrap();
+    assert!(!dormant.is_active);
+    assert!(find_credentials_by_id(&conn, 999).unwrap().is_none());
+}
+
+#[test]
+fn insert_owner_stores_both_hashes_with_the_owner_role() {
+    let conn = migrated();
+    let owner = NewOwner {
+        username: "propietaria".to_string(),
+        password_hash: "hash-clave".to_string(),
+        recovery_code_hash: "hash-codigo".to_string(),
+    };
+
+    let id = insert_owner(&conn, &owner).unwrap();
+
+    let stored = find_credentials_by_id(&conn, id).unwrap().unwrap();
+    assert_eq!(stored.role_name, "Propietaria");
+    assert_eq!(stored.password_hash, "hash-clave");
+    assert_eq!(stored.recovery_code_hash.as_deref(), Some("hash-codigo"));
+    assert!(stored.is_active);
+    assert_eq!(count_users(&conn).unwrap(), 1);
+}

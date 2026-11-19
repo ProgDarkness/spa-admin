@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { DEV_PASSWORD } from '../src/test/ipc/auth-backend'
 import { paymentsDialog } from './support/payments'
 import { FIXED_TODAY, goToSection } from './support/session'
+import { installTauriIpc } from './support/tauri-ipc'
 
 const FIXED_VISUAL_TIME = new Date(`${FIXED_TODAY}T10:15:00-04:00`)
 const BRONZE_RGB = 'rgb(166, 124, 59)'
@@ -16,9 +17,15 @@ const SCREENSHOT_OPTIONS = { fullPage: true, animations: 'disabled' as const }
 test.use({ reducedMotion: 'reduce' })
 
 async function openLoginAtFixedTime(page: Page): Promise<void> {
+  const ipc = await installTauriIpc(page)
   await page.clock.setFixedTime(FIXED_VISUAL_TIME)
   await page.goto('/login/')
   await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible()
+  await ipc.waitForReply('setup_status')
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+  await expect(page.getByRole('button', { name: 'Ingresar' })).toBeEnabled()
+  await expect(page.getByText('No se pudo comprobar el estado del equipo')).toHaveCount(0)
+  await page.evaluate(() => document.fonts.ready.then(() => undefined))
 }
 
 async function signInAsOwner(page: Page): Promise<void> {

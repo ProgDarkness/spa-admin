@@ -108,3 +108,94 @@ fn wipe_clears_the_password() {
     assert!(credentials.password.is_empty());
     assert_eq!(credentials.username, "ana");
 }
+
+#[test]
+fn unlock_credentials_wipe_clears_the_password() {
+    let mut credentials = UnlockCredentials {
+        password: "secreto".to_string(),
+    };
+    credentials.wipe();
+    assert!(credentials.password.is_empty());
+}
+
+#[test]
+fn unlock_credentials_deserialize_from_a_password_only_payload() {
+    let credentials: UnlockCredentials =
+        serde_json::from_value(serde_json::json!({ "password": "secreto" })).unwrap();
+    assert_eq!(credentials.password, "secreto");
+}
+
+#[test]
+fn session_view_serializes_status_in_camel_case_and_locked_has_no_user() {
+    let user = SessionUser {
+        id: 1,
+        username: "ana".to_string(),
+        role_name: "Recepción".to_string(),
+        permissions: vec![PermissionKey::ClientsRead],
+    };
+    let active = serde_json::to_value(SessionView::active(user)).unwrap();
+    let locked = serde_json::to_value(SessionView::locked()).unwrap();
+
+    assert_eq!(active["status"], "active");
+    assert_eq!(active["user"]["username"], "ana");
+    assert_eq!(locked["status"], "locked");
+    assert_eq!(locked["user"], serde_json::json!(null));
+}
+
+#[test]
+fn owner_setup_deserializes_and_wipe_clears_the_password() {
+    let mut setup: OwnerSetup =
+        serde_json::from_value(serde_json::json!({ "username": "ana", "password": "secreto" }))
+            .unwrap();
+    assert_eq!(setup.username, "ana");
+    setup.wipe();
+    assert!(setup.password.is_empty());
+    assert_eq!(setup.username, "ana");
+}
+
+#[test]
+fn owner_setup_take_password_leaves_nothing_behind() {
+    let mut setup = OwnerSetup {
+        username: "ana".to_string(),
+        password: "secreto".to_string(),
+    };
+    let taken = setup.take_password();
+    assert_eq!(taken.as_str(), "secreto");
+    assert!(setup.password.is_empty());
+}
+
+#[test]
+fn setup_status_and_owner_result_serialize_camel_case() {
+    let status = serde_json::to_value(SetupStatus {
+        needs_owner: true,
+        clock_rollback: None,
+    })
+    .unwrap();
+    assert_eq!(status["needsOwner"], true);
+    assert_eq!(status["clockRollback"], serde_json::json!(null));
+
+    let rollback = serde_json::to_value(ClockRollback {
+        last_recorded_at: "2026-01-01T10:00:00".to_string(),
+        detected_at: "2025-01-01T10:00:00".to_string(),
+    })
+    .unwrap();
+    assert_eq!(rollback["lastRecordedAt"], "2026-01-01T10:00:00");
+    assert_eq!(rollback["detectedAt"], "2025-01-01T10:00:00");
+}
+
+#[test]
+fn owner_setup_result_serializes_code_but_debug_redacts_it() {
+    let result = OwnerSetupResult {
+        user: SessionUser {
+            id: 1,
+            username: "ana".to_string(),
+            role_name: "Propietaria".to_string(),
+            permissions: vec![],
+        },
+        recovery_code: "ABCD-EFGH-IJKL-MNOP-QRST".to_string(),
+    };
+    let value = serde_json::to_value(&result).unwrap();
+    assert_eq!(value["recoveryCode"], "ABCD-EFGH-IJKL-MNOP-QRST");
+    assert_eq!(value["user"]["username"], "ana");
+    assert!(!format!("{result:?}").contains("ABCD"));
+}

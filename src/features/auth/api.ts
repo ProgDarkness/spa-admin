@@ -1,38 +1,71 @@
-import { commands } from '@/lib/bindings'
-import { commit, getState } from '@/lib/mock/store'
-import type { Result, SessionUser } from '@/lib/model'
+import { commands, type OwnerSetup, type OwnerSetupResult, type RecoveryRequest, type RecoveryResult, type SetupStatus } from '@/lib/bindings'
+import { commit, getState, nextId, replaceById } from '@/lib/mock/store'
+import type { Result, SessionUser, SessionView } from '@/lib/model'
 import { err } from '@/lib/result'
 
 const INTERNAL_MESSAGE = 'No se pudo completar la operación'
 
-function syncMockSession(user: SessionUser | null): boolean {
+function pointMockSessionTo(sessionUserId: number | null): void {
   const state = getState()
-  const knownUser = user ? state.users.find((candidate) => candidate.username === user.username) : undefined
-  const sessionUserId = knownUser?.id ?? null
   if (state.sessionUserId !== sessionUserId) commit({ ...state, sessionUserId })
-  return user === null || knownUser !== undefined
 }
 
-async function closeRustSession(): Promise<void> {
+function registerInMock(user: SessionUser): number {
+  const state = getState()
+  const id = state.users.some((candidate) => candidate.id === user.id) ? nextId(state.users) : user.id
+  const registered: SessionUser = { id, username: user.username, roleName: user.roleName, permissions: [...user.permissions] }
+  commit({ ...state, users: [...state.users, registered], sessionUserId: id })
+  return id
+}
+
+function hasSameGrants(known: SessionUser, rustUser: SessionUser): boolean {
+  return known.roleName === rustUser.roleName && known.permissions.join() === rustUser.permissions.join()
+}
+
+function alignKnownUserWithRust(known: SessionUser, rustUser: SessionUser): void {
+  if (!hasSameGrants(known, rustUser)) {
+    const state = getState()
+    const aligned: SessionUser = { ...known, roleName: rustUser.roleName, permissions: [...rustUser.permissions] }
+    commit({ ...state, users: replaceById(state.users, aligned) })
+  }
+  pointMockSessionTo(known.id)
+}
+
+function syncMockSession(user: SessionUser | null): void {
+  if (user === null) return pointMockSessionTo(null)
+  const known = getState().users.find((candidate) => candidate.username === user.username)
+  if (known) return alignKnownUserWithRust(known, user)
+  registerInMock(user)
+}
+
+function syncMockSessionView(view: SessionView | null): void {
+  if (view?.status === 'locked') return pointMockSessionTo(null)
+  syncMockSession(view?.user ?? null)
+}
+
+function syncMockOrDisconnect<T>(onOk: (data: T) => void, data: T): void {
   try {
-    await commands.logout()
+    onOk(data)
   } catch {
-    return
+    pointMockSessionTo(null)
   }
 }
 
-async function callBackend<T>(operation: () => Promise<Result<T>>, onOk: (data: T) => boolean): Promise<Result<T>> {
+async function settle<T>(operation: () => Promise<Result<T>>): Promise<Result<T>> {
   try {
-    const result = await operation()
-    if (result.status === 'ok' && !onOk(result.data)) {
-      await closeRustSession()
-      return err('internal', INTERNAL_MESSAGE)
-    }
-    return result
+    return await operation()
   } catch {
     return err('internal', INTERNAL_MESSAGE)
   }
 }
+
+async function callBackend<T>(operation: () => Promise<Result<T>>, onOk: (data: T) => void): Promise<Result<T>> {
+  const result = await settle(operation)
+  if (result.status === 'ok') syncMockOrDisconnect(onOk, result.data)
+  return result
+}
+
+function ignoreData(): void {}
 
 export function login(username: string, password: string): Promise<Result<SessionUser>> {
   return callBackend(() => commands.login({ username, password }), syncMockSession)
@@ -42,6 +75,26 @@ export function logout(): Promise<Result<null>> {
   return callBackend(() => commands.logout(), () => syncMockSession(null))
 }
 
-export function currentSession(): Promise<Result<SessionUser | null>> {
-  return callBackend(() => commands.currentSession(), syncMockSession)
+export function currentSession(): Promise<Result<SessionView | null>> {
+  return callBackend(() => commands.currentSession(), syncMockSessionView)
+}
+
+export function recordActivity(): Promise<Result<SessionView | null>> {
+  return callBackend(() => commands.recordActivity(), syncMockSessionView)
+}
+
+export function unlock(password: string): Promise<Result<SessionUser>> {
+  return callBackend(() => commands.unlock({ password }), syncMockSession)
+}
+
+export function setupStatus(): Promise<Result<SetupStatus>> {
+  return callBackend(() => commands.setupStatus(), ignoreData)
+}
+
+export function setupOwner(input: OwnerSetup): Promise<Result<OwnerSetupResult>> {
+  return callBackend(() => commands.setupOwner(input), ignoreData)
+}
+
+export function recoverPassword(input: RecoveryRequest): Promise<Result<RecoveryResult>> {
+  return callBackend(() => commands.recoverPassword(input), ignoreData)
 }

@@ -1,13 +1,108 @@
 import { describe, expectTypeOf, it } from 'vitest'
+import { commands } from './bindings'
+import type {
+  ClockRollback as BindingsClockRollback,
+  OwnerSetup as BindingsOwnerSetup,
+  OwnerSetupResult as BindingsOwnerSetupResult,
+  SetupStatus as BindingsSetupStatus,
+} from './bindings'
+import type {
+  AuditAction as BindingsAuditAction,
+  AuditEntity as BindingsAuditEntity,
+  AuditEntry as BindingsAuditEntry,
+  AuditPage as BindingsAuditPage,
+  AuditQuery as BindingsAuditQuery,
+  NewRole as BindingsNewRole,
+  NewUserInput as BindingsNewUserInput,
+  PasswordReset as BindingsPasswordReset,
+  RecoveryRequest as BindingsRecoveryRequest,
+  RecoveryResult as BindingsRecoveryResult,
+  RolePermissionsUpdate as BindingsRolePermissionsUpdate,
+  RoleSummary as BindingsRoleSummary,
+  UserSummary as BindingsUserSummary,
+  UserUpdate as BindingsUserUpdate,
+} from './bindings'
 import type { AppError as BindingsAppError, AppErrorCode as BindingsAppErrorCode } from './bindings'
 import type { PermissionKey as BindingsPermissionKey, SessionUser as BindingsSessionUser } from './bindings'
-import type { AppError, AppErrorCode, PermissionKey, SessionUser } from './model'
+import type { SessionStatus as BindingsSessionStatus, SessionView as BindingsSessionView } from './bindings'
+import type { AppError, AppErrorCode, PermissionKey, SessionUser, SessionView, SessionViewStatus } from './model'
 
 describe('contrato de tipos entre bindings generados y model', () => {
   it('SessionUser es equivalente en ambos sentidos', () => {
     expectTypeOf<BindingsSessionUser>().toEqualTypeOf<SessionUser>()
     expectTypeOf<SessionUser>().toExtend<BindingsSessionUser>()
     expectTypeOf<BindingsSessionUser>().toExtend<SessionUser>()
+  })
+
+  it('SessionView y su estado son equivalentes en ambos sentidos', () => {
+    expectTypeOf<BindingsSessionView>().toEqualTypeOf<SessionView>()
+    expectTypeOf<BindingsSessionStatus>().toEqualTypeOf<SessionViewStatus>()
+  })
+
+  it('sessionLocked pertenece a ambos AppErrorCode', () => {
+    expectTypeOf<'sessionLocked'>().toExtend<BindingsAppErrorCode>()
+    expectTypeOf<'sessionLocked'>().toExtend<AppErrorCode>()
+  })
+
+  it('setupStatus y setupOwner exponen los tipos de primer arranque', () => {
+    expectTypeOf<BindingsSetupStatus['needsOwner']>().toEqualTypeOf<boolean>()
+    expectTypeOf<BindingsSetupStatus['clockRollback']>().toEqualTypeOf<BindingsClockRollback | null>()
+    expectTypeOf<BindingsClockRollback>().toEqualTypeOf<{ lastRecordedAt: string; detectedAt: string }>()
+    expectTypeOf<BindingsOwnerSetup>().toEqualTypeOf<{ username: string; password: string }>()
+    expectTypeOf<BindingsOwnerSetupResult>().toEqualTypeOf<{ user: BindingsSessionUser; recoveryCode: string }>()
+    expectTypeOf(commands.setupOwner).parameter(0).toEqualTypeOf<BindingsOwnerSetup>()
+  })
+
+  it('recoverPassword expone RecoveryRequest y RecoveryResult', () => {
+    expectTypeOf<BindingsRecoveryRequest>().toEqualTypeOf<{ username: string; recoveryCode: string; newPassword: string }>()
+    expectTypeOf<BindingsRecoveryResult>().toEqualTypeOf<{ recoveryCode: string }>()
+    expectTypeOf(commands.recoverPassword).parameter(0).toEqualTypeOf<BindingsRecoveryRequest>()
+  })
+
+  it('los comandos de usuarios y roles exponen sus tipos', () => {
+    expectTypeOf<BindingsUserSummary>().toEqualTypeOf<{
+      id: number
+      username: string
+      roleId: number
+      roleName: string
+      active: boolean
+      createdAt: string
+      updatedAt: string
+    }>()
+    expectTypeOf<BindingsRoleSummary>().toEqualTypeOf<{
+      id: number
+      name: string
+      permissions: BindingsPermissionKey[]
+      userCount: number
+    }>()
+    expectTypeOf<BindingsNewUserInput>().toEqualTypeOf<{ username: string; password: string; roleId: number }>()
+    expectTypeOf<BindingsUserUpdate>().toEqualTypeOf<{
+      id: number
+      username: string | null
+      roleId: number | null
+      active: boolean | null
+    }>()
+    expectTypeOf<BindingsPasswordReset>().toEqualTypeOf<{ userId: number; newPassword: string }>()
+    expectTypeOf<BindingsNewRole>().toEqualTypeOf<{ name: string; permissions: BindingsPermissionKey[] }>()
+    expectTypeOf<BindingsRolePermissionsUpdate>().toEqualTypeOf<{
+      roleId: number
+      permissions: BindingsPermissionKey[]
+    }>()
+    expectTypeOf(commands.createUser).parameter(0).toEqualTypeOf<BindingsNewUserInput>()
+    expectTypeOf(commands.updateUser).parameter(0).toEqualTypeOf<BindingsUserUpdate>()
+    expectTypeOf(commands.resetUserPassword).parameter(0).toEqualTypeOf<BindingsPasswordReset>()
+    expectTypeOf(commands.createRole).parameter(0).toEqualTypeOf<BindingsNewRole>()
+    expectTypeOf(commands.setRolePermissions).parameter(0).toEqualTypeOf<BindingsRolePermissionsUpdate>()
+  })
+
+  it('listAudit expone AuditQuery, AuditPage, AuditEntry y sus enums', () => {
+    expectTypeOf<BindingsAuditEntity>().toEqualTypeOf<'user' | 'role' | 'system'>()
+    expectTypeOf<'login_succeeded'>().toExtend<BindingsAuditAction>()
+    expectTypeOf<BindingsAuditQuery>().toEqualTypeOf<{ beforeId: number | null; limit: number }>()
+    expectTypeOf<BindingsAuditPage>().toEqualTypeOf<{ entries: BindingsAuditEntry[]; nextBeforeId: number | null }>()
+    expectTypeOf<BindingsAuditEntry['action']>().toEqualTypeOf<BindingsAuditAction>()
+    expectTypeOf<BindingsAuditEntry['entity']>().toEqualTypeOf<BindingsAuditEntity>()
+    expectTypeOf(commands.listAudit).parameter(0).toEqualTypeOf<BindingsAuditQuery>()
   })
 
   it('PermissionKey es equivalente en ambos sentidos', () => {

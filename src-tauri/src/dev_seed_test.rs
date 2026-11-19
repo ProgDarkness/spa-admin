@@ -1,8 +1,10 @@
 use super::*;
 use crate::db::migrate;
-use crate::features::auth::model::LoginCredentials;
+use crate::features::audit::ClockRollbackNotice;
+use crate::features::auth::model::{LoginCredentials, OwnerSetup};
+use crate::features::auth::owner_setup::{create_owner, setup_status_of};
 use crate::features::auth::repository::count_users;
-use crate::features::auth::service::login;
+use crate::features::auth::service::{login, AuthError, SessionState};
 use rusqlite::Connection;
 
 const SEED_PASSWORD: &str = "clave-de-desarrollo-1";
@@ -109,4 +111,26 @@ fn accepts_a_password_of_exactly_twelve_characters() {
     seed_if_empty(&conn, &policy, &env_exact).unwrap();
 
     assert_eq!(count_users(&conn).unwrap(), 3);
+}
+
+#[test]
+fn dev_seed_leaves_needs_owner_false() {
+    let conn = migrated();
+    let policy = PasswordPolicy::new().unwrap();
+    seed_if_empty(&conn, &policy, &env_with_password).unwrap();
+
+    let status = setup_status_of(&conn, &ClockRollbackNotice(None)).unwrap();
+    let database = crate::db::Database::new(conn);
+    let attempt = tauri::async_runtime::block_on(create_owner(
+        &database,
+        std::sync::Arc::new(policy),
+        &SessionState::default(),
+        OwnerSetup {
+            username: "nueva".to_string(),
+            password: "clave-nueva-larga-1".to_string(),
+        },
+    ));
+
+    assert!(!status.needs_owner);
+    assert!(matches!(attempt, Err(AuthError::SetupClosed)));
 }

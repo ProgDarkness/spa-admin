@@ -3,6 +3,8 @@ import type { Id, PermissionKey } from './model'
 export const ROUTES = {
   home: '/',
   login: '/login',
+  setup: '/setup',
+  recover: '/recover',
   appointments: '/citas',
   clients: '/clientes',
   clientRecord: '/clientes/ficha',

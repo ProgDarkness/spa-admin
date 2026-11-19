@@ -10,7 +10,7 @@ export default function Home() {
   const { status } = useSession()
 
   useEffect(() => {
-    if (status === 'signedIn') router.replace(ROUTES.appointments)
+    if (status === 'signedIn' || status === 'locked') router.replace(ROUTES.appointments)
     if (status === 'signedOut') router.replace(ROUTES.login)
   }, [status, router])
 

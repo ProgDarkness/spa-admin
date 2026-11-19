@@ -1,12 +1,15 @@
 use std::error::Error;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use tauri::Manager;
+use tauri::{Manager, Runtime};
 use thiserror::Error;
 
+use crate::db::snapshot::{pending_from, snapshot_before_migrate, SnapshotError};
 use crate::db::{migrate, open_encrypted, Database, DbError};
+use crate::features::audit::{record_clock_rollback, ClockRollback, ClockRollbackNotice};
+use crate::features::auth::heartbeat::spawn_heartbeat;
 use crate::features::auth::password::PasswordPolicy;
 use crate::features::auth::service::{AuthError, SessionState};
 use crate::features::auth::throttle::LoginThrottle;
@@ -22,6 +25,8 @@ pub enum SetupError {
     KeyStore(#[from] KeyStoreError),
     #[error("database unavailable")]
     Db(#[from] DbError),
+    #[error("database snapshot unavailable")]
+    Snapshot(#[from] SnapshotError),
     #[error("password policy unavailable")]
     Auth(#[from] AuthError),
     #[error("seed password too short")]
@@ -45,6 +50,7 @@ fn restrict_to_owner(_: &Path, _: u32) -> std::io::Result<()> {
 pub struct Bootstrap {
     pub database: Database,
     pub passwords: PasswordPolicy,
+    pub clock_rollback: Option<ClockRollback>,
 }
 
 #[cfg(debug_assertions)]
@@ -59,34 +65,58 @@ fn seed_for_development(_: &Database, _: &PasswordPolicy) -> Result<(), SetupErr
 }
 
 pub fn bootstrap(data_dir: &Path, store: &KeyStore) -> Result<Bootstrap, SetupError> {
+    bootstrap_with(data_dir, store, snapshot_before_migrate)
+}
+
+fn bootstrap_with(
+    data_dir: &Path,
+    store: &KeyStore,
+    snapshot: impl FnOnce(&Path, i64) -> Result<PathBuf, SnapshotError>,
+) -> Result<Bootstrap, SetupError> {
     fs::create_dir_all(data_dir)?;
     restrict_to_owner(data_dir, DIRECTORY_MODE)?;
     let database_path = data_dir.join(DATABASE_FILE_NAME);
     let key = load_or_create(store, database_path.exists())?;
     let mut conn = open_encrypted(&database_path, &key)?;
     restrict_to_owner(&database_path, DATABASE_MODE)?;
+    if let Some(version) = pending_from(&conn)? {
+        snapshot(&database_path, version)?;
+    }
     migrate(&mut conn)?;
     let passwords = PasswordPolicy::new()?;
     let database = Database::new(conn);
+    let clock_rollback = database.with_tx(|tx| record_clock_rollback(tx))?;
     seed_for_development(&database, &passwords)?;
     Ok(Bootstrap {
         database,
         passwords,
+        clock_rollback,
     })
 }
 
-pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn Error>> {
+pub fn init<R: Runtime>(app: &mut tauri::App<R>) -> Result<(), Box<dyn Error>> {
     let data_dir = app.path().app_data_dir()?;
     let store = KeyStore::new(app.config().identifier.clone());
     init_native_store()?;
+    install(app, &data_dir, &store)
+}
+
+fn install<R: Runtime>(
+    app: &mut tauri::App<R>,
+    data_dir: &Path,
+    store: &KeyStore,
+) -> Result<(), Box<dyn Error>> {
     let Bootstrap {
         database,
         passwords,
-    } = bootstrap(&data_dir, &store)?;
+        clock_rollback,
+    } = bootstrap(data_dir, store)?;
     app.manage(database);
+    app.manage(ClockRollbackNotice(clock_rollback));
     app.manage(Arc::new(passwords));
     app.manage(LoginThrottle::default());
     app.manage(SessionState::default());
+    spawn_heartbeat(app.handle().clone());
     Ok(())
 }
 

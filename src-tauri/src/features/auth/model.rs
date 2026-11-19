@@ -1,5 +1,9 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
+
+use crate::features::audit::ClockRollback;
 
 #[derive(Serialize, Deserialize, specta::Type, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PermissionKey {
@@ -86,6 +90,99 @@ pub struct SessionUser {
     pub username: String,
     pub role_name: String,
     pub permissions: Vec<PermissionKey>,
+}
+
+#[derive(Serialize, specta::Type, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionStatus {
+    Active,
+    Locked,
+}
+
+#[derive(Serialize, specta::Type, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionView {
+    pub status: SessionStatus,
+    pub user: Option<SessionUser>,
+}
+
+impl SessionView {
+    pub fn active(user: SessionUser) -> Self {
+        Self {
+            status: SessionStatus::Active,
+            user: Some(user),
+        }
+    }
+
+    pub fn locked() -> Self {
+        Self {
+            status: SessionStatus::Locked,
+            user: None,
+        }
+    }
+}
+
+#[derive(Deserialize, specta::Type)]
+pub struct UnlockCredentials {
+    pub password: String,
+}
+
+impl UnlockCredentials {
+    pub(crate) fn wipe(&mut self) {
+        self.password.zeroize();
+    }
+}
+
+impl Drop for UnlockCredentials {
+    fn drop(&mut self) {
+        self.wipe();
+    }
+}
+
+#[derive(Serialize, specta::Type, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupStatus {
+    pub needs_owner: bool,
+    pub clock_rollback: Option<ClockRollback>,
+}
+
+#[derive(Deserialize, specta::Type)]
+pub struct OwnerSetup {
+    pub username: String,
+    pub password: String,
+}
+
+impl OwnerSetup {
+    pub(crate) fn wipe(&mut self) {
+        self.password.zeroize();
+    }
+
+    pub(crate) fn take_password(&mut self) -> Zeroizing<String> {
+        Zeroizing::new(std::mem::take(&mut self.password))
+    }
+}
+
+impl Drop for OwnerSetup {
+    fn drop(&mut self) {
+        self.wipe();
+    }
+}
+
+#[derive(Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnerSetupResult {
+    pub user: SessionUser,
+    pub recovery_code: String,
+}
+
+impl fmt::Debug for OwnerSetupResult {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OwnerSetupResult")
+            .field("user", &self.user)
+            .field("recovery_code", &"***")
+            .finish()
+    }
 }
 
 #[derive(Deserialize, specta::Type)]

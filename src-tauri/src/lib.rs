@@ -8,28 +8,65 @@ pub mod setup;
 #[cfg(test)]
 mod test_support;
 
-use features::auth::commands::{current_session, login, logout};
+use features::auth::audit_commands::list_audit;
+use features::auth::commands::{
+    current_session, login, logout, record_activity, setup_owner, setup_status, unlock,
+};
+use features::auth::recover::recover_password;
+use features::users::commands::{
+    create_role, create_user, list_roles, list_users, reset_user_password, set_role_permissions,
+    update_user,
+};
 
-pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
-    tauri_specta::Builder::<tauri::Wry>::new()
+fn with_commands<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+    builder.invoke_handler(command_catalog::<R>().invoke_handler())
+}
+
+fn command_catalog<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
+    tauri_specta::Builder::<R>::new()
         .commands(tauri_specta::collect_commands![
             login,
             logout,
-            current_session
+            current_session,
+            record_activity,
+            unlock,
+            setup_status,
+            setup_owner,
+            recover_password,
+            list_users,
+            create_user,
+            update_user,
+            reset_user_password,
+            list_roles,
+            create_role,
+            set_role_permissions,
+            list_audit
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .disable_serde_phases()
         .dangerously_cast_bigints_to_number()
 }
 
+fn start<R: tauri::Runtime>(
+    builder: tauri::Builder<R>,
+    context: tauri::Context<R>,
+    setup: impl FnOnce(&mut tauri::App<R>) -> Result<(), Box<dyn std::error::Error>> + Send + 'static,
+) -> tauri::Result<()> {
+    with_commands(builder).setup(setup).run(context)
+}
+
+fn startup_failure_message(error: &tauri::Error) -> String {
+    format!("application failed to start: {error}")
+}
+
+fn app_context<R: tauri::Runtime>() -> tauri::Context<R> {
+    tauri::generate_context!()
+}
+
 pub fn run() {
-    let builder = specta_builder();
-    let outcome = tauri::Builder::default()
-        .invoke_handler(builder.invoke_handler())
-        .setup(setup::init)
-        .run(tauri::generate_context!());
-    if let Err(error) = outcome {
-        eprintln!("application failed to start: {error}");
+    let context = app_context();
+    if let Err(error) = start(tauri::Builder::default(), context, setup::init) {
+        eprintln!("{}", startup_failure_message(&error));
         std::process::exit(1);
     }
 }
@@ -37,3 +74,7 @@ pub fn run() {
 #[cfg(test)]
 #[path = "lib_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lib_bindings_test.rs"]
+mod bindings_tests;

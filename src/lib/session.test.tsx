@@ -66,7 +66,10 @@ describe('SessionProvider', () => {
     expect(await screen.findByText('signedIn:lectura')).toBeInTheDocument()
     expect(screen.getByText('denegado')).toBeInTheDocument()
     expect(screen.getByText('permitido')).toBeInTheDocument()
-    expect(await currentSession()).toMatchObject({ status: 'ok', data: { username: 'lectura' } })
+    expect(await currentSession()).toMatchObject({
+      status: 'ok',
+      data: { status: 'active', user: { username: 'lectura' } },
+    })
   })
 
   it('signIn con clave errónea devuelve invalidCredentials y no cambia el estado', async () => {
