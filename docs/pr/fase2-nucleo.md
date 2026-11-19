@@ -81,16 +81,16 @@ Agrupados por área. Lista completa: `git diff --name-only main...HEAD`.
 
 ## Plan de pruebas y checklist de verificación
 
-Cifras obtenidas en el repositorio de origen (CI 6/6 en verde sobre el mismo código, antes de anonimizar fixtures y documentos) y por confirmar contra el CI de este PR. Los comandos son los definidos en `package.json` y `.github/workflows/ci.yml`.
+Verificado contra el run de CI `44635972702` de este PR (6 jobs en `success`) y contra los fuentes. Los comandos son los definidos en `package.json` y `.github/workflows/ci.yml`.
 
-- [ ] CI: 6/6 jobs en verde en este PR (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`, `web`, `deps` y `core-coverage`).
-- [ ] `bun run test` (`vitest run`): 1756 tests en 145 archivos (job `web`).
-- [ ] `bun run test:cov`: cobertura del front «All files» 96.09 % de líneas (job `web`).
-- [ ] `bun run e2e` (`playwright test`): 43 tests en 5 archivos según `playwright test --list` (incluye `support/tauri-ipc.test.ts`); 43 passed en el job `web`.
-- [ ] `cargo test --locked --manifest-path src-tauri/Cargo.toml`: 553 tests en verde (`rust (ubuntu-latest)`, `rust (macos-latest)` y el paso de cobertura de `core-coverage`); en `rust (windows-latest)` son 551, menos por los tests condicionados a `cfg(unix)`. Con `--features real-keyring` son 554 en ubuntu y macOS, y 552 en Windows; `real_keyring` requiere `--features real-keyring`.
-- [ ] Cobertura Rust (`cargo llvm-cov`, job `core-coverage`): 97.46 % de líneas (fila TOTAL), umbral 80 %.
-- [ ] `export_bindings`: compara los comandos con `src/lib/bindings.ts` y falla ante deriva; `bindings_tests::export_bindings ... ok` en los jobs `rust`.
-- [ ] Guard de waivers (`src/lib/audit-waiver.test.ts`, dentro de la ejecución de vitest): con `.github/audit-waivers.json` en `[]`, el paso `bun audit` de `ci.yml` (job `deps`, `success`) no lleva `--ignore`.
+- [x] CI: 6/6 jobs en verde en este PR (`rust (ubuntu-latest)`, `rust (macos-latest)`, `rust (windows-latest)`, `web`, `deps` y `core-coverage`).
+- [x] `bun run test` (`vitest run`): 1756 tests en 145 archivos (job `web`).
+- [x] `bun run test:cov`: cobertura del front «All files» 96.09 % de líneas (job `web`).
+- [x] `bun run e2e` (`playwright test`): 43 tests en 5 archivos según `playwright test --list` (incluye `support/tauri-ipc.test.ts`); 43 passed en el job `web`.
+- [x] `cargo test --locked --manifest-path src-tauri/Cargo.toml`: 553 tests en verde (`rust (ubuntu-latest)`, `rust (macos-latest)` y el paso de cobertura de `core-coverage`); en `rust (windows-latest)` son 551, menos por los tests condicionados a `cfg(unix)`. Con `--features real-keyring` son 554 en ubuntu y macOS, y 552 en Windows; `real_keyring` requiere `--features real-keyring`.
+- [x] Cobertura Rust (`cargo llvm-cov`, job `core-coverage`): 97.46 % de líneas (fila TOTAL), umbral 80 %.
+- [x] `export_bindings`: compara los comandos con `src/lib/bindings.ts` y falla ante deriva; `bindings_tests::export_bindings ... ok` en los jobs `rust`.
+- [x] Guard de waivers (`src/lib/audit-waiver.test.ts`, dentro de la ejecución de vitest): con `.github/audit-waivers.json` en `[]`, el paso `bun audit` de `ci.yml` (job `deps`, `success`) no lleva `--ignore`.
 Verificación manual del autor antes del merge (no automatizable en CI): keychain con el Secret Service de una sesión de escritorio real del usuario final. CI ya ejecuta `real_keyring` en Windows, macOS y Ubuntu (con `gnome-keyring-daemon`); WSL local no ejecuta esa prueba sin Secret Service (ADR 0002, «Consecuencias»). El merge es humano.
 
 Casos de borde cubiertos: lockout persistido tras 5 fallos y reinicio; fallo de infraestructura sin consumir intento; bloqueo de sesión por inactividad y por reanudación; reautorización dentro de la transacción en `create_user` y `reset_user_password`; último administrador protegido en la misma transacción; retroceso de reloj al arranque; reloj del mock e2e unificado entre navegador y backend.
