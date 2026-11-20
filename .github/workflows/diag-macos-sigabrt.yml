@@ -44,45 +44,52 @@ jobs:
             | tail -1 > "${RUNNER_TEMP}/lib-test-binary.txt"
           test -x "$(cat "${RUNNER_TEMP}/lib-test-binary.txt")"
           cat "${RUNNER_TEMP}/lib-test-binary.txt"
-      - name: repeat with default parallelism
+      - name: only db tests, parallel, 30 runs
         run: |
           set +e
           binary="$(cat "${RUNNER_TEMP}/lib-test-binary.txt")"
           cd src-tauri
           failures=0
+          for attempt in $(seq 1 30); do
+            "$binary" db:: > "${RUNNER_TEMP}/db-${attempt}.log" 2>&1
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              failures=$((failures + 1))
+              echo "db attempt ${attempt} exit status ${status}"
+              tail -15 "${RUNNER_TEMP}/db-${attempt}.log"
+            fi
+          done
+          echo "db-only failures: ${failures}/30"
+      - name: everything except db tests, parallel, 30 runs
+        if: always()
+        run: |
+          set +e
+          binary="$(cat "${RUNNER_TEMP}/lib-test-binary.txt")"
+          cd src-tauri
+          failures=0
+          for attempt in $(seq 1 30); do
+            "$binary" --skip db:: > "${RUNNER_TEMP}/nodb-${attempt}.log" 2>&1
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              failures=$((failures + 1))
+              echo "no-db attempt ${attempt} exit status ${status}"
+              tail -15 "${RUNNER_TEMP}/nodb-${attempt}.log"
+            fi
+          done
+          echo "no-db failures: ${failures}/30"
+      - name: full suite under lldb, 10 runs
+        if: always()
+        run: |
+          set +e
+          binary="$(cat "${RUNNER_TEMP}/lib-test-binary.txt")"
+          cd src-tauri
           for attempt in $(seq 1 10); do
-            echo "::group::parallel attempt ${attempt}"
-            "$binary" --nocapture 2>&1
-            status=$?
-            echo "exit status ${status}"
-            echo "::endgroup::"
-            if [ "$status" -ne 0 ]; then failures=$((failures + 1)); fi
-          done
-          echo "parallel failures: ${failures}/10"
-          test "$failures" -eq 0
-      - name: repeat single threaded
-        if: always()
-        run: |
-          set +e
-          binary="$(cat "${RUNNER_TEMP}/lib-test-binary.txt")"
-          cd src-tauri
-          failures=0
-          for attempt in $(seq 1 3); do
-            echo "::group::single thread attempt ${attempt}"
-            "$binary" --nocapture --test-threads=1 2>&1
-            status=$?
-            echo "exit status ${status}"
-            echo "::endgroup::"
-            if [ "$status" -ne 0 ]; then failures=$((failures + 1)); fi
-          done
-          echo "single thread failures: ${failures}/3"
-          test "$failures" -eq 0
-      - name: crash reports
-        if: always()
-        run: |
-          for report in "${HOME}"/Library/Logs/DiagnosticReports/*; do
-            [ -e "$report" ] || continue
-            echo "::group::${report}"
-            head -150 "$report"
-            echo "::endgroup::"
+            lldb --batch -o run -o "bt all" -o "register read" -o kill -- "$binary" > "${RUNNER_TEMP}/lldb-${attempt}.log" 2>&1
+            if grep -q "stop reason" "${RUNNER_TEMP}/lldb-${attempt}.log"; then
+              echo "::group::lldb attempt ${attempt} crashed"
+              grep -A80 "stop reason" "${RUNNER_TEMP}/lldb-${attempt}.log" | head -150
+              echo "::endgroup::"
+            else
+              echo "lldb attempt ${attempt}: no crash"
+            fi
           done
