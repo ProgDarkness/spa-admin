@@ -33,9 +33,9 @@ export type AppError = {
 
 export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "internal";
 
-export type AuditAction = "login_succeeded" | "logout" | "login_failed" | "login_locked_out" | "session_locked" | "session_unlocked" | "owner_created" | "recovery_used" | "clock_rollback" | "user_created" | "user_updated" | "password_reset" | "role_created" | "unlock_failed" | "recovery_failed" | "role_permissions_changed";
+export type AuditAction = "login_succeeded" | "logout" | "login_failed" | "login_locked_out" | "session_locked" | "session_unlocked" | "owner_created" | "recovery_used" | "clock_rollback" | "user_created" | "user_updated" | "password_reset" | "role_created" | "unlock_failed" | "recovery_failed" | "role_permissions_changed" | "create" | "update" | "deactivate" | "soft_delete" | "reactivate" | "void" | "backup_created" | "backup_restored";
 
-export type AuditEntity = "user" | "role" | "system";
+export type AuditEntity = "user" | "role" | "system" | "client" | "service" | "resource" | "appointment" | "payment" | "payment_method" | "exchange_rate";
 
 export type AuditEntry = {
 	id: number,

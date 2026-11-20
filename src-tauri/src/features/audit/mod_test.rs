@@ -14,7 +14,7 @@ fn entry() -> NewAuditEntry {
     NewAuditEntry {
         actor_user_id: None,
         action: AuditAction::OwnerCreated,
-        entity: AuditEntity::System,
+        entity: AuditEntity::User,
         entity_id: None,
         diff: None,
     }

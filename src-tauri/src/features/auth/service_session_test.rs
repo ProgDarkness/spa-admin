@@ -4,7 +4,7 @@ use rusqlite::Connection;
 
 use super::tests::{
     add_user, credentials, later, migrated, origin, session_user, OWNER_ROLE_ID, PASSWORD,
-    RECEPTION_ROLE_ID,
+    READ_ONLY_ROLE_ID, RECEPTION_ROLE_ID,
 };
 use super::*;
 use crate::errors::{AppError, AppErrorCode};
@@ -393,8 +393,11 @@ fn require_permission_reloads_permissions_from_the_database() {
     let conn = migrated();
     let policy = PasswordPolicy::new().unwrap();
     let (state, id) = signed_in(&conn, &policy, OWNER_ROLE_ID);
-    conn.execute("UPDATE users SET role_id = 3 WHERE id = ?1", [id])
-        .unwrap();
+    conn.execute(
+        "UPDATE users SET role_id = ?1 WHERE id = ?2",
+        [READ_ONLY_ROLE_ID, id],
+    )
+    .unwrap();
 
     let denied = require_permission(&conn, &state, PermissionKey::UsersManage, origin());
     let allowed = require_permission(&conn, &state, PermissionKey::ClientsRead, origin());
@@ -495,4 +498,109 @@ fn locked_user_for_unlock_requires_a_locked_session() {
 
     let idle = later(start, IDLE_TIMEOUT);
     assert_eq!(locked_user_for_unlock(&conn, &state, idle).unwrap(), id);
+}
+
+#[test]
+fn require_any_permission_allows_when_one_of_the_keys_is_granted() {
+    let conn = migrated();
+    let policy = PasswordPolicy::new().unwrap();
+    let (state, id) = signed_in(&conn, &policy, RECEPTION_ROLE_ID);
+
+    let user = require_any_permission(
+        &conn,
+        &state,
+        &[PermissionKey::UsersManage, PermissionKey::ClientsWrite],
+        origin(),
+    )
+    .unwrap();
+
+    assert_eq!(user.id, id);
+}
+
+#[test]
+fn require_any_permission_is_forbidden_when_none_is_granted() {
+    let conn = migrated();
+    let policy = PasswordPolicy::new().unwrap();
+    let (state, _) = signed_in(&conn, &policy, RECEPTION_ROLE_ID);
+
+    let result = require_any_permission(
+        &conn,
+        &state,
+        &[PermissionKey::UsersManage, PermissionKey::BackupManage],
+        origin(),
+    );
+
+    assert!(matches!(result, Err(AuthError::Forbidden)));
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "permissions")]
+fn require_any_permission_with_an_empty_list_panics_in_debug_builds() {
+    let conn = migrated();
+    let policy = PasswordPolicy::new().unwrap();
+    let (state, _) = signed_in(&conn, &policy, OWNER_ROLE_ID);
+
+    let _ = require_any_permission(&conn, &state, &[], origin());
+}
+
+#[cfg(not(debug_assertions))]
+#[test]
+fn require_any_permission_with_an_empty_list_is_forbidden() {
+    let conn = migrated();
+    let policy = PasswordPolicy::new().unwrap();
+    let (state, _) = signed_in(&conn, &policy, OWNER_ROLE_ID);
+
+    let result = require_any_permission(&conn, &state, &[], origin());
+
+    assert!(matches!(result, Err(AuthError::Forbidden)));
+}
+
+#[test]
+fn require_any_permission_without_session_is_unauthenticated() {
+    let conn = migrated();
+    let state = SessionState::default();
+
+    let result = require_any_permission(&conn, &state, &[PermissionKey::ClientsRead], origin());
+
+    assert!(matches!(result, Err(AuthError::Unauthenticated)));
+}
+
+#[test]
+fn require_any_permission_after_idle_lock_is_locked_even_with_a_granted_key() {
+    let conn = migrated();
+    let policy = PasswordPolicy::new().unwrap();
+    let (state, _) = signed_in(&conn, &policy, OWNER_ROLE_ID);
+
+    let result = require_any_permission(
+        &conn,
+        &state,
+        &[PermissionKey::ClientsRead],
+        later(origin(), IDLE_TIMEOUT + Duration::from_secs(1)),
+    );
+
+    assert!(matches!(result, Err(AuthError::Locked)));
+}
+
+#[test]
+fn require_any_permission_reloads_permissions_from_the_database() {
+    let conn = migrated();
+    let policy = PasswordPolicy::new().unwrap();
+    let (state, id) = signed_in(&conn, &policy, OWNER_ROLE_ID);
+    conn.execute(
+        "UPDATE users SET role_id = ?1 WHERE id = ?2",
+        [READ_ONLY_ROLE_ID, id],
+    )
+    .unwrap();
+
+    let denied = require_any_permission(&conn, &state, &[PermissionKey::UsersManage], origin());
+    let allowed = require_any_permission(
+        &conn,
+        &state,
+        &[PermissionKey::UsersManage, PermissionKey::ClientsRead],
+        origin(),
+    );
+
+    assert!(matches!(denied, Err(AuthError::Forbidden)));
+    assert!(allowed.is_ok());
 }

@@ -337,6 +337,24 @@ pub fn require_permission(
     }
 }
 
+pub fn require_any_permission(
+    conn: &Connection,
+    session: &SessionState,
+    permissions: &[PermissionKey],
+    beat: Beat,
+) -> Result<SessionUser, AuthError> {
+    debug_assert!(!permissions.is_empty(), "permissions must not be empty");
+    let user = active_user(conn, session, beat)?;
+    if permissions
+        .iter()
+        .any(|permission| user.permissions.contains(permission))
+    {
+        Ok(user)
+    } else {
+        Err(AuthError::Forbidden)
+    }
+}
+
 fn view_from(outcome: Result<SessionUser, AuthError>) -> Result<Option<SessionView>, AuthError> {
     match outcome {
         Ok(user) => Ok(Some(SessionView::active(user))),

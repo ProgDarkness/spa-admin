@@ -9,6 +9,9 @@ const ENTRY_COLUMNS: &str = "SELECT a.id, a.occurred_at, a.actor_user_id, u.user
      FROM audit_log a LEFT JOIN users u ON u.id = a.actor_user_id";
 
 pub fn insert(conn: &Connection, entry: &NewAuditEntry) -> Result<i64, DbError> {
+    if !entry.action.allows(entry.entity) {
+        return Err(DbError::InvalidAuditPair);
+    }
     conn.execute(
         "INSERT INTO audit_log (actor_user_id, action, entity, entity_id, diff)
          VALUES (?1, ?2, ?3, ?4, ?5)",

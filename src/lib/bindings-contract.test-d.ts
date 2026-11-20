@@ -96,8 +96,44 @@ describe('contrato de tipos entre bindings generados y model', () => {
   })
 
   it('listAudit expone AuditQuery, AuditPage, AuditEntry y sus enums', () => {
-    expectTypeOf<BindingsAuditEntity>().toEqualTypeOf<'user' | 'role' | 'system'>()
-    expectTypeOf<'login_succeeded'>().toExtend<BindingsAuditAction>()
+    expectTypeOf<BindingsAuditEntity>().toEqualTypeOf<
+      | 'user'
+      | 'role'
+      | 'system'
+      | 'client'
+      | 'service'
+      | 'resource'
+      | 'appointment'
+      | 'payment'
+      | 'payment_method'
+      | 'exchange_rate'
+    >()
+    expectTypeOf<BindingsAuditAction>().toEqualTypeOf<
+      | 'login_succeeded'
+      | 'login_failed'
+      | 'login_locked_out'
+      | 'logout'
+      | 'session_locked'
+      | 'session_unlocked'
+      | 'unlock_failed'
+      | 'owner_created'
+      | 'recovery_used'
+      | 'recovery_failed'
+      | 'user_created'
+      | 'user_updated'
+      | 'password_reset'
+      | 'role_created'
+      | 'role_permissions_changed'
+      | 'clock_rollback'
+      | 'create'
+      | 'update'
+      | 'deactivate'
+      | 'soft_delete'
+      | 'reactivate'
+      | 'void'
+      | 'backup_created'
+      | 'backup_restored'
+    >()
     expectTypeOf<BindingsAuditQuery>().toEqualTypeOf<{ beforeId: number | null; limit: number }>()
     expectTypeOf<BindingsAuditPage>().toEqualTypeOf<{ entries: BindingsAuditEntry[]; nextBeforeId: number | null }>()
     expectTypeOf<BindingsAuditEntry['action']>().toEqualTypeOf<BindingsAuditAction>()

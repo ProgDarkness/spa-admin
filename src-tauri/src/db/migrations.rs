@@ -4,11 +4,12 @@ use super::DbError;
 
 pub(super) type Migration = (u32, &'static str);
 
-const MIGRATIONS: [Migration; 4] = [
+const MIGRATIONS: [Migration; 5] = [
     (1, include_str!("migrations/0001_auth.sql")),
     (2, include_str!("migrations/0002_username_nocase.sql")),
     (3, include_str!("migrations/0003_audit_log.sql")),
     (4, include_str!("migrations/0004_login_throttle.sql")),
+    (5, include_str!("migrations/0005_audit_business.sql")),
 ];
 
 pub fn migrate(conn: &mut Connection) -> Result<(), DbError> {

@@ -11,11 +11,11 @@ fn migrated() -> Connection {
     conn
 }
 
-fn system_entry(action: AuditAction) -> NewAuditEntry {
+fn valid_entry(action: AuditAction) -> NewAuditEntry {
     NewAuditEntry {
         actor_user_id: None,
         action,
-        entity: AuditEntity::System,
+        entity: action.allowed_entities()[0],
         entity_id: None,
         diff: None,
     }
@@ -35,7 +35,7 @@ fn is_append_only_abort(result: rusqlite::Result<usize>) -> bool {
 #[test]
 fn update_on_audit_log_aborts() {
     let conn = migrated();
-    let id = insert(&conn, &system_entry(AuditAction::LoginSucceeded)).unwrap();
+    let id = insert(&conn, &valid_entry(AuditAction::LoginSucceeded)).unwrap();
     let result = conn.execute("UPDATE audit_log SET action = 'logout' WHERE id = ?1", [id]);
     assert!(is_append_only_abort(result));
     assert_eq!(
@@ -47,7 +47,7 @@ fn update_on_audit_log_aborts() {
 #[test]
 fn delete_on_audit_log_aborts() {
     let conn = migrated();
-    let id = insert(&conn, &system_entry(AuditAction::LoginSucceeded)).unwrap();
+    let id = insert(&conn, &valid_entry(AuditAction::LoginSucceeded)).unwrap();
     let result = conn.execute("DELETE FROM audit_log WHERE id = ?1", [id]);
     assert!(is_append_only_abort(result));
     assert!(find_by_id(&conn, id).unwrap().is_some());
@@ -86,7 +86,7 @@ fn invalid_json_diff_rejected_by_check() {
 #[test]
 fn record_persists_seconds_precision_at() {
     let conn = migrated();
-    let id = insert(&conn, &system_entry(AuditAction::LoginSucceeded)).unwrap();
+    let id = insert(&conn, &valid_entry(AuditAction::LoginSucceeded)).unwrap();
     let stored = find_by_id(&conn, id).unwrap().unwrap().occurred_at;
     let shape = "dddd-dd-ddTdd:dd:dd";
     let matches_shape = stored.len() == shape.len()
@@ -140,7 +140,7 @@ fn unknown_actor_is_rejected_by_foreign_key() {
     let conn = migrated();
     let entry = NewAuditEntry {
         actor_user_id: Some(999),
-        ..system_entry(AuditAction::LoginSucceeded)
+        ..valid_entry(AuditAction::LoginSucceeded)
     };
     assert!(matches!(insert(&conn, &entry), Err(DbError::Sqlite(_))));
 }
@@ -174,5 +174,71 @@ fn every_audit_action_is_accepted_by_the_check() {
     ];
     assert!(actions
         .into_iter()
-        .all(|action| insert(&conn, &system_entry(action)).is_ok()));
+        .all(|action| insert(&conn, &valid_entry(action)).is_ok()));
+}
+
+fn entry_for(action: AuditAction, entity: AuditEntity) -> NewAuditEntry {
+    NewAuditEntry {
+        actor_user_id: None,
+        action,
+        entity,
+        entity_id: None,
+        diff: None,
+    }
+}
+
+fn audit_row_count(conn: &Connection) -> i64 {
+    conn.query_row("SELECT count(*) FROM audit_log", [], |row| row.get(0))
+        .unwrap()
+}
+
+#[test]
+fn every_allowed_action_entity_pair_is_inserted() {
+    let conn = migrated();
+    let mut inserted = 0;
+    for action in AuditAction::ALL {
+        for entity in action.allowed_entities() {
+            insert(&conn, &entry_for(action, *entity)).unwrap();
+            inserted += 1;
+        }
+    }
+    assert!(inserted >= AuditAction::ALL.len() as i64);
+    assert_eq!(audit_row_count(&conn), inserted);
+}
+
+#[test]
+fn invalid_action_entity_pairs_are_rejected_without_writing() {
+    let conn = migrated();
+    let invalid = [
+        (AuditAction::LoginSucceeded, AuditEntity::Payment),
+        (AuditAction::BackupCreated, AuditEntity::Client),
+        (AuditAction::Create, AuditEntity::System),
+    ];
+    for (action, entity) in invalid {
+        let outcome = insert(&conn, &entry_for(action, entity));
+        assert!(
+            matches!(outcome, Err(DbError::InvalidAuditPair)),
+            "{} on {}",
+            action.as_str(),
+            entity.as_str()
+        );
+    }
+    assert_eq!(audit_row_count(&conn), 0);
+}
+
+#[test]
+fn every_pair_outside_the_table_is_rejected() {
+    let conn = migrated();
+    for action in AuditAction::ALL {
+        for entity in AuditEntity::ALL {
+            let outcome = insert(&conn, &entry_for(action, entity));
+            assert_eq!(
+                outcome.is_ok(),
+                action.allows(entity),
+                "{} on {}",
+                action.as_str(),
+                entity.as_str()
+            );
+        }
+    }
 }
