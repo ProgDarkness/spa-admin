@@ -21,6 +21,10 @@ export const commands = {
 	createRole: (role: NewRole, options?: InvokeOptions) => typedError<RoleSummary, AppError>(__TAURI_INVOKE("create_role", { role }, options)),
 	setRolePermissions: (update: RolePermissionsUpdate, options?: InvokeOptions) => typedError<RoleSummary, AppError>(__TAURI_INVOKE("set_role_permissions", { update }, options)),
 	listAudit: (query: AuditQuery, options?: InvokeOptions) => typedError<AuditPage, AppError>(__TAURI_INVOKE("list_audit", { query }, options)),
+	listServices: (filter: ServiceFilter, options?: InvokeOptions) => typedError<ServiceSummary[], AppError>(__TAURI_INVOKE("list_services", { filter }, options)),
+	createService: (input: ServiceInput, options?: InvokeOptions) => typedError<ServiceSummary, AppError>(__TAURI_INVOKE("create_service", { input }, options)),
+	updateService: (update: ServiceUpdate, options?: InvokeOptions) => typedError<ServiceSummary, AppError>(__TAURI_INVOKE("update_service", { update }, options)),
+	setServiceActive: (activation: ServiceActivation, options?: InvokeOptions) => typedError<ServiceSummary, AppError>(__TAURI_INVOKE("set_service_active", { activation }, options)),
 };
 
 /* Types */
@@ -116,6 +120,39 @@ export type RoleSummary = {
 	name: string,
 	permissions: PermissionKey[],
 	userCount: number,
+};
+
+export type ServiceActivation = {
+	id: number,
+	active: boolean,
+};
+
+export type ServiceFilter = {
+	includeInactive: boolean,
+};
+
+export type ServiceInput = {
+	name: string,
+	priceCents: number,
+	durationMin: number,
+};
+
+export type ServiceSummary = {
+	id: number,
+	name: string,
+	priceCents: number,
+	currency: string,
+	durationMin: number,
+	active: boolean,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type ServiceUpdate = {
+	id: number,
+	name: string,
+	priceCents: number,
+	durationMin: number,
 };
 
 export type SessionStatus = "active" | "locked";

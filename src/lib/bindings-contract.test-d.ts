@@ -19,6 +19,11 @@ import type {
   RecoveryResult as BindingsRecoveryResult,
   RolePermissionsUpdate as BindingsRolePermissionsUpdate,
   RoleSummary as BindingsRoleSummary,
+  ServiceActivation as BindingsServiceActivation,
+  ServiceFilter as BindingsServiceFilter,
+  ServiceInput as BindingsServiceInput,
+  ServiceSummary as BindingsServiceSummary,
+  ServiceUpdate as BindingsServiceUpdate,
   UserSummary as BindingsUserSummary,
   UserUpdate as BindingsUserUpdate,
 } from './bindings'
@@ -93,6 +98,32 @@ describe('contrato de tipos entre bindings generados y model', () => {
     expectTypeOf(commands.resetUserPassword).parameter(0).toEqualTypeOf<BindingsPasswordReset>()
     expectTypeOf(commands.createRole).parameter(0).toEqualTypeOf<BindingsNewRole>()
     expectTypeOf(commands.setRolePermissions).parameter(0).toEqualTypeOf<BindingsRolePermissionsUpdate>()
+  })
+
+  it('los comandos de servicios exponen sus tipos', () => {
+    expectTypeOf<BindingsServiceSummary>().toEqualTypeOf<{
+      id: number
+      name: string
+      priceCents: number
+      currency: string
+      durationMin: number
+      active: boolean
+      createdAt: string
+      updatedAt: string
+    }>()
+    expectTypeOf<BindingsServiceInput>().toEqualTypeOf<{ name: string; priceCents: number; durationMin: number }>()
+    expectTypeOf<BindingsServiceUpdate>().toEqualTypeOf<{
+      id: number
+      name: string
+      priceCents: number
+      durationMin: number
+    }>()
+    expectTypeOf<BindingsServiceFilter>().toEqualTypeOf<{ includeInactive: boolean }>()
+    expectTypeOf<BindingsServiceActivation>().toEqualTypeOf<{ id: number; active: boolean }>()
+    expectTypeOf(commands.listServices).parameter(0).toEqualTypeOf<BindingsServiceFilter>()
+    expectTypeOf(commands.createService).parameter(0).toEqualTypeOf<BindingsServiceInput>()
+    expectTypeOf(commands.updateService).parameter(0).toEqualTypeOf<BindingsServiceUpdate>()
+    expectTypeOf(commands.setServiceActive).parameter(0).toEqualTypeOf<BindingsServiceActivation>()
   })
 
   it('listAudit expone AuditQuery, AuditPage, AuditEntry y sus enums', () => {

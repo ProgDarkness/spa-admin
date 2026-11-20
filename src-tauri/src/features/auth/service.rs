@@ -13,7 +13,7 @@ use super::repository::{
     find_active_user_by_id, find_credentials_by_username, permissions_of_role_for_user,
     ActiveUserRow, UserCredentialRow,
 };
-use super::username::is_allowed_username_character;
+use super::username::is_allowed_text_character;
 use crate::db::DbError;
 use crate::errors::AppError;
 
@@ -47,7 +47,7 @@ pub enum AuthError {
 pub fn normalized_username(raw: &str) -> Option<String> {
     let username: String = raw.trim().nfc().collect();
     let within_limit = (1..=MAX_USERNAME_BYTES).contains(&username.len());
-    (within_limit && username.chars().all(is_allowed_username_character)).then_some(username)
+    (within_limit && username.chars().all(is_allowed_text_character)).then_some(username)
 }
 
 pub fn validated_password(password: &str) -> Result<(), AuthError> {

@@ -13,6 +13,9 @@ use features::auth::commands::{
     current_session, login, logout, record_activity, setup_owner, setup_status, unlock,
 };
 use features::auth::recover::recover_password;
+use features::catalog::commands::{
+    create_service, list_services, set_service_active, update_service,
+};
 use features::users::commands::{
     create_role, create_user, list_roles, list_users, reset_user_password, set_role_permissions,
     update_user,
@@ -40,7 +43,11 @@ fn command_catalog<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
             list_roles,
             create_role,
             set_role_permissions,
-            list_audit
+            list_audit,
+            list_services,
+            create_service,
+            update_service,
+            set_service_active
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .disable_serde_phases()

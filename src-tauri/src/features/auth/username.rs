@@ -41,7 +41,7 @@ fn within(ranges: &[(u32, u32)], character: char) -> bool {
         .any(|&(first, last)| (first..=last).contains(&code_point))
 }
 
-pub fn is_allowed_username_character(character: char) -> bool {
+pub fn is_allowed_text_character(character: char) -> bool {
     !character.is_control()
         && !within(&FORMAT_CHARACTER_RANGES, character)
         && !within(&SEPARATOR_RANGES, character)

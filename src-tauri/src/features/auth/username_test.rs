@@ -5,7 +5,7 @@ fn ascii_space_and_letters_are_allowed() {
     for character in [
         'a', 'Z', '0', ' ', '.', '_', '\u{00F3}', '\u{00D1}', '\u{4E2D}',
     ] {
-        assert!(is_allowed_username_character(character), "{character:?}");
+        assert!(is_allowed_text_character(character), "{character:?}");
     }
 }
 
@@ -34,7 +34,7 @@ fn control_format_and_separator_characters_are_not_allowed() {
         '\u{FEFF}',
         '\u{E0041}',
     ] {
-        assert!(!is_allowed_username_character(character), "{character:?}");
+        assert!(!is_allowed_text_character(character), "{character:?}");
     }
 }
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-service-active"
+description = "Enables the set_service_active command without any pre-configured scope."
+commands.allow = ["set_service_active"]
+
+[[permission]]
+identifier = "deny-set-service-active"
+description = "Denies the set_service_active command without any pre-configured scope."
+commands.deny = ["set_service_active"]
