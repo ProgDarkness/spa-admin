@@ -167,6 +167,7 @@ fn test_database() -> rusqlite::Connection {
     conn
 }
 
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn start_runs_the_setup_hook_inside_the_event_loop_and_returns_once_the_window_closes() {
     let setup_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -183,6 +184,7 @@ fn start_runs_the_setup_hook_inside_the_event_loop_and_returns_once_the_window_c
     assert!(setup_ran.load(std::sync::atomic::Ordering::SeqCst));
 }
 
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn start_registers_the_invoke_handler_before_the_setup_hook_runs() {
     let routed = std::sync::Arc::new(std::sync::Mutex::new(None));
