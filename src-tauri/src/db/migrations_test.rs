@@ -271,7 +271,7 @@ fn table_exists(conn: &Connection, name: &str) -> bool {
 #[test]
 fn user_version_equals_number_of_applied_migrations() {
     let conn = migrated();
-    assert_eq!(user_version(&conn), 2);
+    assert_eq!(user_version(&conn), 4);
 }
 
 #[test]
@@ -291,7 +291,7 @@ fn reopening_a_persisted_database_does_not_reapply_migrations() {
     }
     let mut reopened = Connection::open(&path).unwrap();
     migrate(&mut reopened).unwrap();
-    assert_eq!((user_version(&reopened), count(&reopened, "users")), (2, 1));
+    assert_eq!((user_version(&reopened), count(&reopened, "users")), (4, 1));
 }
 
 #[test]
@@ -304,7 +304,7 @@ fn upgrades_a_database_left_at_version_one() {
     let duplicate = insert_user(&conn, "ANA", 1).unwrap_err();
     assert_eq!(
         (user_version(&conn), duplicate.sqlite_error_code()),
-        (2, Some(ErrorCode::ConstraintViolation))
+        (4, Some(ErrorCode::ConstraintViolation))
     );
 }
 
@@ -355,7 +355,19 @@ fn newer_schema_is_reported_with_found_and_supported_versions() {
         failure,
         DbError::SchemaNewerThanApp {
             found: 99,
-            supported: 2
+            supported: 4
         }
     ));
+}
+
+#[test]
+fn audit_log_table_exists_after_migrating() {
+    let conn = migrated();
+    assert!(table_exists(&conn, "audit_log"));
+}
+
+#[test]
+fn login_throttle_table_exists_after_migrating() {
+    let conn = migrated();
+    assert!(table_exists(&conn, "login_throttle"));
 }

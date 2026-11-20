@@ -9,10 +9,14 @@ function isRunningInTauri(): boolean {
 export function installDevBrowserIpc(): boolean {
   if (process.env.NODE_ENV !== 'development' || typeof window === 'undefined' || isRunningInTauri()) return false
   mockIPC(
-    createAuthIpcBackend(() => getState().users, {
-      read: () => getState().sessionUserId,
-      write: (id) => commit({ ...getState(), sessionUserId: id }),
-    }),
+    createAuthIpcBackend(
+      () => getState().users,
+      {
+        read: () => getState().sessionUserId,
+        write: (id) => commit({ ...getState(), sessionUserId: id }),
+      },
+      { directory: { add: (user) => commit({ ...getState(), users: [...getState().users, user] }) } },
+    ),
   )
   return true
 }

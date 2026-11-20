@@ -45,3 +45,22 @@ fn session_errors_serialize_with_their_own_codes() {
     assert_eq!(forbidden["code"], "forbidden");
     assert_ne!(unauthenticated["message"], forbidden["message"]);
 }
+
+#[test]
+fn session_locked_serializes_with_its_own_code_and_message() {
+    let value = serde_json::to_value(AppError::session_locked()).unwrap();
+    assert_eq!(value["code"], "sessionLocked");
+    assert_eq!(
+        value["message"],
+        "Sesión bloqueada. Ingresa tu contraseña para continuar"
+    );
+    assert_eq!(value["field"], json!(null));
+}
+
+#[test]
+fn validation_constructor_carries_the_field() {
+    let error = AppError::validation("password");
+    assert_eq!(error.code, AppErrorCode::Validation);
+    assert_eq!(error.field.as_deref(), Some("password"));
+    assert_eq!(error.entity_ids, None);
+}

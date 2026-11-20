@@ -7,7 +7,20 @@ import type { InvokeOptions } from "@tauri-apps/api/core";
 export const commands = {
 	login: (credentials: LoginCredentials, options?: InvokeOptions) => typedError<SessionUser, AppError>(__TAURI_INVOKE("login", { credentials }, options)),
 	logout: (options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("logout", undefined, options)),
-	currentSession: (options?: InvokeOptions) => typedError<SessionUser | null, AppError>(__TAURI_INVOKE("current_session", undefined, options)),
+	currentSession: (options?: InvokeOptions) => typedError<SessionView | null, AppError>(__TAURI_INVOKE("current_session", undefined, options)),
+	recordActivity: (options?: InvokeOptions) => typedError<SessionView | null, AppError>(__TAURI_INVOKE("record_activity", undefined, options)),
+	unlock: (credentials: UnlockCredentials, options?: InvokeOptions) => typedError<SessionUser, AppError>(__TAURI_INVOKE("unlock", { credentials }, options)),
+	setupStatus: (options?: InvokeOptions) => typedError<SetupStatus, AppError>(__TAURI_INVOKE("setup_status", undefined, options)),
+	setupOwner: (input: OwnerSetup, options?: InvokeOptions) => typedError<OwnerSetupResult, AppError>(__TAURI_INVOKE("setup_owner", { input }, options)),
+	recoverPassword: (input: RecoveryRequest, options?: InvokeOptions) => typedError<RecoveryResult, AppError>(__TAURI_INVOKE("recover_password", { input }, options)),
+	listUsers: (options?: InvokeOptions) => typedError<UserSummary[], AppError>(__TAURI_INVOKE("list_users", undefined, options)),
+	createUser: (input: NewUserInput, options?: InvokeOptions) => typedError<UserSummary, AppError>(__TAURI_INVOKE("create_user", { input }, options)),
+	updateUser: (update: UserUpdate, options?: InvokeOptions) => typedError<UserSummary, AppError>(__TAURI_INVOKE("update_user", { update }, options)),
+	resetUserPassword: (reset: PasswordReset, options?: InvokeOptions) => typedError<null, AppError>(__TAURI_INVOKE("reset_user_password", { reset }, options)),
+	listRoles: (options?: InvokeOptions) => typedError<RoleSummary[], AppError>(__TAURI_INVOKE("list_roles", undefined, options)),
+	createRole: (role: NewRole, options?: InvokeOptions) => typedError<RoleSummary, AppError>(__TAURI_INVOKE("create_role", { role }, options)),
+	setRolePermissions: (update: RolePermissionsUpdate, options?: InvokeOptions) => typedError<RoleSummary, AppError>(__TAURI_INVOKE("set_role_permissions", { update }, options)),
+	listAudit: (query: AuditQuery, options?: InvokeOptions) => typedError<AuditPage, AppError>(__TAURI_INVOKE("list_audit", { query }, options)),
 };
 
 /* Types */
@@ -18,20 +31,131 @@ export type AppError = {
 	entityIds: number[] | null,
 };
 
-export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "internal";
+export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "internal";
+
+export type AuditAction = "login_succeeded" | "logout" | "login_failed" | "login_locked_out" | "session_locked" | "session_unlocked" | "owner_created" | "recovery_used" | "clock_rollback" | "user_created" | "user_updated" | "password_reset" | "role_created" | "unlock_failed" | "recovery_failed" | "role_permissions_changed";
+
+export type AuditEntity = "user" | "role" | "system";
+
+export type AuditEntry = {
+	id: number,
+	occurredAt: string,
+	actorUserId: number | null,
+	actorUsername: string | null,
+	action: AuditAction,
+	entity: AuditEntity,
+	entityId: number | null,
+	diff: string | null,
+};
+
+export type AuditPage = {
+	entries: AuditEntry[],
+	nextBeforeId: number | null,
+};
+
+export type AuditQuery = {
+	beforeId: number | null,
+	limit: number,
+};
+
+export type ClockRollback = {
+	lastRecordedAt: string,
+	detectedAt: string,
+};
 
 export type LoginCredentials = {
 	username: string,
 	password: string,
 };
 
+export type NewRole = {
+	name: string,
+	permissions: PermissionKey[],
+};
+
+export type NewUserInput = {
+	username: string,
+	password: string,
+	roleId: number,
+};
+
+export type OwnerSetup = {
+	username: string,
+	password: string,
+};
+
+export type OwnerSetupResult = {
+	user: SessionUser,
+	recoveryCode: string,
+};
+
+export type PasswordReset = {
+	userId: number,
+	newPassword: string,
+};
+
 export type PermissionKey = "clients.read" | "clients.write" | "catalog.read" | "catalog.write" | "resources.manage" | "appointments.read" | "appointments.write" | "appointments.reopen" | "payments.read" | "payments.write" | "rates.manage" | "metrics.read" | "audit.read" | "users.manage" | "backup.manage";
+
+export type RecoveryRequest = {
+	username: string,
+	recoveryCode: string,
+	newPassword: string,
+};
+
+export type RecoveryResult = {
+	recoveryCode: string,
+};
+
+export type RolePermissionsUpdate = {
+	roleId: number,
+	permissions: PermissionKey[],
+};
+
+export type RoleSummary = {
+	id: number,
+	name: string,
+	permissions: PermissionKey[],
+	userCount: number,
+};
+
+export type SessionStatus = "active" | "locked";
 
 export type SessionUser = {
 	id: number,
 	username: string,
 	roleName: string,
 	permissions: PermissionKey[],
+};
+
+export type SessionView = {
+	status: SessionStatus,
+	user: SessionUser | null,
+};
+
+export type SetupStatus = {
+	needsOwner: boolean,
+	clockRollback: ClockRollback | null,
+};
+
+export type UnlockCredentials = {
+	password: string,
+};
+
+export type UserSummary = {
+	id: number,
+	username: string,
+	roleId: number,
+	roleName: string,
+	active: boolean,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type UserUpdate = {
+	id: number,
+	username: string | null,
+	roleId: number | null,
+	active: boolean | null,
 };
 
 /* Tauri Specta runtime */

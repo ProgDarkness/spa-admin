@@ -126,6 +126,34 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: bun audit
+      - run: |
+          set -euo pipefail
+          entries="$(jq -r '.[] | [(.id // ""), (.package // ""), (.vulnerableUpTo // "")] | join("|")' .github/audit-waivers.json)"
+          [ -z "$entries" ] && exit 0
+          version_pattern='^[0-9]+\.[0-9]+\.[0-9]+$'
+          while IFS='|' read -r id pkg limit; do
+            if ! [[ "$id" =~ ^GHSA(-[a-z0-9]{4}){3}$ ]]; then
+              echo "waiver con campo id invalido o vacio"
+              exit 1
+            fi
+            if ! [[ "$pkg" =~ ^(@[a-z0-9._~-]+/)?[a-z0-9._~][a-z0-9._~-]*$ ]]; then
+              echo "waiver ${id}: campo package invalido o vacio"
+              exit 1
+            fi
+            if ! [[ "$limit" =~ $version_pattern ]]; then
+              echo "waiver ${id}: campo vulnerableUpTo ausente o no es X.Y.Z"
+              exit 1
+            fi
+            latest="$(bun pm view "$pkg" version </dev/null)"
+            if ! [[ "$latest" =~ $version_pattern ]]; then
+              echo "waiver ${id}: ultima version de ${pkg} vacia o no es X.Y.Z"
+              exit 1
+            fi
+            if [ "$latest" != "$limit" ] && [ "$(printf '%s\n%s\n' "$latest" "$limit" | sort -V | tail -1)" = "$latest" ]; then
+              echo "${pkg} ${latest} supera ${limit}: retirar el waiver ${id}"
+              exit 1
+            fi
+          done <<< "$entries"
       - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39
         with:
           tool: cargo-deny@0.20.2

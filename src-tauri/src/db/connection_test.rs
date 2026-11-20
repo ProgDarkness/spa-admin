@@ -137,6 +137,70 @@ fn with_conn_recovers_from_a_lock_poisoned_elsewhere() {
     assert!(database.with_conn(|_| Ok(())).is_ok());
 }
 
+fn database_with_row() -> (TempDir, Database) {
+    let (dir, path) = fresh_path();
+    create_with_row(&path, &key_of("a"));
+    let database = Database::new(open_encrypted(&path, &key_of("a")).unwrap());
+    (dir, database)
+}
+
+fn row_count(database: &Database) -> i64 {
+    database
+        .with_conn(|conn| {
+            Ok(conn.query_row("SELECT count(*) FROM t", [], |row| row.get::<_, i64>(0))?)
+        })
+        .unwrap()
+}
+
+#[test]
+fn with_tx_commits() {
+    let (_dir, database) = database_with_row();
+    let outcome: Result<i64, DbError> = database.with_tx(|tx| {
+        tx.execute("INSERT INTO t VALUES ('nuevo')", [])?;
+        Ok(5)
+    });
+    assert_eq!(outcome.unwrap(), 5);
+    assert_eq!(row_count(&database), 2);
+}
+
+#[test]
+fn with_tx_rolls_back_on_err() {
+    let (_dir, database) = database_with_row();
+    let outcome: Result<(), DbError> = database.with_tx(|tx| {
+        tx.execute("INSERT INTO t VALUES ('perdido')", [])?;
+        Err(DbError::UnknownPermission)
+    });
+    assert!(matches!(outcome, Err(DbError::UnknownPermission)));
+    assert_eq!(row_count(&database), 1);
+}
+
+#[test]
+fn with_tx_rolls_back_on_panic() {
+    let (_dir, database) = database_with_row();
+    let outcome: Result<(), DbError> = database.with_tx(|tx| {
+        tx.execute("INSERT INTO t VALUES ('perdido')", []).unwrap();
+        panic!("boom");
+    });
+    assert!(matches!(outcome, Err(DbError::OperationPanicked)));
+    assert_eq!(row_count(&database), 1);
+    let again: Result<(), DbError> = database.with_tx(|tx| {
+        tx.execute("INSERT INTO t VALUES ('luego')", [])?;
+        Ok(())
+    });
+    assert!(again.is_ok());
+    assert_eq!(row_count(&database), 2);
+}
+
+#[test]
+fn with_tx_recovers_from_a_lock_poisoned_elsewhere() {
+    let (_dir, path) = fresh_path();
+    let database = Arc::new(Database::new(open_encrypted(&path, &key_of("a")).unwrap()));
+    let poisoner = Arc::clone(&database);
+    let _ = std::thread::spawn(move || poisoner.poison_for_test()).join();
+    let outcome: Result<(), DbError> = database.with_tx(|_| Ok(()));
+    assert!(outcome.is_ok());
+}
+
 fn version_parts(text: &str) -> Vec<u32> {
     text.split(|c: char| !c.is_ascii_digit())
         .filter(|part| !part.is_empty())
@@ -157,4 +221,67 @@ fn encrypted_database_runs_patched_sqlite_and_sqlcipher() {
         .unwrap();
     assert!(version_parts(&sqlite) >= vec![3, 54, 0], "sqlite {sqlite}");
     assert!(version_parts(&cipher) >= vec![4, 20, 0], "cipher {cipher}");
+}
+
+#[derive(Debug, PartialEq)]
+enum CallerError {
+    Database,
+    Custom,
+}
+
+impl From<DbError> for CallerError {
+    fn from(_: DbError) -> Self {
+        Self::Database
+    }
+}
+
+impl From<rusqlite::Error> for CallerError {
+    fn from(_: rusqlite::Error) -> Self {
+        Self::Database
+    }
+}
+
+fn open_database() -> (TempDir, Database) {
+    let (dir, path) = fresh_path();
+    (
+        dir,
+        Database::new(open_encrypted(&path, &key_of("a")).unwrap()),
+    )
+}
+
+#[test]
+fn with_conn_mapped_returns_the_value_without_a_double_result() {
+    let (_dir, database) = open_database();
+
+    let answer: Result<i64, CallerError> = database.with_conn_mapped(|conn| {
+        Ok(conn.query_row("SELECT 40 + 2", [], |row| row.get::<_, i64>(0))?)
+    });
+
+    assert_eq!(answer, Ok(42));
+}
+
+#[test]
+fn with_conn_mapped_keeps_the_caller_error_untouched() {
+    let (_dir, database) = open_database();
+
+    let outcome: Result<(), CallerError> = database.with_conn_mapped(|_| Err(CallerError::Custom));
+
+    assert_eq!(outcome, Err(CallerError::Custom));
+}
+
+#[test]
+fn with_conn_mapped_converts_a_panic_into_the_caller_error_and_rolls_back() {
+    let (_dir, database) = open_database();
+
+    let outcome: Result<(), CallerError> = database.with_conn_mapped(|conn| {
+        conn.execute_batch("BEGIN").unwrap();
+        panic!("boom");
+    });
+
+    assert_eq!(outcome, Err(CallerError::Database));
+    let autocommit: Result<bool, DbError> = database.with_conn(|conn| Ok(conn.is_autocommit()));
+    assert!(autocommit.unwrap());
+    let usable: Result<i64, DbError> =
+        database.with_conn(|conn| Ok(conn.query_row("SELECT 1", [], |row| row.get(0))?));
+    assert_eq!(usable.unwrap(), 1);
 }

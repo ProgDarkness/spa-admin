@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import { type SeedUsername } from '../../src/lib/mock/seed'
 import { DEV_PASSWORD } from '../../src/test/ipc/auth-backend'
 import { installTauriIpc } from './tauri-ipc'
@@ -6,11 +6,8 @@ import { installTauriIpc } from './tauri-ipc'
 export const FIXED_NOW = new Date('2026-11-12T09:00:00-04:00')
 export const FIXED_TODAY = '2026-11-12'
 
-test.beforeEach(async ({ page }) => {
-  await installTauriIpc(page)
-})
-
 export async function openLogin(page: Page): Promise<void> {
+  await installTauriIpc(page)
   await page.clock.install({ time: FIXED_NOW })
   await page.goto('/login/')
   await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible()

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use keyring_core::mock;
 
 use super::*;
+use crate::db::migrations::supported_version;
 use crate::keystore::{KeyStoreError, DB_KEY_ACCOUNT};
 use crate::test_support::{isolated_store, isolated_store_with_service};
 
@@ -125,4 +126,221 @@ fn bootstrap_tightens_permissions_of_an_existing_database() {
     let mode_of = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode_of(dir.path()), 0o700);
     assert_eq!(mode_of(&database_path(dir.path())), 0o600);
+}
+
+#[cfg(not(unix))]
+#[test]
+fn restrict_to_owner_leaves_the_platform_permissions_untouched() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("probe");
+    fs::write(&file, SENTINEL_BYTES).unwrap();
+    let permissions_of = |path: &Path| fs::metadata(path).unwrap().permissions();
+    let (dir_before, file_before) = (permissions_of(dir.path()), permissions_of(&file));
+
+    restrict_to_owner(dir.path(), DIRECTORY_MODE).unwrap();
+    restrict_to_owner(&file, DATABASE_MODE).unwrap();
+
+    assert_eq!(permissions_of(dir.path()), dir_before);
+    assert_eq!(permissions_of(&file), file_before);
+    assert!(!permissions_of(&file).readonly());
+    assert_eq!(fs::read(&file).unwrap(), SENTINEL_BYTES);
+}
+
+fn database_at_version_two(dir: &Path, store: &KeyStore) {
+    let key = load_or_create(store, false).unwrap();
+    let conn = open_encrypted(&database_path(dir), &key).unwrap();
+    conn.execute_batch(include_str!("db/migrations/0001_auth.sql"))
+        .unwrap();
+    conn.execute_batch(include_str!("db/migrations/0002_username_nocase.sql"))
+        .unwrap();
+    conn.pragma_update(None, "user_version", 2).unwrap();
+}
+
+fn backups_in(dir: &Path) -> Vec<String> {
+    fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .filter(|name| name.ends_with(".bak"))
+        .collect()
+}
+
+fn version_of(path: &Path, store: &KeyStore) -> i64 {
+    let key = load_or_create(store, true).unwrap();
+    open_encrypted(path, &key)
+        .unwrap()
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap()
+}
+
+#[test]
+fn bootstrap_snapshots_a_pending_database_before_migrating() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+    database_at_version_two(dir.path(), &store);
+
+    drop(bootstrap(dir.path(), &store).unwrap());
+
+    let backups = backups_in(dir.path());
+    assert_eq!(backups.len(), 1);
+    assert!(backups[0].ends_with(".v2.bak"));
+    assert_eq!(version_of(&dir.path().join(&backups[0]), &store), 2);
+    assert_eq!(
+        version_of(&database_path(dir.path()), &store),
+        i64::from(supported_version())
+    );
+}
+
+#[test]
+fn bootstrap_creates_no_snapshot_for_a_fresh_or_current_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+
+    drop(bootstrap(dir.path(), &store).unwrap());
+    drop(bootstrap(dir.path(), &store).unwrap());
+
+    assert!(backups_in(dir.path()).is_empty());
+}
+
+#[test]
+fn copy_failure_aborts_before_migrate() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+    database_at_version_two(dir.path(), &store);
+    let failing_snapshot =
+        |_: &Path, _: i64| Err(SnapshotError::Io(std::io::Error::other("disk full")));
+
+    let result = bootstrap_with(dir.path(), &store, failing_snapshot);
+
+    assert!(matches!(result, Err(SetupError::Snapshot(_))));
+    assert_eq!(version_of(&database_path(dir.path()), &store), 2);
+    assert!(backups_in(dir.path()).is_empty());
+}
+
+#[test]
+fn snapshot_setup_error_message_is_fixed() {
+    let failure = SetupError::Snapshot(SnapshotError::Io(std::io::Error::other("/ruta")));
+    assert_eq!(failure.to_string(), "database snapshot unavailable");
+}
+
+fn insert_future_audit_row(bootstrap: &Bootstrap) -> String {
+    bootstrap
+        .database
+        .with_conn(|conn| {
+            let (stamp, stamp_utc): (String, String) = conn.query_row(
+                "SELECT strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime', '+1 day'), \
+                        strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+1 day')",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            conn.execute(
+                "INSERT INTO audit_log (occurred_at, occurred_at_utc, action, entity) \
+                 VALUES (?1, ?2, 'logout', 'system')",
+                [&stamp, &stamp_utc],
+            )?;
+            Ok(stamp)
+        })
+        .unwrap()
+}
+
+fn rollback_rows(bootstrap: &Bootstrap) -> i64 {
+    bootstrap
+        .database
+        .with_conn(|conn| {
+            Ok(conn.query_row(
+                "SELECT count(*) FROM audit_log WHERE action = 'clock_rollback'",
+                [],
+                |row| row.get(0),
+            )?)
+        })
+        .unwrap()
+}
+
+#[test]
+fn bootstrap_records_clock_rollback_notice() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+    let first = bootstrap(dir.path(), &store).unwrap();
+    let recorded = insert_future_audit_row(&first);
+    drop(first);
+
+    let second = bootstrap(dir.path(), &store).unwrap();
+
+    let notice = second.clock_rollback.clone().unwrap();
+    assert_eq!(notice.last_recorded_at, recorded);
+    assert_eq!(rollback_rows(&second), 1);
+}
+
+#[test]
+fn bootstrap_without_rollback_has_no_notice_and_no_audit() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+    drop(bootstrap(dir.path(), &store).unwrap());
+
+    let second = bootstrap(dir.path(), &store).unwrap();
+
+    assert_eq!(second.clock_rollback, None);
+    assert_eq!(rollback_rows(&second), 0);
+}
+
+fn installed_app(
+    dir: &Path,
+    store: &KeyStore,
+) -> (
+    tauri::App<tauri::test::MockRuntime>,
+    Result<(), Box<dyn Error>>,
+) {
+    let mut app = tauri::test::mock_app();
+    let outcome = install(&mut app, dir, store);
+    (app, outcome)
+}
+
+#[test]
+fn install_manages_every_state_the_commands_depend_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+
+    let (app, outcome) = installed_app(dir.path(), &store);
+
+    outcome.unwrap();
+    assert_eq!(
+        app.state::<Database>()
+            .with_conn(|conn| Ok(
+                conn.query_row("SELECT count(*) FROM roles", [], |r| r.get::<_, i64>(0))?
+            ))
+            .unwrap(),
+        3
+    );
+    assert_eq!(app.state::<ClockRollbackNotice>().0, None);
+    assert!(app.try_state::<Arc<PasswordPolicy>>().is_some());
+    assert!(app.try_state::<LoginThrottle>().is_some());
+    assert!(app.state::<SessionState>().last_beat().unwrap().is_none());
+}
+
+#[test]
+fn install_exposes_the_recorded_clock_rollback_to_the_frontend() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+    let first = bootstrap(dir.path(), &store).unwrap();
+    let recorded = insert_future_audit_row(&first);
+    drop(first);
+
+    let (app, outcome) = installed_app(dir.path(), &store);
+
+    outcome.unwrap();
+    let notice = app.state::<ClockRollbackNotice>().0.clone().unwrap();
+    assert_eq!(notice.last_recorded_at, recorded);
+}
+
+#[test]
+fn install_manages_nothing_when_the_bootstrap_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let (store, service) = isolated_store_with_service();
+    inject_keystore_failure(&service);
+
+    let (app, outcome) = installed_app(dir.path(), &store);
+
+    assert!(outcome.is_err());
+    assert!(app.try_state::<Database>().is_none());
+    assert!(app.try_state::<SessionState>().is_none());
+    assert!(app.try_state::<LoginThrottle>().is_none());
 }

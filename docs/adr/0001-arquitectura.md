@@ -15,12 +15,14 @@
 ## Decisión
 
 1. **Vertical slices en Rust (D4).** Una carpeta por feature con capas planas `commands → service → repository` y `model`. Sin puertos ni adaptadores ni agregados DDD.
-   - Layout: `src-tauri/src/features/<feature>/{commands,service,repository,model}.rs`.
+   - Layout: `src-tauri/src/features/<feature>/{commands,service,repository,model}.rs`. Fase 2 añade slices `features/audit/` y `features/users/` (declarados en `features/mod.rs`) y módulos por necesidad dentro de `features/auth/` (`password`, `throttle`, `heartbeat`, `recovery`, `recover`, `owner_setup`, `events`) y `features/audit/clock.rs`.
    - Compartido mínimo: `main.rs`, `lib.rs` (`specta_builder()` separado de `run()`), `setup.rs`, `db/`, `errors.rs`, `keystore.rs`, `dev_seed.rs` (solo `cfg(debug_assertions)`).
    - Los permisos se validan en Rust en cada comando; el front solo oculta controles.
 2. **Contrato IPC con camelCase (D20).** `serde(rename_all = "camelCase")` en Rust. `tauri-specta` genera `src/lib/bindings.ts`, que sustituye a `src/lib/model.ts` sin renombrar campos.
    - Errores: `AppError { code, message, field?, entityIds? }`. Códigos `invalidCredentials`, `validation`, `unauthenticated`, `forbidden`, `internal` (E3: `internal` es un código propio, no se reutiliza `validation`).
    - `AppError` no expone causas internas.
+   - **Flujo de regeneración de bindings.** `export_bindings` (`src-tauri/src/lib_bindings_test.rs`, módulo `bindings_tests` de `lib.rs`) exporta los comandos a un directorio temporal y compara el resultado con `src/lib/bindings.ts`. Sin variable de entorno no escribe el archivo y falla con mensaje de deriva. Para regenerar, desde `src-tauri/`: `SPA_UPDATE_BINDINGS=1 cargo test export_bindings`. Después, revisar `git diff -- src/lib/bindings.ts` y commitear el archivo junto con el cambio de comandos.
+   - **Check de CI de deriva.** Tras `cargo test --locked`, el job de Windows, macOS y Ubuntu ejecuta `git status --porcelain -- src/lib/bindings.ts` y falla si el archivo aparece modificado o sin trackear (`.github/workflows/ci.yml`).
 3. **Frontera del mock.** `@/lib/mock/*` solo se importa desde `features/*/api.ts`, tests, `src/test/**` y `e2e/**`; la regla `no-restricted-imports` de ESLint lo impone.
 4. **Costura temporal session → auth/api.** `auth/api.ts` usa los comandos de `bindings.ts` y llama `syncMockSession(user | null)` con el `username` para mantener el mock sincronizado. Las firmas públicas de `auth/api.ts` no cambian en tipo; `session.tsx` solo cambia `signOut`, de `Promise<void>` a `Promise<Result<null>>`, y conserva el snapshot si `logout` falla. Si Rust devuelve un usuario ausente del mock, la costura responde `internal` y deja el mock sin sesión; la costura cierra también la sesión de Rust con `logout` (si ese `logout` falla igualmente responde `internal`). Es temporal: se retira al migrar cada feature a bindings.
 5. **KeyStore como struct concreta (E1).** No se crea un trait propio (YAGNI).
@@ -39,7 +41,8 @@
 - **Duplicación entre slices es aceptada.** Un concepto compartido se extrae solo cuando sea estable y tenga al menos dos usos reales.
 - **Un cambio en un concepto compartido se replica por slice.** Coste asumido por la ausencia de capa de dominio.
 - **Costura temporal.** Mientras `syncMockSession` exista, sesión del mock y sesión Rust pueden divergir; se verifica en tests de `bindings-contract.test.ts`.
-- **Relojes monotónicos.** El TTL de sesión (10 min) y el bloqueo de login (300 s) usan `Instant`, que en Linux no avanza durante la suspensión del equipo; tras suspender, ambos duran más en tiempo de pared. Límite aceptado, sin reloj de pared.
+- **Relojes monotónicos.** El TTL de sesión (10 min) y el bloqueo de login en memoria (300 s) usan `Instant`, que en Linux no avanza durante la suspensión del equipo. Desde Fase 2, la reanudación se detecta comparando reloj monotónico y de pared en el latido (ADR 0002, punto 6; ADR 0004). El bloqueo persistido en `login_throttle` usa el reloj de pared de SQLite.
+- **Dependencias entre slices en Fase 2.** `features/auth/events.rs` llama a `audit::record`; `features/auth/model.rs` usa `audit::ClockRollback`; `features/users/` usa `auth` (permisos, `PasswordPolicy`, `OWNER_ROLE_ID`). `audit` no importa `auth` (ADR 0004, notas de revisión).
 - **Desarrollo en WSL.** `tauri dev` con login requiere Secret Service; alternativa: fallback de navegador o correr en Windows.
 - **Verificado en Linux (`cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo check --locked --features real-keyring`, 2026-11-16):** `init_native_store`, `NoEntry` en keyring 4, `BigIntExportBehavior::Number`, forma `Result` de specta y API de `argon2` 0.6.
 - **Pendiente de verificación (no ejecutable en WSL):** OpenSSL vendored en Windows (CI Windows) y CSP con scripts inline de Next en `tauri build`.

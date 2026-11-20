@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
-import { DEV_PASSWORD } from '../../src/test/ipc/auth-backend'
-import { installTauriIpc } from './tauri-ipc'
+import { DEV_PASSWORD, IDLE_LOCK_MS } from '../../src/test/ipc/auth-backend'
+import { FIXED_NOW } from './session'
+import { installTauriIpc, type TauriIpcHandle } from './tauri-ipc'
 
 type Outcome = { resolved: true; value: unknown } | { resolved: false; isError: boolean; payload: unknown }
 
@@ -25,8 +26,13 @@ async function invokeInPage(page: Page, cmd: string, args?: unknown): Promise<Ou
 
 const OWNER_CREDENTIALS = { credentials: { username: 'propietaria', password: DEV_PASSWORD } }
 
+const IDLE_MS = 11 * 60_000
+
+let ipc: TauriIpcHandle
+
 test.beforeEach(async ({ page }) => {
-  await installTauriIpc(page)
+  ipc = await installTauriIpc(page)
+  await page.clock.install({ time: FIXED_NOW })
   await page.goto('/login/')
 })
 
@@ -73,7 +79,7 @@ test('un comando desconocido rechaza con un Error', async ({ page }) => {
 test('la sesión se mantiene durante la página y se descarta al recargar (D21)', async ({ page }) => {
   await invokeInPage(page, 'login', OWNER_CREDENTIALS)
   const beforeReload = await invokeInPage(page, 'current_session')
-  expect(beforeReload).toMatchObject({ resolved: true, value: { username: 'propietaria' } })
+  expect(beforeReload).toMatchObject({ resolved: true, value: { status: 'active', user: { username: 'propietaria' } } })
 
   await page.reload()
 
@@ -86,4 +92,126 @@ test('logout limpia la sesión', async ({ page }) => {
   await invokeInPage(page, 'logout')
 
   expect(await invokeInPage(page, 'current_session')).toEqual({ resolved: true, value: null })
+})
+
+test('record_activity extiende la sesión y devuelve la vista activa', async ({ page }) => {
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+
+  const outcome = await invokeInPage(page, 'record_activity')
+
+  expect(outcome).toMatchObject({ resolved: true, value: { status: 'active', user: { username: 'propietaria' } } })
+})
+
+test('la inactividad del reloj inyectado bloquea la sesión sin cerrarla', async ({ page }) => {
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+
+  await ipc.advanceClock(IDLE_MS)
+
+  expect(await invokeInPage(page, 'current_session')).toEqual({
+    resolved: true,
+    value: { status: 'locked', user: null },
+  })
+})
+
+test('unlock con la contraseña correcta reactiva la sesión bloqueada', async ({ page }) => {
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+  await ipc.advanceClock(IDLE_MS)
+  await invokeInPage(page, 'current_session')
+
+  const wrong = await invokeInPage(page, 'unlock', { credentials: { password: 'mala' } })
+  const right = await invokeInPage(page, 'unlock', { credentials: { password: DEV_PASSWORD } })
+
+  expect(wrong).toMatchObject({ resolved: false, payload: { code: 'invalidCredentials' } })
+  expect(right).toMatchObject({ resolved: true, value: { username: 'propietaria' } })
+})
+
+test('setup_status informa que no falta la propietaria con los usuarios de ejemplo', async ({ page }) => {
+  expect(await invokeInPage(page, 'setup_status')).toEqual({
+    resolved: true,
+    value: { needsOwner: false, clockRollback: null },
+  })
+})
+
+const THRESHOLD_MARGIN_MS = 5_000
+
+test('el reloj del backend es el del navegador: avanzar solo el navegador bloquea la sesión inactiva', async ({
+  page,
+}) => {
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+
+  await page.clock.fastForward(IDLE_MS)
+
+  expect(await invokeInPage(page, 'current_session')).toEqual({
+    resolved: true,
+    value: { status: 'locked', user: null },
+  })
+})
+
+test('el backend bloquea al cruzar el umbral de inactividad medido en el reloj fijado del navegador', async ({
+  page,
+}) => {
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+
+  await page.clock.fastForward(IDLE_LOCK_MS - THRESHOLD_MARGIN_MS)
+  const beforeThreshold = await invokeInPage(page, 'current_session')
+  await page.clock.fastForward(2 * THRESHOLD_MARGIN_MS)
+  const afterThreshold = await invokeInPage(page, 'current_session')
+
+  expect(beforeThreshold).toMatchObject({ resolved: true, value: { status: 'active' } })
+  expect(afterThreshold).toEqual({ resolved: true, value: { status: 'locked', user: null } })
+})
+
+test('advanceClock mueve a la vez el reloj del navegador y el del backend', async ({ page }) => {
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+  const browserBefore = await page.evaluate(() => Date.now())
+
+  await ipc.advanceClock(IDLE_MS)
+
+  const browserAfter = await page.evaluate(() => Date.now())
+  expect(browserAfter - browserBefore).toBeGreaterThanOrEqual(IDLE_MS)
+  expect(await invokeInPage(page, 'current_session')).toEqual({
+    resolved: true,
+    value: { status: 'locked', user: null },
+  })
+})
+
+test('waitForReply resuelve de inmediato si el backend ya respondió al comando', async () => {
+  await ipc.waitForReply('setup_status')
+})
+
+test('waitForReply no resuelve mientras el backend retiene la respuesta y resuelve al liberarla', async ({
+  context,
+}) => {
+  const heldPage = await context.newPage()
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let markRequested: () => void = () => undefined
+  const requested = new Promise<void>((resolve) => {
+    markRequested = resolve
+  })
+  const heldIpc = await installTauriIpc(heldPage, {
+    overrides: {
+      setup_status: async () => {
+        markRequested()
+        await gate
+        return { needsOwner: false, clockRollback: null }
+      },
+    },
+  })
+  let hasReplied = false
+  const reply = heldIpc.waitForReply('setup_status').then(() => {
+    hasReplied = true
+  })
+
+  await heldPage.goto('/login/')
+  await requested
+  await heldPage.waitForTimeout(100)
+  const repliedWhileHeld = hasReplied
+  release()
+  await reply
+
+  expect(repliedWhileHeld).toBe(false)
+  expect(hasReplied).toBe(true)
 })

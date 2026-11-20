@@ -1,6 +1,14 @@
+pub mod audit_commands;
 pub mod commands;
+pub mod concurrency;
+pub mod events;
+pub mod heartbeat;
 pub mod model;
+pub mod owner_setup;
 pub mod password;
+pub mod recover;
+pub mod recovery;
 pub mod repository;
 pub mod service;
 pub mod throttle;
+pub mod username;

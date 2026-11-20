@@ -1,9 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getState, resetStore } from '@/lib/mock/store'
 import { clientRecordHref } from '@/lib/routes'
 import { freezeDate } from '@/test/clock'
 import { renderWithProviders } from '@/test/render'
+import { dropMockSessionKeepingRustActive } from '@/test/session'
 import { ClientList } from './client-list'
 
 beforeEach(() => {
@@ -150,10 +151,9 @@ describe('ClientList escritura', () => {
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Eliminar' }))
     await waitFor(() => expect(getState().clients[0]?.deletedAt).not.toBeNull())
     await user.click(screen.getByRole('checkbox', { name: 'Mostrar eliminados' }))
-    const { commit } = await import('@/lib/mock/store')
-    commit({ ...getState(), sessionUserId: null })
+    dropMockSessionKeepingRustActive()
 
-    await user.click(await screen.findByRole('button', { name: 'Reactivar María González' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Reactivar María González' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Debes iniciar sesión')
   })

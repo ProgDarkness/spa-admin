@@ -47,6 +47,58 @@ Fase 1: scaffold Tauri 2 y núcleo de seguridad y datos del backend Rust (login 
 - `cargo deny --locked check` con `deny.toml`; solo se ignoran 5 advisories `unmaintained` transitivos, cada uno con `reason`. `RUSTSEC-2026-0502` no se ignora.
 - `bun audit` sin hallazgos.
 
+### Fase 2: Núcleo de datos y seguridad
+
+Migraciones con copia previa, auth con bloqueo persistente y sesión bloqueable, roles y permisos en Rust, auditoría de solo inserción, gestión de usuarios y roles, y primer arranque con recuperación de la Propietaria. Sin publicar. Decisiones en `docs/adr/0004-sesion-y-auditoria.md`, `docs/adr/0005-tiempo-utc-y-hora-local.md` y `docs/adr/0006-users-manage-control-total.md`.
+
+#### Added
+
+- Copia previa de la base de datos (`.bak`) antes de migrar, con permisos `0600` y retención de 3 copias (`SNAPSHOT_RETENTION`). Si la copia nueva falla, no se migra; la poda de copias antiguas es best-effort.
+- Migraciones `0003_audit_log.sql` (auditoría) y `0004_login_throttle.sql` (bloqueo persistido).
+- Lockout persistente en `login_throttle`: 5 fallos bloquean 300 s a usuarios existentes y el bloqueo sobrevive a reinicios.
+- Roles y permisos en Rust: 15 claves `PermissionKey`, validadas en cada comando con `require_permission` contra permisos recargados desde la BD.
+- Sesión con estados `active` y `locked` en Rust (`SessionView`). Bloqueo por inactividad a los 10 min (reloj monotónico) y por reanudación del equipo (latido cada 15 s con reloj monotónico y de pared).
+- Desbloqueo (`unlock`) con reautenticación del mismo usuario, con el mismo throttle que el login.
+- `record_activity` como única vía que extiende la inactividad. El front la envía desde `useActivityTracker`, con throttle de 30 s.
+- Primer arranque (`setup_owner`) con la Propietaria y contraseña de al menos 10 caracteres.
+- Código de recuperación de la Propietaria de 20 caracteres base32 (alfabeto de 32 símbolos) generado con `getrandom`. `recover_password` no requiere sesión y devuelve un código nuevo; los demás usuarios se recuperan con `reset_user_password`.
+- Auditoría de solo inserción en `audit_log`: triggers `audit_log_no_update` y `audit_log_no_delete`, 16 acciones (`AuditAction`) y `list_audit` paginado con máximo de 200 filas por página. La auditoría de cada acción se escribe dentro de su transacción (`audit::record`); la fila `session_locked` es la excepción, porque se escribe en autocommit (ADR 0004).
+- Mitigación de retroceso de reloj al arranque: evento `clock_rollback` con tolerancia de 300 s y banner `ClockRollbackBanner` en la pantalla de login.
+- Gestión de usuarios y roles en Rust (`features/users`): alta, edición de usuario, rol y estado activo, restablecimiento de contraseña por administrador, creación de roles y cambio de permisos. Guarda del último administrador en la misma transacción.
+- 16 comandos IPC tipados: `login`, `logout`, `current_session`, `record_activity`, `unlock`, `setup_status`, `setup_owner`, `recover_password`, `list_users`, `create_user`, `update_user`, `reset_user_password`, `list_roles`, `create_role`, `set_role_permissions` y `list_audit`.
+- Front: pantalla de bloqueo (`lock-screen`), ruta de primer arranque (`/setup`), ruta de recuperación (`/recover`), rastreador de actividad (`useActivityTracker`) y sondeo de sesión cada 15 s (`SESSION_POLL_INTERVAL_MS`).
+- Datos de desarrollo (`dev_seed`) solo en compilación de depuración y solo si está definida `SPA_DEV_SEED_PASSWORD` (mínimo 12 caracteres).
+- Guard genérico de waivers en el job `deps` de `.github/workflows/ci.yml`: falla si la última versión publicada de un paquete con waiver supera `vulnerableUpTo`. `src/lib/audit-waiver.test.ts` exige correspondencia 1:1 entre waivers registrados y flags `--ignore`. Procedimiento para añadir y retirar waivers en `docs/adr/0004-sesion-y-auditoria.md` (sección «CI: waivers de `bun audit`»).
+
+#### Changed
+
+- Comparación del bloqueo persistido y del retroceso de reloj en UTC (`locked_until_utc`, `last_failure_at_utc`, `occurred_at_utc`), con formato ISO 8601 validado por `CHECK`. La hora local queda solo para mostrar (ADR 0005).
+- Migraciones `0003` y `0004` editadas en su lugar, porque Fase 2 no está publicada. Las bases de desarrollo ya migradas a `user_version` 3 o 4 no reciben el esquema actual, porque el runner omite las versiones ya aplicadas: deben recrearse.
+- `current_session` devuelve `SessionView` en lugar de `Option<SessionUser>`. Cambio incompatible del contrato IPC; los consumidores se actualizaron en `src/lib/session.tsx`, `src/features/auth/api.ts` y el shim IPC de desarrollo (`src/app/providers.tsx`).
+- `AppErrorCode` suma `sessionLocked`.
+- `logout` termina la sesión en memoria y después audita `logout` en su propia transacción; la terminación de la sesión no ocurre dentro de esa transacción.
+- El umbral de bloqueo (5 fallos) se pasa como parámetro SQL al upsert de `login_throttle` y queda ligado al `CHECK` del esquema por tests.
+- `export_bindings` (`src-tauri/src/lib_bindings_test.rs`) compara los comandos Rust con `src/lib/bindings.ts` y falla ante deriva sin escribir el archivo. Para regenerar, desde `src-tauri/`: `SPA_UPDATE_BINDINGS=1 cargo test export_bindings`, y después revisar `git diff -- src/lib/bindings.ts`.
+
+#### Removed
+
+- Waiver de picomatch `GHSA-fc5q-39xc-vjpf` (picomatch <= 4.0.7, ReDoS, solo herramientas de desarrollo): retirado el 2026-11-18, porque GitHub retiró el aviso. `.github/audit-waivers.json` queda como `[]` y el job `deps` ejecuta `bun audit` sin `--ignore`.
+
+#### Fixed
+
+- Tests e2e: el reloj del mock es uno solo (`advanceClock` mueve el reloj del navegador y el del backend mock); `installTauriIpc` se instala por página con respuestas inyectables; nuevo `e2e/lockout.spec.ts` para sesión bloqueada y cuenta bloqueada. Sin cambios de comportamiento de producto.
+
+#### Security
+
+- `create_user` y `reset_user_password` reautorizan al actor dentro de la transacción, después del hash de la contraseña, en lugar de fiarse solo de la comprobación previa.
+- Un login denegado por throttle o por bloqueo persistido también ejecuta una verificación Argon2 contra un hash dummy (`reject_after_verification`), para que el tiempo de respuesta no revele el motivo.
+- Límite de concurrencia de Argon2 a 2 operaciones simultáneas (`MAX_CONCURRENT_OPERATIONS`); las demás esperan a un permiso.
+- Evicción del throttle en memoria con tope de 1024 claves (`MAX_TRACKED`): se purgan las entradas caducadas y después se evicta la entrada no bloqueada con menos fallos. Una clave nueva nunca recibe `Denied` por capacidad.
+- Límites residuales documentados en ADR 0004: el throttle en memoria bloquea por nombre de usuario sin distinguir si existe (DoS local acotado a 5 minutos; el bloqueo persistente es por usuario real) y el CSP de producción mantiene `style-src 'unsafe-inline'` por los atributos `style` del prerender de Next, con `script-src 'self'`.
+- Nombres de usuario Unicode: normalización NFC y rechazo de caracteres de control, de formato y de separadores, salvo el espacio ASCII. La unicidad en alta y renombrado usa plegado propio; el login compara con `COLLATE NOCASE`, que solo pliega ASCII.
+- `users.manage` es control total de usuarios y roles: puede asignar cualquier rol (incluido el de la Propietaria), restablecer la contraseña de cualquier cuenta y conceder `users.manage` a otra cuenta. Es riesgo aceptado (ADR 0006); los intentos denegados no se auditan.
+- Windows: `restrict_to_owner` aplica `0700` y `0600` solo en Unix. En Windows no altera permisos del directorio, de `spa.db` ni de los `.bak`, y la protección descansa en la ACL heredada de `%APPDATA%` y en el cifrado SQLCipher (ADR 0002, punto 11).
+
 ## [0.2.0] - 2026-11-13
 
 Rediseño visual «Piedra y bronce». Sin cambios de lógica de dominio ni de textos. Decisiones en `docs/design/piedra-y-bronce.md`.

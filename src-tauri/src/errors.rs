@@ -7,6 +7,7 @@ pub enum AppErrorCode {
     Validation,
     Unauthenticated,
     Forbidden,
+    SessionLocked,
     Internal,
 }
 
@@ -23,6 +24,8 @@ const INVALID_CREDENTIALS_MESSAGE: &str = "Usuario o contraseña incorrectos";
 const INTERNAL_MESSAGE: &str = "No se pudo completar la operación";
 const UNAUTHENTICATED_MESSAGE: &str = "Inicia sesión para continuar";
 const FORBIDDEN_MESSAGE: &str = "No tienes permiso para esta acción";
+const SESSION_LOCKED_MESSAGE: &str = "Sesión bloqueada. Ingresa tu contraseña para continuar";
+const VALIDATION_MESSAGE: &str = "Revisa el dato ingresado";
 
 impl AppError {
     fn without_details(code: AppErrorCode, message: &str) -> Self {
@@ -47,6 +50,17 @@ impl AppError {
 
     pub fn forbidden() -> Self {
         Self::without_details(AppErrorCode::Forbidden, FORBIDDEN_MESSAGE)
+    }
+
+    pub fn session_locked() -> Self {
+        Self::without_details(AppErrorCode::SessionLocked, SESSION_LOCKED_MESSAGE)
+    }
+
+    pub fn validation(field: &str) -> Self {
+        Self {
+            field: Some(field.to_string()),
+            ..Self::without_details(AppErrorCode::Validation, VALIDATION_MESSAGE)
+        }
     }
 
     pub fn internal() -> Self {

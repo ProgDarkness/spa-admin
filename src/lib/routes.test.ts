@@ -7,6 +7,8 @@ describe('ROUTES', () => {
     expect(ROUTES).toEqual({
       home: '/',
       login: '/login',
+      setup: '/setup',
+      recover: '/recover',
       appointments: '/citas',
       clients: '/clientes',
       clientRecord: '/clientes/ficha',
@@ -15,6 +17,13 @@ describe('ROUTES', () => {
       resources: '/ajustes/recursos',
       rates: '/ajustes/tasas',
     })
+  })
+})
+
+describe('rutas de acceso', () => {
+  it('routes_exposes_setup_and_recover', () => {
+    expect(ROUTES.setup).toBe('/setup')
+    expect(ROUTES.recover).toBe('/recover')
   })
 })
 

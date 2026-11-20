@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { PERMISSION_KEYS } from './model'
+import { PERMISSION_KEYS, type AppErrorCode } from './model'
 import { createSeed } from './mock/seed'
+
+describe('AppErrorCode', () => {
+  it('admite sessionLocked', () => {
+    const code: AppErrorCode = 'sessionLocked'
+    expect(code).toBe('sessionLocked')
+  })
+})
 
 describe('PERMISSION_KEYS', () => {
   it('contiene exactamente las 15 claves del plan sin duplicados', () => {

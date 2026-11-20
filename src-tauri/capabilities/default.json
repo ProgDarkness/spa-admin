@@ -1,6 +1,25 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "windows": ["main"],
-  "permissions": ["allow-login", "allow-logout", "allow-current-session"]
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "allow-login",
+    "allow-logout",
+    "allow-current-session",
+    "allow-record-activity",
+    "allow-unlock",
+    "allow-setup-status",
+    "allow-setup-owner",
+    "allow-recover-password",
+    "allow-list-users",
+    "allow-create-user",
+    "allow-update-user",
+    "allow-reset-user-password",
+    "allow-list-roles",
+    "allow-create-role",
+    "allow-set-role-permissions",
+    "allow-list-audit"
+  ]
 }

@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
+import { mockIPC } from '@tauri-apps/api/mocks'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { resetStore } from '@/lib/mock/store'
 import { freezeDate } from '@/test/clock'
@@ -23,6 +24,16 @@ describe('Home', () => {
     renderWithProviders(<Home />, { as: 'lectura' })
 
     await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/citas'))
+    expect(routerMock.replace).toHaveBeenCalledTimes(1)
+  })
+
+  it('page_redirects_when_locked', async () => {
+    mockIPC((cmd) => (cmd === 'current_session' ? { status: 'locked', user: null } : null))
+
+    renderWithProviders(<Home />)
+
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/citas'))
+    expect(routerMock.replace).not.toHaveBeenCalledWith('/login')
     expect(routerMock.replace).toHaveBeenCalledTimes(1)
   })
 
