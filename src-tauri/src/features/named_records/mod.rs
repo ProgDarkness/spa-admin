@@ -13,6 +13,7 @@ const MAX_NAME_CHARS: usize = 80;
 pub enum NamedTable {
     Services,
     Resources,
+    PaymentMethods,
 }
 
 impl NamedTable {
@@ -20,6 +21,7 @@ impl NamedTable {
         match self {
             Self::Services => "services",
             Self::Resources => "resources",
+            Self::PaymentMethods => "payment_methods",
         }
     }
 }

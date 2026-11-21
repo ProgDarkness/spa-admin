@@ -29,6 +29,10 @@ export const commands = {
 	createResource: (input: ResourceInput, options?: InvokeOptions) => typedError<ResourceSummary, AppError>(__TAURI_INVOKE("create_resource", { input }, options)),
 	updateResource: (update: ResourceUpdate, options?: InvokeOptions) => typedError<ResourceSummary, AppError>(__TAURI_INVOKE("update_resource", { update }, options)),
 	setResourceActive: (activation: ResourceActivation, options?: InvokeOptions) => typedError<ResourceSummary, AppError>(__TAURI_INVOKE("set_resource_active", { activation }, options)),
+	listPaymentMethods: (filter: PaymentMethodFilter, options?: InvokeOptions) => typedError<PaymentMethodSummary[], AppError>(__TAURI_INVOKE("list_payment_methods", { filter }, options)),
+	createPaymentMethod: (input: PaymentMethodInput, options?: InvokeOptions) => typedError<PaymentMethodSummary, AppError>(__TAURI_INVOKE("create_payment_method", { input }, options)),
+	updatePaymentMethod: (update: PaymentMethodUpdate, options?: InvokeOptions) => typedError<PaymentMethodSummary, AppError>(__TAURI_INVOKE("update_payment_method", { update }, options)),
+	setPaymentMethodActive: (activation: PaymentMethodActivation, options?: InvokeOptions) => typedError<PaymentMethodSummary, AppError>(__TAURI_INVOKE("set_payment_method_active", { activation }, options)),
 };
 
 /* Types */
@@ -100,6 +104,32 @@ export type OwnerSetupResult = {
 export type PasswordReset = {
 	userId: number,
 	newPassword: string,
+};
+
+export type PaymentMethodActivation = {
+	id: number,
+	active: boolean,
+};
+
+export type PaymentMethodFilter = {
+	includeInactive: boolean,
+};
+
+export type PaymentMethodInput = {
+	name: string,
+};
+
+export type PaymentMethodSummary = {
+	id: number,
+	name: string,
+	active: boolean,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type PaymentMethodUpdate = {
+	id: number,
+	name: string,
 };
 
 export type PermissionKey = "clients.read" | "clients.write" | "catalog.read" | "catalog.write" | "resources.manage" | "appointments.read" | "appointments.write" | "appointments.reopen" | "payments.read" | "payments.write" | "rates.manage" | "metrics.read" | "audit.read" | "users.manage" | "backup.manage";

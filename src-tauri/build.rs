@@ -27,6 +27,10 @@ const APP_COMMANDS: &[&str] = &[
     "create_resource",
     "update_resource",
     "set_resource_active",
+    "list_payment_methods",
+    "create_payment_method",
+    "update_payment_method",
+    "set_payment_method_active",
 ];
 const WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
 

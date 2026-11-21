@@ -28,6 +28,10 @@
     "allow-list-resources",
     "allow-create-resource",
     "allow-update-resource",
-    "allow-set-resource-active"
+    "allow-set-resource-active",
+    "allow-list-payment-methods",
+    "allow-create-payment-method",
+    "allow-update-payment-method",
+    "allow-set-payment-method-active"
   ]
 }

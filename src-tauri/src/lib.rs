@@ -16,6 +16,9 @@ use features::auth::recover::recover_password;
 use features::catalog::commands::{
     create_service, list_services, set_service_active, update_service,
 };
+use features::payment_methods::commands::{
+    create_payment_method, list_payment_methods, set_payment_method_active, update_payment_method,
+};
 use features::resources::commands::{
     create_resource, list_resources, set_resource_active, update_resource,
 };
@@ -54,7 +57,11 @@ fn command_catalog<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
             list_resources,
             create_resource,
             update_resource,
-            set_resource_active
+            set_resource_active,
+            list_payment_methods,
+            create_payment_method,
+            update_payment_method,
+            set_payment_method_active
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .disable_serde_phases()

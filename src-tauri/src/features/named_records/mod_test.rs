@@ -118,6 +118,24 @@ fn name_taken_only_looks_at_the_requested_table() {
 }
 
 #[test]
+fn name_taken_looks_at_payment_methods_only_when_asked() {
+    let conn = migrated();
+    let id = 2;
+
+    assert!(name_taken(&conn, NamedTable::PaymentMethods, "ZELLE", None).unwrap());
+    assert!(name_taken(&conn, NamedTable::PaymentMethods, "pago m\u{f3}vil", None).unwrap());
+    assert!(!name_taken(
+        &conn,
+        NamedTable::PaymentMethods,
+        "Pago m\u{f3}vil",
+        Some(id)
+    )
+    .unwrap());
+    assert!(!name_taken(&conn, NamedTable::Services, "Zelle", None).unwrap());
+    assert!(!name_taken(&conn, NamedTable::Resources, "Zelle", None).unwrap());
+}
+
+#[test]
 fn record_change_stores_actor_action_entity_and_id() {
     let conn = migrated();
     conn.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();

@@ -15,6 +15,11 @@ import type {
   NewRole as BindingsNewRole,
   NewUserInput as BindingsNewUserInput,
   PasswordReset as BindingsPasswordReset,
+  PaymentMethodActivation as BindingsPaymentMethodActivation,
+  PaymentMethodFilter as BindingsPaymentMethodFilter,
+  PaymentMethodInput as BindingsPaymentMethodInput,
+  PaymentMethodSummary as BindingsPaymentMethodSummary,
+  PaymentMethodUpdate as BindingsPaymentMethodUpdate,
   RecoveryRequest as BindingsRecoveryRequest,
   RecoveryResult as BindingsRecoveryResult,
   ResourceActivation as BindingsResourceActivation,
@@ -150,6 +155,24 @@ describe('contrato de tipos entre bindings generados y model', () => {
     expectTypeOf(commands.createResource).parameter(0).toEqualTypeOf<BindingsResourceInput>()
     expectTypeOf(commands.updateResource).parameter(0).toEqualTypeOf<BindingsResourceUpdate>()
     expectTypeOf(commands.setResourceActive).parameter(0).toEqualTypeOf<BindingsResourceActivation>()
+  })
+
+  it('los comandos de métodos de pago exponen sus tipos', () => {
+    expectTypeOf<BindingsPaymentMethodSummary>().toEqualTypeOf<{
+      id: number
+      name: string
+      active: boolean
+      createdAt: string
+      updatedAt: string
+    }>()
+    expectTypeOf<BindingsPaymentMethodInput>().toEqualTypeOf<{ name: string }>()
+    expectTypeOf<BindingsPaymentMethodUpdate>().toEqualTypeOf<{ id: number; name: string }>()
+    expectTypeOf<BindingsPaymentMethodFilter>().toEqualTypeOf<{ includeInactive: boolean }>()
+    expectTypeOf<BindingsPaymentMethodActivation>().toEqualTypeOf<{ id: number; active: boolean }>()
+    expectTypeOf(commands.listPaymentMethods).parameter(0).toEqualTypeOf<BindingsPaymentMethodFilter>()
+    expectTypeOf(commands.createPaymentMethod).parameter(0).toEqualTypeOf<BindingsPaymentMethodInput>()
+    expectTypeOf(commands.updatePaymentMethod).parameter(0).toEqualTypeOf<BindingsPaymentMethodUpdate>()
+    expectTypeOf(commands.setPaymentMethodActive).parameter(0).toEqualTypeOf<BindingsPaymentMethodActivation>()
   })
 
   it('listAudit expone AuditQuery, AuditPage, AuditEntry y sus enums', () => {
