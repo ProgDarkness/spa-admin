@@ -1,8 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
 import { DEV_PASSWORD, IDLE_LOCK_MS } from '../../src/test/ipc/auth-backend'
 import {
+  EXPECTED_DEV_PAYMENT_METHODS,
+  EXPECTED_DEV_RATES,
   EXPECTED_DEV_RESOURCES,
   EXPECTED_DEV_SERVICES,
+  paymentMethodIdentitiesOf,
+  rateIdentitiesOf,
   resourceIdentitiesOf,
   serviceIdentitiesOf,
 } from '../../src/test/ipc/dev-seed-expectations'
@@ -164,6 +168,32 @@ test('list_resources exige sesión y con la propietaria lista Cabina 1, Cabina 2
   const listed = await invokeInPage(page, 'list_resources', filter)
 
   expect(listed.resolved && resourceIdentitiesOf(listed.value)).toEqual(EXPECTED_DEV_RESOURCES)
+})
+
+test('list_payment_methods exige sesión y con la propietaria lista los cinco métodos de ejemplo', async ({ page }) => {
+  const filter = { filter: { includeInactive: true } }
+
+  expect(await invokeInPage(page, 'list_payment_methods', filter)).toMatchObject({
+    resolved: false,
+    isError: false,
+    payload: { code: 'unauthenticated' },
+  })
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+  const listed = await invokeInPage(page, 'list_payment_methods', filter)
+
+  expect(listed.resolved && paymentMethodIdentitiesOf(listed.value)).toEqual(EXPECTED_DEV_PAYMENT_METHODS)
+})
+
+test('list_rates exige sesión y con la propietaria lista las tasas de ejemplo por fecha descendente', async ({ page }) => {
+  expect(await invokeInPage(page, 'list_rates')).toMatchObject({
+    resolved: false,
+    isError: false,
+    payload: { code: 'unauthenticated' },
+  })
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+  const listed = await invokeInPage(page, 'list_rates')
+
+  expect(listed.resolved && rateIdentitiesOf(listed.value)).toEqual(EXPECTED_DEV_RATES)
 })
 
 const THRESHOLD_MARGIN_MS = 5_000

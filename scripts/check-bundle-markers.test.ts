@@ -54,6 +54,8 @@ describe('marcadores literales del bundle', () => {
   it.each([
     'createCatalogIpcBackend',
     'createResourcesIpcBackend',
+    'createPaymentMethodsIpcBackend',
+    'createRatesIpcBackend',
     'createDevBackends',
     'composeBackends',
     'createAuthIpcBackend',

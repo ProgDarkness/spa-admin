@@ -3,16 +3,19 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { commit, getState, resetStore } from '@/lib/mock/store'
 import { ROUTES } from '@/lib/routes'
 import { freezeDate } from '@/test/clock'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import { MissingRateBanner } from './missing-rate-banner'
 
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
   resetStore()
+  installDevIpc()
 })
 
 function removeTodayRate() {
   commit({ ...getState(), rates: getState().rates.filter((rate) => rate.date !== '2026-11-12') })
+  installDevIpc()
 }
 
 describe('MissingRateBanner', () => {

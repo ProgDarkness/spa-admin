@@ -2,10 +2,16 @@ import { invoke } from '@tauri-apps/api/core'
 import { clearMocks } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEV_PASSWORD } from '@/test/ipc/auth-backend'
+import { freezeDate } from '@/test/clock'
 import { commit, getState, resetStore } from '@/lib/mock/store'
 import {
+  EXPECTED_DEV_PAYMENT_METHODS,
+  EXPECTED_DEV_RATES,
   EXPECTED_DEV_RESOURCES,
   EXPECTED_DEV_SERVICES,
+  paymentMethodIdentitiesOf,
+  rateIdentitiesOf,
+  SEED_REFERENCE_DATE,
   resourceIdentitiesOf,
   serviceIdentitiesOf,
 } from './dev-seed-expectations'
@@ -95,6 +101,32 @@ describe('installDevBrowserIpc', () => {
     const resources = await invoke('list_resources', { filter: { includeInactive: true } })
 
     expect(resourceIdentitiesOf(resources)).toEqual(EXPECTED_DEV_RESOURCES)
+  })
+
+  it('atiende los comandos de métodos de pago con la sesión iniciada y rechaza sin sesión', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    installDevBrowserIpc()
+
+    await expect(invoke('list_payment_methods', { filter: { includeInactive: true } })).rejects.toMatchObject({
+      code: 'unauthenticated',
+    })
+    await invoke('login', OWNER_CREDENTIALS)
+    const methods = await invoke('list_payment_methods', { filter: { includeInactive: true } })
+
+    expect(paymentMethodIdentitiesOf(methods)).toEqual(EXPECTED_DEV_PAYMENT_METHODS)
+  })
+
+  it('atiende los comandos de tasas con la sesión iniciada y rechaza sin sesión', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    freezeDate(`${SEED_REFERENCE_DATE}T09:00`)
+    resetStore()
+    installDevBrowserIpc()
+
+    await expect(invoke('list_rates')).rejects.toMatchObject({ code: 'unauthenticated' })
+    await invoke('login', OWNER_CREDENTIALS)
+    const rates = await invoke('list_rates')
+
+    expect(rateIdentitiesOf(rates)).toEqual(EXPECTED_DEV_RATES)
   })
 
   it('marca window con el centinela al instalarse', () => {

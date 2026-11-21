@@ -5,7 +5,14 @@ import type { IpcBackend } from './auth-backend'
 import { composeBackends, createDevBackends } from './dev-backends'
 
 const SEED = createSeed('2026-11-12')
-const ALL_PERMISSIONS: PermissionKey[] = ['catalog.read', 'catalog.write', 'resources.manage', 'appointments.read']
+const ALL_PERMISSIONS: PermissionKey[] = [
+  'catalog.read',
+  'catalog.write',
+  'resources.manage',
+  'appointments.read',
+  'payments.read',
+  'rates.manage',
+]
 const LIST_ALL = { filter: { includeInactive: true } }
 
 function userWith(...permissions: PermissionKey[]): SessionUser {
@@ -70,6 +77,14 @@ describe('createDevBackends', () => {
     expect(backend('list_resources', LIST_ALL)).toHaveLength(SEED.resources.length)
   })
 
+  it('atiende los comandos de métodos de pago con el seed recibido', () => {
+    expect(devBackends()('list_payment_methods', LIST_ALL)).toHaveLength(SEED.paymentMethods.length)
+  })
+
+  it('atiende los comandos de tasas con el seed recibido', () => {
+    expect(devBackends()('list_rates', undefined)).toHaveLength(SEED.rates.length)
+  })
+
   it('delega en el backend de autenticación todo lo demás', () => {
     expect(devBackends()('current_session', undefined)).toEqual({ cmd: 'current_session', reply: 'auth' })
   })
@@ -91,11 +106,19 @@ describe('createDevBackends', () => {
   })
 
   it('usa el seed de recursos y el de servicios por separado', () => {
-    const seed = { services: SEED.services.slice(0, 2), resources: SEED.resources.slice(0, 1) }
+    const seed = {
+      ...SEED,
+      services: SEED.services.slice(0, 2),
+      resources: SEED.resources.slice(0, 1),
+      paymentMethods: SEED.paymentMethods.slice(0, 3),
+      rates: SEED.rates.slice(0, 2),
+    }
     const backend = createDevBackends({ auth: authReplying('auth'), session: () => userWith(...ALL_PERMISSIONS), seed })
 
     expect(backend('list_services', LIST_ALL)).toHaveLength(2)
     expect(backend('list_resources', LIST_ALL)).toHaveLength(1)
+    expect(backend('list_payment_methods', LIST_ALL)).toHaveLength(3)
+    expect(backend('list_rates', undefined)).toHaveLength(2)
   })
 
   it('el estado es propio de cada composición', () => {
@@ -104,9 +127,15 @@ describe('createDevBackends', () => {
 
     first('create_resource', { input: { name: 'Sala nueva', kind: 'cabin' } })
     first('create_service', { input: { name: 'Servicio nuevo', priceCents: 100, durationMin: 5 } })
+    first('create_payment_method', { input: { name: 'Cripto' } })
+    first('upsert_rate', { date: '2030-01-01', rateBsPerUsdE4: 1 })
 
     expect(second('list_resources', LIST_ALL)).toHaveLength(SEED.resources.length)
     expect(second('list_services', LIST_ALL)).toHaveLength(SEED.services.length)
+    expect(second('list_payment_methods', LIST_ALL)).toHaveLength(SEED.paymentMethods.length)
+    expect(second('list_rates', undefined)).toHaveLength(SEED.rates.length)
+    expect(first('list_rates', undefined)).toHaveLength(SEED.rates.length + 1)
     expect(first('list_resources', LIST_ALL)).toHaveLength(SEED.resources.length + 1)
+    expect(first('list_payment_methods', LIST_ALL)).toHaveLength(SEED.paymentMethods.length + 1)
   })
 })

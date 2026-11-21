@@ -35,11 +35,19 @@ export function parseRateE4(text: string): RateE4 | null {
   return parsed === null || parsed === 0 ? null : parsed
 }
 
-export function formatRateE4(rate: RateE4): string {
+function formatRateWithDecimals(rate: RateE4, minimumFractionDigits: number): string {
   return new Intl.NumberFormat('es-VE', {
-    minimumFractionDigits: CENTS_DECIMALS,
+    minimumFractionDigits,
     maximumFractionDigits: RATE_DECIMALS,
   }).format(rate / RATE_SCALE)
+}
+
+export function formatRateE4(rate: RateE4): string {
+  return formatRateWithDecimals(rate, CENTS_DECIMALS)
+}
+
+export function formatRateE4Fixed(rate: RateE4): string {
+  return formatRateWithDecimals(rate, RATE_DECIMALS)
 }
 
 export function parseCents(text: string): Cents | null {

@@ -2,19 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Id, ServiceInput, ServiceListFilter } from '@/lib/model'
 import { QUERY_KEYS } from '@/lib/query-keys'
 import { unwrap } from '@/lib/result'
-import { createService, listPaymentMethods, listServices, setServiceActive, updateService } from './api'
+import { createService, listServices, setServiceActive, updateService } from './api'
 
 export function useServices(filter: ServiceListFilter) {
   return useQuery({
     queryKey: [QUERY_KEYS.services, filter],
     queryFn: async () => unwrap(await listServices(filter)),
-  })
-}
-
-export function usePaymentMethods() {
-  return useQuery({
-    queryKey: [QUERY_KEYS.paymentMethods],
-    queryFn: async () => unwrap(await listPaymentMethods()),
   })
 }
 

@@ -1,4 +1,11 @@
-import type { ResourceFilter, ResourceSummary, ServiceFilter, ServiceSummary } from './bindings'
+import type {
+  PaymentMethodFilter,
+  PaymentMethodSummary,
+  ResourceFilter,
+  ResourceSummary,
+  ServiceFilter,
+  ServiceSummary,
+} from './bindings'
 
 export type Id = number
 export type Cents = number
@@ -61,8 +68,10 @@ export type Resource = Omit<ResourceSummary, 'createdAt' | 'updatedAt'>
 export type { ResourceInput, ResourceKind } from './bindings'
 export type ResourceListFilter = ResourceFilter
 
-export type PaymentMethod = { id: Id; name: string; active: boolean }
-export type ExchangeRate = { date: LocalDate; rateBsPerUsdE4: RateE4 }
+export type PaymentMethod = Omit<PaymentMethodSummary, 'createdAt' | 'updatedAt'>
+export type { PaymentMethodInput } from './bindings'
+export type PaymentMethodListFilter = PaymentMethodFilter
+export type { ExchangeRate } from './bindings'
 
 export type AppointmentStatus = 'scheduled' | 'inProgress' | 'completed' | 'cancelled' | 'noShow'
 export type Appointment = {

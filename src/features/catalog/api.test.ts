@@ -6,7 +6,7 @@ import type { AppError, Service, ServiceInput } from '@/lib/model'
 import { freezeDate } from '@/test/clock'
 import { createCatalogIpcBackend } from '@/test/ipc/catalog-backend'
 import { signInAs } from '@/test/session'
-import { createService, listPaymentMethods, listServices, setServiceActive, updateService } from './api'
+import { createService, listServices, setServiceActive, updateService } from './api'
 
 const validInput: ServiceInput = { name: 'Depilación', priceCents: 2_500, durationMin: 30 }
 const INACTIVE_SEED_ID = 8
@@ -345,33 +345,5 @@ describe('setServiceActive', () => {
 
     expect(result).toMatchObject({ status: 'ok', data: { id: 1, active: true } })
     expect(getState().appointments).toBe(before.appointments)
-  })
-})
-
-describe('listPaymentMethods', () => {
-  it('rechaza sin sesión con unauthenticated', async () => {
-    expect(await listPaymentMethods()).toMatchObject({ status: 'error', error: { code: 'unauthenticated' } })
-  })
-
-  it.each(['propietaria', 'recepcion', 'lectura'] as const)('lista los métodos del seed a %s', async (username) => {
-    signInAs(username)
-
-    const result = await listPaymentMethods()
-
-    expect(result.status === 'ok' && result.data.map((method) => method.name)).toEqual([
-      'Efectivo',
-      'Pago móvil',
-      'Zelle',
-      'Transferencia',
-      'Punto de venta',
-    ])
-  })
-
-  it('devuelve una copia que no aliasa el estado', async () => {
-    signInAs('lectura')
-
-    const result = await listPaymentMethods()
-
-    expect(result.status === 'ok' && result.data).not.toBe(getState().paymentMethods)
   })
 })

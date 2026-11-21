@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  EXPECTED_DEV_PAYMENT_METHODS,
+  EXPECTED_DEV_RATES,
   EXPECTED_DEV_RESOURCES,
   EXPECTED_DEV_SERVICES,
+  paymentMethodIdentitiesOf,
+  rateIdentitiesOf,
   resourceIdentitiesOf,
   serviceIdentitiesOf,
 } from './dev-seed-expectations'
@@ -34,7 +38,49 @@ describe('serviceIdentitiesOf', () => {
   })
 })
 
+describe('paymentMethodIdentitiesOf', () => {
+  it('conserva solo id, name y active de cada fila', () => {
+    const rows = [{ id: 1, name: 'Efectivo', active: true, createdAt: 'x', updatedAt: 'y' }]
+
+    expect(paymentMethodIdentitiesOf(rows)).toEqual([{ id: 1, name: 'Efectivo', active: true }])
+  })
+
+  it('devuelve vacío si lo recibido no es un arreglo', () => {
+    expect(paymentMethodIdentitiesOf(null)).toEqual([])
+  })
+})
+
+describe('rateIdentitiesOf', () => {
+  it('conserva solo date y rateBsPerUsdE4 de cada fila', () => {
+    const rows = [{ date: '2026-11-12', rateBsPerUsdE4: 365000, extra: 1 }]
+
+    expect(rateIdentitiesOf(rows)).toEqual([{ date: '2026-11-12', rateBsPerUsdE4: 365000 }])
+  })
+
+  it('devuelve vacío si lo recibido no es un arreglo', () => {
+    expect(rateIdentitiesOf(undefined)).toEqual([])
+  })
+})
+
 describe('esperados del seed de desarrollo', () => {
+  it('las tasas esperadas son siete días hasta la fecha de referencia, en orden descendente', () => {
+    expect(EXPECTED_DEV_RATES).toHaveLength(7)
+    expect(EXPECTED_DEV_RATES[0]).toEqual({ date: '2026-11-12', rateBsPerUsdE4: 365000 })
+    expect(EXPECTED_DEV_RATES.map((rate) => rate.date)).toEqual(
+      EXPECTED_DEV_RATES.map((rate) => rate.date).toSorted().toReversed(),
+    )
+  })
+
+  it('los métodos de pago esperados son los cinco del seed, activos y ordenados por nombre como el backend', () => {
+    expect(EXPECTED_DEV_PAYMENT_METHODS.map(({ id, name, active }) => [id, name, active])).toEqual([
+      [1, 'Efectivo', true],
+      [2, 'Pago móvil', true],
+      [5, 'Punto de venta', true],
+      [4, 'Transferencia', true],
+      [3, 'Zelle', true],
+    ])
+  })
+
   it('los recursos esperados son Cabina 1, Cabina 2 y Manicure (Rosa) inactivo con ids 1 a 3', () => {
     expect(EXPECTED_DEV_RESOURCES.map(({ id, name, active }) => [id, name, active])).toEqual([
       [1, 'Cabina 1', true],

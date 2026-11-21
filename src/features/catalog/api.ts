@@ -1,11 +1,9 @@
 import { commands, type ServiceSummary } from '@/lib/bindings'
 import { callBackend } from '@/lib/ipc'
-import { authorize, type PermissionRequirement } from '@/lib/mock/authorize'
 import { commit, getState, upsertById } from '@/lib/mock/store'
-import type { Id, PaymentMethod, Result, Service, ServiceInput, ServiceListFilter } from '@/lib/model'
-import { mapOk, ok } from '@/lib/result'
+import type { Id, Result, Service, ServiceInput, ServiceListFilter } from '@/lib/model'
+import { mapOk } from '@/lib/result'
 
-const PAYMENT_METHODS_READ: PermissionRequirement = { anyOf: ['catalog.read', 'payments.read'] }
 const SERVICE_CURRENCY = 'USD'
 
 function toService(summary: ServiceSummary): Service {
@@ -46,10 +44,4 @@ export function updateService(id: Id, input: ServiceInput): Promise<Result<Servi
 
 export function setServiceActive(id: Id, active: boolean): Promise<Result<Service>> {
   return callServiceBackend(() => commands.setServiceActive({ id, active }))
-}
-
-export async function listPaymentMethods(): Promise<Result<PaymentMethod[]>> {
-  const access = authorize(getState(), PAYMENT_METHODS_READ)
-  if (access.status === 'error') return access
-  return ok([...getState().paymentMethods])
 }

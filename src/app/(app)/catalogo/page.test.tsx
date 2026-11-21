@@ -29,7 +29,7 @@ describe('CatalogPage lectura', () => {
 
     const section = await screen.findByRole('region', { name: 'Métodos de pago' })
     const items = await within(section).findAllByRole('listitem')
-    expect(items.map((item) => item.textContent)).toEqual(['Efectivo', 'Pago móvil', 'Zelle', 'Transferencia', 'Punto de venta'])
+    expect(items.map((item) => item.textContent)).toEqual(['Efectivo', 'Pago móvil', 'Punto de venta', 'Transferencia', 'Zelle'])
     expect(within(section).queryByRole('button')).not.toBeInTheDocument()
   })
 

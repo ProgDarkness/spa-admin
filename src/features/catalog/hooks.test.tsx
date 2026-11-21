@@ -8,7 +8,6 @@ import { freezeDate } from '@/test/clock'
 import { signInAs } from '@/test/session'
 import {
   useCreateService,
-  usePaymentMethods,
   useServices,
   useSetServiceActive,
   useUpdateService,
@@ -60,19 +59,6 @@ describe('useServices', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(appErrorOf(result.current.error)?.code).toBe('unauthenticated')
-  })
-})
-
-describe('usePaymentMethods', () => {
-  it('carga los métodos bajo la clave [paymentMethods]', async () => {
-    signInAs('lectura')
-    const { queryClient, wrapper } = setup()
-
-    const { result } = renderHook(() => usePaymentMethods(), { wrapper })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data).toHaveLength(5)
-    expect(queryClient.getQueryData(['paymentMethods'])).toEqual(result.current.data)
   })
 })
 

@@ -5,6 +5,8 @@ const IDENTIFIER_MARKERS: readonly string[] = [
   'mockIPC',
   'createCatalogIpcBackend',
   'createResourcesIpcBackend',
+  'createPaymentMethodsIpcBackend',
+  'createRatesIpcBackend',
   'createDevBackends',
   'composeBackends',
   'createAuthIpcBackend',

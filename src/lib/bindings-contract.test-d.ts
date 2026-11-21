@@ -45,7 +45,11 @@ import type { SessionStatus as BindingsSessionStatus, SessionView as BindingsSes
 import type {
   AppError,
   AppErrorCode,
+  ExchangeRate,
   PermissionKey,
+  PaymentMethod,
+  PaymentMethodInput,
+  PaymentMethodListFilter,
   Resource,
   ResourceInput,
   ResourceKind,
@@ -226,8 +230,21 @@ describe('contrato de tipos entre bindings generados y model', () => {
     expectTypeOf(commands.setPaymentMethodActive).parameter(0).toEqualTypeOf<BindingsPaymentMethodActivation>()
   })
 
+  it('PaymentMethod de model se deriva de PaymentMethodSummary sin marcas de tiempo', () => {
+    expectTypeOf<PaymentMethod>().toEqualTypeOf<Omit<BindingsPaymentMethodSummary, 'createdAt' | 'updatedAt'>>()
+    expectTypeOf<keyof PaymentMethod>().toEqualTypeOf<
+      Exclude<keyof BindingsPaymentMethodSummary, 'createdAt' | 'updatedAt'>
+    >()
+  })
+
+  it('PaymentMethodInput y PaymentMethodListFilter de model son los de bindings', () => {
+    expectTypeOf<PaymentMethodInput>().toEqualTypeOf<BindingsPaymentMethodInput>()
+    expectTypeOf<PaymentMethodListFilter>().toEqualTypeOf<BindingsPaymentMethodFilter>()
+  })
+
   it('los comandos de tasas de cambio exponen sus tipos', () => {
     expectTypeOf<BindingsExchangeRate>().toEqualTypeOf<{ date: string; rateBsPerUsdE4: number }>()
+    expectTypeOf<ExchangeRate>().toEqualTypeOf<BindingsExchangeRate>()
     expectTypeOf(commands.getRate).parameter(0).toEqualTypeOf<string>()
     expectTypeOf(commands.upsertRate).parameter(0).toEqualTypeOf<string>()
     expectTypeOf(commands.upsertRate).parameter(1).toEqualTypeOf<number>()

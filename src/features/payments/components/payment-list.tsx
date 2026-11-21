@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { usePaymentMethods } from '@/features/catalog/hooks'
+import { usePaymentMethods } from '@/features/payment-methods/hooks'
 import type { Id, Payment } from '@/lib/model'
 import { formatCents, formatRateE4 } from '@/lib/money'
 import { appErrorOf } from '@/lib/result'
