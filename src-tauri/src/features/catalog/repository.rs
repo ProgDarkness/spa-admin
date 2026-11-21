@@ -1,9 +1,8 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use unicode_normalization::UnicodeNormalization;
 
 use super::model::{ServiceFilter, ServiceInput, ServiceSummary};
 use crate::db::DbError;
-use crate::features::auth::username::unicode_casefold;
+use crate::features::named_records::{name_key, name_taken, NamedTable};
 
 const SERVICE_SUMMARY_SQL: &str = "SELECT id, name, price_cents, currency, duration_min, \
      active, created_at, updated_at FROM services";
@@ -47,21 +46,12 @@ pub fn find_service(conn: &Connection, service_id: i64) -> Result<Option<Service
     Ok(service)
 }
 
-pub fn name_key(name: &str) -> String {
-    unicode_casefold(&name.nfkc().collect::<String>())
-}
-
 pub fn service_name_taken(
     conn: &Connection,
     name: &str,
     except_service_id: Option<i64>,
 ) -> Result<bool, DbError> {
-    let taken = conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM services WHERE name_key = ?1 AND id IS NOT ?2)",
-        params![name_key(name), except_service_id],
-        |row| row.get(0),
-    )?;
-    Ok(taken)
+    name_taken(conn, NamedTable::Services, name, except_service_id)
 }
 
 pub fn insert_service(

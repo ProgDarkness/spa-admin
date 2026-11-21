@@ -202,15 +202,6 @@ fn stored_key(conn: &Connection, id: i64) -> String {
 }
 
 #[test]
-fn name_key_unifies_case_width_and_normalization_forms() {
-    assert_eq!(name_key("Masaje"), name_key("MASAJE"));
-    assert_eq!(name_key("\u{FF2D}asaje"), name_key("Masaje"));
-    assert_eq!(name_key("Cafe\u{301}"), name_key("CAF\u{c9}"));
-    assert_eq!(name_key("\u{FB01}nal"), name_key("FINAL"));
-    assert_ne!(name_key("Masaje"), name_key("Masajes"));
-}
-
-#[test]
 fn insert_and_update_persist_the_name_key_of_the_name() {
     let conn = migrated();
     let actor_id = actor(&conn);

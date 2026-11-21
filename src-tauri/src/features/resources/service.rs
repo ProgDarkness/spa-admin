@@ -1,29 +1,20 @@
 use rusqlite::Connection;
 use serde_json::{json, Value};
-use unicode_normalization::UnicodeNormalization;
 
 use super::model::{
     ResourceActivation, ResourceInput, ResourceSummary, ResourceUpdate, ResourcesError,
 };
 use super::repository;
-use crate::features::audit::{self, AuditAction, AuditEntity, Diff, NewAuditEntry};
-use crate::features::auth::username::{collapse_ascii_spaces, is_allowed_text_character};
+use crate::features::audit::{AuditAction, AuditEntity, Diff};
+use crate::features::named_records::{record_change, valid_name as valid_record_name};
 
 const ID_FIELD: &str = "id";
 const NAME_FIELD: &str = "name";
 const KIND_FIELD: &str = "kind";
 const ACTIVE_FIELD: &str = "active";
-const MAX_NAME_CHARS: usize = 80;
 
 fn valid_name(raw: &str) -> Result<String, ResourcesError> {
-    let composed: String = raw.trim().nfc().collect();
-    let name = collapse_ascii_spaces(&composed);
-    let is_clean = name.chars().all(is_allowed_text_character);
-    if is_clean && (1..=MAX_NAME_CHARS).contains(&name.chars().count()) {
-        Ok(name)
-    } else {
-        Err(ResourcesError::Validation { field: NAME_FIELD })
-    }
+    valid_record_name(raw).ok_or(ResourcesError::Validation { field: NAME_FIELD })
 }
 
 fn require_resource(
@@ -53,15 +44,14 @@ fn record(
     resource_id: i64,
     diff: Option<Diff>,
 ) -> Result<(), ResourcesError> {
-    let entry = NewAuditEntry {
-        actor_user_id: Some(actor_id),
+    Ok(record_change(
+        conn,
+        actor_id,
         action,
-        entity: AuditEntity::Resource,
-        entity_id: Some(resource_id),
+        AuditEntity::Resource,
+        resource_id,
         diff,
-    };
-    audit::record(conn, &entry)?;
-    Ok(())
+    )?)
 }
 
 fn resource_snapshot(resource: &ResourceSummary) -> Value {

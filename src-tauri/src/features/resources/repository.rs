@@ -1,10 +1,9 @@
 use rusqlite::types::Type;
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use unicode_normalization::UnicodeNormalization;
 
 use super::model::{ResourceFilter, ResourceInput, ResourceKind, ResourceSummary};
 use crate::db::DbError;
-use crate::features::auth::username::unicode_casefold;
+use crate::features::named_records::{name_key, name_taken, NamedTable};
 
 const RESOURCE_SUMMARY_SQL: &str =
     "SELECT id, name, kind, active, created_at, updated_at FROM resources";
@@ -55,21 +54,12 @@ pub fn find_resource(
     Ok(resource)
 }
 
-pub fn name_key(name: &str) -> String {
-    unicode_casefold(&name.nfkc().collect::<String>())
-}
-
 pub fn resource_name_taken(
     conn: &Connection,
     name: &str,
     except_resource_id: Option<i64>,
 ) -> Result<bool, DbError> {
-    let taken = conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM resources WHERE name_key = ?1 AND id IS NOT ?2)",
-        params![name_key(name), except_resource_id],
-        |row| row.get(0),
-    )?;
-    Ok(taken)
+    name_taken(conn, NamedTable::Resources, name, except_resource_id)
 }
 
 pub fn insert_resource(

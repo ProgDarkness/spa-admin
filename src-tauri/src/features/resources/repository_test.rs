@@ -266,15 +266,6 @@ fn set_resource_active_flips_only_the_flag() {
 }
 
 #[test]
-fn name_key_unifies_case_width_and_normalization_forms() {
-    assert_eq!(name_key("Cabina"), name_key("CABINA"));
-    assert_eq!(name_key("\u{FF23}abina"), name_key("Cabina"));
-    assert_eq!(name_key("Cafe\u{301}"), name_key("CAF\u{c9}"));
-    assert_eq!(name_key("\u{FB01}nal"), name_key("FINAL"));
-    assert_ne!(name_key("Cabina"), name_key("Cabinas"));
-}
-
-#[test]
 fn insert_and_update_persist_the_name_key_of_the_name() {
     let conn = migrated();
     let actor_id = actor(&conn);

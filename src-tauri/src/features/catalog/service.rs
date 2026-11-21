@@ -1,31 +1,22 @@
 use rusqlite::Connection;
 use serde_json::{json, Value};
-use unicode_normalization::UnicodeNormalization;
 
 use super::model::{
     CatalogError, ServiceActivation, ServiceInput, ServiceSummary, ServiceUpdate, MAX_AMOUNT_CENTS,
 };
 use super::repository;
-use crate::features::audit::{self, AuditAction, AuditEntity, Diff, NewAuditEntry};
-use crate::features::auth::username::{collapse_ascii_spaces, is_allowed_text_character};
+use crate::features::audit::{AuditAction, AuditEntity, Diff};
+use crate::features::named_records::{record_change, valid_name as valid_record_name};
 
 const ID_FIELD: &str = "id";
 const NAME_FIELD: &str = "name";
 const PRICE_FIELD: &str = "priceCents";
 const DURATION_FIELD: &str = "durationMin";
-const MAX_NAME_CHARS: usize = 80;
 const MAX_DURATION_MIN: i64 = 1440;
 const DURATION_STEP_MIN: i64 = 5;
 
 fn valid_name(raw: &str) -> Result<String, CatalogError> {
-    let composed: String = raw.trim().nfc().collect();
-    let name = collapse_ascii_spaces(&composed);
-    let is_clean = name.chars().all(is_allowed_text_character);
-    if is_clean && (1..=MAX_NAME_CHARS).contains(&name.chars().count()) {
-        Ok(name)
-    } else {
-        Err(CatalogError::Validation { field: NAME_FIELD })
-    }
+    valid_record_name(raw).ok_or(CatalogError::Validation { field: NAME_FIELD })
 }
 
 fn valid_price(price_cents: i64) -> Result<i64, CatalogError> {
@@ -84,15 +75,14 @@ fn record(
     service_id: i64,
     diff: Option<Diff>,
 ) -> Result<(), CatalogError> {
-    let entry = NewAuditEntry {
-        actor_user_id: Some(actor_id),
+    Ok(record_change(
+        conn,
+        actor_id,
         action,
-        entity: AuditEntity::Service,
-        entity_id: Some(service_id),
+        AuditEntity::Service,
+        service_id,
         diff,
-    };
-    audit::record(conn, &entry)?;
-    Ok(())
+    )?)
 }
 
 fn service_snapshot(service: &ServiceSummary) -> Value {
