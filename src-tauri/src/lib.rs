@@ -1,6 +1,8 @@
 pub mod db;
 #[cfg(debug_assertions)]
 pub mod dev_seed;
+#[cfg(debug_assertions)]
+pub mod dev_seed_catalog;
 pub mod errors;
 pub mod features;
 pub mod keystore;

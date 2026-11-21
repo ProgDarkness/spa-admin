@@ -209,7 +209,7 @@ fn copy_failure_aborts_before_migrate() {
     let failing_snapshot =
         |_: &Path, _: i64| Err(SnapshotError::Io(std::io::Error::other("disk full")));
 
-    let result = bootstrap_with(dir.path(), &store, failing_snapshot);
+    let result = bootstrap_with(dir.path(), &store, failing_snapshot, &|_: &str| None);
 
     assert!(matches!(result, Err(SetupError::Snapshot(_))));
     assert_eq!(version_of(&database_path(dir.path()), &store), 2);
@@ -343,4 +343,48 @@ fn install_manages_nothing_when_the_bootstrap_fails() {
     assert!(app.try_state::<Database>().is_none());
     assert!(app.try_state::<SessionState>().is_none());
     assert!(app.try_state::<LoginThrottle>().is_none());
+}
+
+#[cfg(debug_assertions)]
+fn row_count(bootstrap: &Bootstrap, table: &'static str) -> i64 {
+    bootstrap
+        .database
+        .with_conn(|conn| {
+            Ok(
+                conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })?,
+            )
+        })
+        .unwrap()
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn bootstrap_with_the_seed_variable_seeds_users_services_and_rates() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+    let read_env = |name: &str| {
+        (name == crate::dev_seed::SEED_PASSWORD_VAR).then(|| "clave-de-desarrollo-1".to_string())
+    };
+
+    let bootstrap = bootstrap_with(dir.path(), &store, snapshot_before_migrate, &read_env).unwrap();
+
+    assert_eq!(row_count(&bootstrap, "users"), 3);
+    assert_eq!(row_count(&bootstrap, "services"), 8);
+    assert_eq!(row_count(&bootstrap, "exchange_rates"), 7);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn bootstrap_without_the_seed_variable_seeds_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+    let read_env = |_: &str| None;
+
+    let bootstrap = bootstrap_with(dir.path(), &store, snapshot_before_migrate, &read_env).unwrap();
+
+    assert_eq!(row_count(&bootstrap, "users"), 0);
+    assert_eq!(row_count(&bootstrap, "services"), 0);
+    assert_eq!(row_count(&bootstrap, "exchange_rates"), 0);
 }

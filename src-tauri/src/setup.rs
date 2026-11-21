@@ -31,6 +31,8 @@ pub enum SetupError {
     Auth(#[from] AuthError),
     #[error("seed password too short")]
     SeedPasswordTooShort,
+    #[error("seed catalog rejected")]
+    SeedCatalogRejected,
 }
 
 const DIRECTORY_MODE: u32 = 0o700;
@@ -54,24 +56,36 @@ pub struct Bootstrap {
 }
 
 #[cfg(debug_assertions)]
-fn seed_for_development(database: &Database, passwords: &PasswordPolicy) -> Result<(), SetupError> {
-    let read_env = |name: &str| std::env::var(name).ok();
-    database.with_conn(|conn| Ok(crate::dev_seed::seed_if_empty(conn, passwords, &read_env)))?
+fn seed_for_development(
+    database: &Database,
+    passwords: &PasswordPolicy,
+    read_env: &dyn Fn(&str) -> Option<String>,
+) -> Result<(), SetupError> {
+    database.with_conn(|conn| {
+        Ok(crate::dev_seed::seed_if_empty(conn, passwords, read_env)
+            .and_then(|()| crate::dev_seed_catalog::seed_catalog_if_empty(conn, read_env)))
+    })?
 }
 
 #[cfg(not(debug_assertions))]
-fn seed_for_development(_: &Database, _: &PasswordPolicy) -> Result<(), SetupError> {
+fn seed_for_development(
+    _: &Database,
+    _: &PasswordPolicy,
+    _: &dyn Fn(&str) -> Option<String>,
+) -> Result<(), SetupError> {
     Ok(())
 }
 
 pub fn bootstrap(data_dir: &Path, store: &KeyStore) -> Result<Bootstrap, SetupError> {
-    bootstrap_with(data_dir, store, snapshot_before_migrate)
+    let read_env = |name: &str| std::env::var(name).ok();
+    bootstrap_with(data_dir, store, snapshot_before_migrate, &read_env)
 }
 
 fn bootstrap_with(
     data_dir: &Path,
     store: &KeyStore,
     snapshot: impl FnOnce(&Path, i64) -> Result<PathBuf, SnapshotError>,
+    read_env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<Bootstrap, SetupError> {
     fs::create_dir_all(data_dir)?;
     restrict_to_owner(data_dir, DIRECTORY_MODE)?;
@@ -86,7 +100,7 @@ fn bootstrap_with(
     let passwords = PasswordPolicy::new()?;
     let database = Database::new(conn);
     let clock_rollback = database.with_tx(|tx| record_clock_rollback(tx))?;
-    seed_for_development(&database, &passwords)?;
+    seed_for_development(&database, &passwords, read_env)?;
     Ok(Bootstrap {
         database,
         passwords,

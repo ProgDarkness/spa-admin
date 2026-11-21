@@ -8,17 +8,20 @@ use crate::setup::SetupError;
 pub const SEED_PASSWORD_VAR: &str = "SPA_DEV_SEED_PASSWORD";
 
 const MIN_SEED_PASSWORD_CHARS: usize = 12;
-const OWNER_ROLE_ID: i64 = 1;
+pub(crate) const OWNER_ROLE_ID: i64 = 1;
+pub(crate) const SEED_OWNER_USERNAME: &str = "propietaria";
 const RECEPTION_ROLE_ID: i64 = 2;
 const READ_ONLY_ROLE_ID: i64 = 3;
 
 const SEED_USERS: [(&str, i64); 3] = [
-    ("propietaria", OWNER_ROLE_ID),
+    (SEED_OWNER_USERNAME, OWNER_ROLE_ID),
     ("recepcion", RECEPTION_ROLE_ID),
     ("lectura", READ_ONLY_ROLE_ID),
 ];
 
-fn configured_password(read_env: &dyn Fn(&str) -> Option<String>) -> Option<Zeroizing<String>> {
+pub(crate) fn configured_password(
+    read_env: &dyn Fn(&str) -> Option<String>,
+) -> Option<Zeroizing<String>> {
     read_env(SEED_PASSWORD_VAR)
         .filter(|password| !password.is_empty())
         .map(Zeroizing::new)
