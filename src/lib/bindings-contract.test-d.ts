@@ -17,6 +17,12 @@ import type {
   PasswordReset as BindingsPasswordReset,
   RecoveryRequest as BindingsRecoveryRequest,
   RecoveryResult as BindingsRecoveryResult,
+  ResourceActivation as BindingsResourceActivation,
+  ResourceFilter as BindingsResourceFilter,
+  ResourceInput as BindingsResourceInput,
+  ResourceKind as BindingsResourceKind,
+  ResourceSummary as BindingsResourceSummary,
+  ResourceUpdate as BindingsResourceUpdate,
   RolePermissionsUpdate as BindingsRolePermissionsUpdate,
   RoleSummary as BindingsRoleSummary,
   ServiceActivation as BindingsServiceActivation,
@@ -124,6 +130,26 @@ describe('contrato de tipos entre bindings generados y model', () => {
     expectTypeOf(commands.createService).parameter(0).toEqualTypeOf<BindingsServiceInput>()
     expectTypeOf(commands.updateService).parameter(0).toEqualTypeOf<BindingsServiceUpdate>()
     expectTypeOf(commands.setServiceActive).parameter(0).toEqualTypeOf<BindingsServiceActivation>()
+  })
+
+  it('los comandos de recursos exponen sus tipos', () => {
+    expectTypeOf<BindingsResourceKind>().toEqualTypeOf<'cabin' | 'manicure'>()
+    expectTypeOf<BindingsResourceSummary>().toEqualTypeOf<{
+      id: number
+      name: string
+      kind: BindingsResourceKind
+      active: boolean
+      createdAt: string
+      updatedAt: string
+    }>()
+    expectTypeOf<BindingsResourceInput>().toEqualTypeOf<{ name: string; kind: BindingsResourceKind }>()
+    expectTypeOf<BindingsResourceUpdate>().toEqualTypeOf<{ id: number; name: string; kind: BindingsResourceKind }>()
+    expectTypeOf<BindingsResourceFilter>().toEqualTypeOf<{ includeInactive: boolean }>()
+    expectTypeOf<BindingsResourceActivation>().toEqualTypeOf<{ id: number; active: boolean }>()
+    expectTypeOf(commands.listResources).parameter(0).toEqualTypeOf<BindingsResourceFilter>()
+    expectTypeOf(commands.createResource).parameter(0).toEqualTypeOf<BindingsResourceInput>()
+    expectTypeOf(commands.updateResource).parameter(0).toEqualTypeOf<BindingsResourceUpdate>()
+    expectTypeOf(commands.setResourceActive).parameter(0).toEqualTypeOf<BindingsResourceActivation>()
   })
 
   it('listAudit expone AuditQuery, AuditPage, AuditEntry y sus enums', () => {

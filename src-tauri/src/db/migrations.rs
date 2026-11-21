@@ -4,13 +4,14 @@ use super::DbError;
 
 pub(super) type Migration = (u32, &'static str);
 
-const MIGRATIONS: [Migration; 6] = [
+const MIGRATIONS: [Migration; 7] = [
     (1, include_str!("migrations/0001_auth.sql")),
     (2, include_str!("migrations/0002_username_nocase.sql")),
     (3, include_str!("migrations/0003_audit_log.sql")),
     (4, include_str!("migrations/0004_login_throttle.sql")),
     (5, include_str!("migrations/0005_audit_business.sql")),
     (6, include_str!("migrations/0006_services.sql")),
+    (7, include_str!("migrations/0007_resources.sql")),
 ];
 
 pub fn migrate(conn: &mut Connection) -> Result<(), DbError> {
@@ -47,3 +48,15 @@ fn apply_one(conn: &mut Connection, version: u32, sql: &str) -> Result<(), DbErr
 #[cfg(test)]
 #[path = "migrations_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "migrations_audit_test.rs"]
+mod audit_tests;
+
+#[cfg(test)]
+#[path = "migrations_services_test.rs"]
+mod services_tests;
+
+#[cfg(test)]
+#[path = "migrations_resources_test.rs"]
+mod resources_tests;

@@ -373,7 +373,7 @@ fn protected_command_after_lock_rejected_with_session_locked() {
 }
 
 #[test]
-fn active_user_while_locked_stays_locked_without_touching_the_database() {
+fn require_active_user_while_locked_stays_locked_without_touching_the_database() {
     let conn = migrated();
     let policy = PasswordPolicy::new().unwrap();
     let (state, id) = signed_in(&conn, &policy, OWNER_ROLE_ID);
@@ -382,7 +382,7 @@ fn active_user_while_locked_stays_locked_without_touching_the_database() {
     conn.execute("UPDATE users SET active = 0 WHERE id = ?1", [id])
         .unwrap();
 
-    let result = active_user(&conn, &state, locked_at);
+    let result = require_active_user_or_roll_back(&conn, &state, locked_at);
 
     assert!(matches!(result, Err(AuthError::Locked)));
     assert_eq!(state.locked_user_id().unwrap(), Some(id));
@@ -423,12 +423,12 @@ fn deactivated_user_loses_the_session_on_next_check() {
 }
 
 #[test]
-fn active_user_returns_the_refreshed_session_user() {
+fn require_active_user_returns_the_refreshed_session_user() {
     let conn = migrated();
     let policy = PasswordPolicy::new().unwrap();
     let (state, id) = signed_in(&conn, &policy, RECEPTION_ROLE_ID);
 
-    let user = active_user(&conn, &state, origin()).unwrap();
+    let user = require_active_user_or_roll_back(&conn, &state, origin()).unwrap();
 
     assert_eq!(user.id, id);
 }

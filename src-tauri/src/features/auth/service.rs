@@ -168,7 +168,9 @@ impl ActiveSession {
             .lock_if_resumed(beat)
             .or_else(|| self.lock_if_idle(beat))
             .or_else(|| self.audit_pending.take());
-        self.last_beat = beat;
+        if beat.mono > self.last_beat.mono {
+            self.last_beat = beat;
+        }
         Observation {
             view: self.view(),
             locked_now,
@@ -304,14 +306,50 @@ impl SessionState {
     }
 }
 
-pub fn active_user(
+#[derive(Clone, Copy)]
+struct AuditedLock {
+    user_id: i64,
+    reason: LockReason,
+}
+
+struct Resolution {
+    outcome: Result<SessionUser, AuthError>,
+    audited_lock: Option<AuditedLock>,
+}
+
+impl Resolution {
+    fn failed(error: AuthError) -> Self {
+        Self {
+            outcome: Err(error),
+            audited_lock: None,
+        }
+    }
+}
+
+fn resolve_active_user(conn: &Connection, session: &SessionState, beat: Beat) -> Resolution {
+    let observation = match session.observe(beat) {
+        Ok(Some(observation)) => observation,
+        Ok(None) => return Resolution::failed(AuthError::Unauthenticated),
+        Err(error) => return Resolution::failed(error),
+    };
+    if let Err(error) = events::session_locked_if_new(conn, session, &observation) {
+        return Resolution::failed(error);
+    }
+    Resolution {
+        outcome: user_for_observation(conn, session, &observation),
+        audited_lock: observation.locked_now.map(|reason| AuditedLock {
+            user_id: observation.user_id,
+            reason,
+        }),
+    }
+}
+
+fn user_for_observation(
     conn: &Connection,
     session: &SessionState,
-    beat: Beat,
+    observation: &Observation,
 ) -> Result<SessionUser, AuthError> {
-    let observation = session.observe(beat)?.ok_or(AuthError::Unauthenticated)?;
-    events::session_locked_if_new(conn, session, &observation)?;
-    let Some(cached) = observation.view.user else {
+    let Some(cached) = observation.view.user.as_ref() else {
         return Err(AuthError::Locked);
     };
     let Some(row) = find_active_user_by_id(conn, cached.id)? else {
@@ -323,13 +361,31 @@ pub fn active_user(
     Ok(fresh)
 }
 
+fn restore_unaudited_lock(session: &SessionState, resolution: &Resolution) {
+    if let (Some(lock), Err(AuthError::Locked)) = (resolution.audited_lock, &resolution.outcome) {
+        session.restore_audit_pending(lock.user_id, lock.reason);
+    }
+}
+
+pub fn require_active_user_or_roll_back(
+    conn: &Connection,
+    session: &SessionState,
+    beat: Beat,
+) -> Result<SessionUser, AuthError> {
+    let resolution = resolve_active_user(conn, session, beat);
+    if !conn.is_autocommit() {
+        restore_unaudited_lock(session, &resolution);
+    }
+    resolution.outcome
+}
+
 pub fn require_permission(
     conn: &Connection,
     session: &SessionState,
     permission: PermissionKey,
     beat: Beat,
 ) -> Result<SessionUser, AuthError> {
-    let user = active_user(conn, session, beat)?;
+    let user = require_active_user_or_roll_back(conn, session, beat)?;
     if user.permissions.contains(&permission) {
         Ok(user)
     } else {
@@ -344,7 +400,7 @@ pub fn require_any_permission(
     beat: Beat,
 ) -> Result<SessionUser, AuthError> {
     debug_assert!(!permissions.is_empty(), "permissions must not be empty");
-    let user = active_user(conn, session, beat)?;
+    let user = require_active_user_or_roll_back(conn, session, beat)?;
     if permissions
         .iter()
         .any(|permission| user.permissions.contains(permission))
@@ -369,7 +425,7 @@ pub fn current_view(
     session: &SessionState,
     beat: Beat,
 ) -> Result<Option<SessionView>, AuthError> {
-    view_from(active_user(conn, session, beat))
+    view_from(resolve_active_user(conn, session, beat).outcome)
 }
 
 pub fn record_activity_view(
@@ -381,7 +437,7 @@ pub fn record_activity_view(
         return Ok(None);
     };
     events::session_locked_if_new(conn, session, &observation)?;
-    view_from(active_user(conn, session, beat))
+    view_from(resolve_active_user(conn, session, beat).outcome)
 }
 
 pub fn locked_user_for_unlock(
@@ -428,3 +484,11 @@ mod session_tests;
 #[cfg(test)]
 #[path = "service_username_test.rs"]
 mod username_tests;
+
+#[cfg(test)]
+#[path = "service_rollback_test.rs"]
+mod rollback_tests;
+
+#[cfg(test)]
+#[path = "service_beat_test.rs"]
+mod beat_tests;

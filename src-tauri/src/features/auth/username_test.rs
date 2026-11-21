@@ -47,3 +47,18 @@ fn casefold_unifies_case_and_normalization_forms() {
         unicode_casefold("\u{00F3}scar")
     );
 }
+
+#[test]
+fn runs_of_ascii_spaces_collapse_to_one_space() {
+    assert_eq!(collapse_ascii_spaces("a   b  c"), "a b c");
+    assert_eq!(collapse_ascii_spaces("  a  "), " a ");
+    assert_eq!(collapse_ascii_spaces("a b"), "a b");
+    assert_eq!(collapse_ascii_spaces(""), "");
+}
+
+#[test]
+fn collapsing_leaves_every_other_character_untouched() {
+    for text in ["a\t\tb", "a\n\nb", "a\u{00A0}\u{00A0}b", "a \t b"] {
+        assert_eq!(collapse_ascii_spaces(text), text, "{text:?}");
+    }
+}

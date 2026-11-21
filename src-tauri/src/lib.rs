@@ -16,6 +16,9 @@ use features::auth::recover::recover_password;
 use features::catalog::commands::{
     create_service, list_services, set_service_active, update_service,
 };
+use features::resources::commands::{
+    create_resource, list_resources, set_resource_active, update_resource,
+};
 use features::users::commands::{
     create_role, create_user, list_roles, list_users, reset_user_password, set_role_permissions,
     update_user,
@@ -47,7 +50,11 @@ fn command_catalog<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
             list_services,
             create_service,
             update_service,
-            set_service_active
+            set_service_active,
+            list_resources,
+            create_resource,
+            update_resource,
+            set_resource_active
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .disable_serde_phases()

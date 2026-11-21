@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-resources"
+description = "Enables the list_resources command without any pre-configured scope."
+commands.allow = ["list_resources"]
+
+[[permission]]
+identifier = "deny-list-resources"
+description = "Denies the list_resources command without any pre-configured scope."
+commands.deny = ["list_resources"]

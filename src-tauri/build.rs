@@ -23,6 +23,10 @@ const APP_COMMANDS: &[&str] = &[
     "create_service",
     "update_service",
     "set_service_active",
+    "list_resources",
+    "create_resource",
+    "update_resource",
+    "set_resource_active",
 ];
 const WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
 

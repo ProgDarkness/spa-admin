@@ -487,3 +487,96 @@ fn no_catalog_command_ever_reduces_the_number_of_services() {
     );
     assert_eq!(*counts.last().unwrap(), 2);
 }
+
+const TRANSACTIONAL_WRITES: [&str; 3] = ["create_service", "update_service", "set_service_active"];
+
+fn past_idle_beat() -> Beat {
+    let now = Beat::now();
+    let by = IDLE_TIMEOUT + Duration::from_secs(1);
+    Beat {
+        mono: now.mono + by,
+        wall: now.wall + by,
+    }
+}
+
+fn run_in_transaction(
+    fixture: &Fixture,
+    target: &ServiceSummary,
+    beat: Beat,
+    write: &str,
+) -> Result<(), AppError> {
+    let session: tauri::State<'_, SessionState> = fixture.app.state();
+    let outcome = database(fixture).with_tx(|tx| match write {
+        "create_service" => {
+            let input = ServiceInput {
+                name: "Nuevo".to_string(),
+                price_cents: 3500,
+                duration_min: 60,
+            };
+            create_service_in_transaction(tx, &session, beat, &input).map(|_| ())
+        }
+        "update_service" => {
+            update_service_in_transaction(tx, &session, beat, &update_to(target, 9900)).map(|_| ())
+        }
+        _ => {
+            let activation = ServiceActivation {
+                id: target.id,
+                active: false,
+            };
+            set_service_active_in_transaction(tx, &session, beat, &activation).map(|_| ())
+        }
+    });
+    outcome.map_err(AppError::from)
+}
+
+#[test]
+fn every_transactional_write_revalidates_the_permission_inside_the_transaction() {
+    for write in TRANSACTIONAL_WRITES {
+        let fixture = fixture();
+        let target = seed_service(&fixture, "Masaje");
+        let stored_before = stored_services(&fixture);
+        let audit_before = audit_actions(&fixture);
+        database(&fixture)
+            .with_conn(|conn| {
+                conn.execute(
+                    "DELETE FROM role_permissions WHERE role_id = ?1 AND permission_key = 'catalog.write'",
+                    [OWNER_ROLE],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+
+        let outcome = run_in_transaction(&fixture, &target, Beat::now(), write);
+
+        assert_eq!(outcome.unwrap_err(), AppError::forbidden(), "{write}");
+        assert_eq!(stored_services(&fixture), stored_before, "{write}");
+        assert_eq!(audit_actions(&fixture), audit_before, "{write}");
+    }
+}
+
+#[test]
+fn every_transactional_write_revalidates_the_idle_lock_and_keeps_its_audit_for_the_next_attempt() {
+    for write in TRANSACTIONAL_WRITES {
+        let fixture = fixture();
+        let target = seed_service(&fixture, "Masaje");
+        let stored_before = stored_services(&fixture);
+        let audit_before = audit_actions(&fixture);
+
+        let outcome = run_in_transaction(&fixture, &target, past_idle_beat(), write);
+
+        assert_eq!(
+            outcome.unwrap_err().code,
+            AppErrorCode::SessionLocked,
+            "{write}"
+        );
+        assert_eq!(stored_services(&fixture), stored_before, "{write}");
+        assert_eq!(audit_actions(&fixture), audit_before, "{write}");
+        let next = call_create(&fixture, "Despues");
+        assert_eq!(
+            next.unwrap_err().code,
+            AppErrorCode::SessionLocked,
+            "{write}"
+        );
+        assert_eq!(session_locked_rows(&fixture), 1, "{write}");
+    }
+}

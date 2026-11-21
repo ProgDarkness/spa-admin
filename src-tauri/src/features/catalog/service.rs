@@ -7,7 +7,7 @@ use super::model::{
 };
 use super::repository;
 use crate::features::audit::{self, AuditAction, AuditEntity, Diff, NewAuditEntry};
-use crate::features::auth::username::is_allowed_text_character;
+use crate::features::auth::username::{collapse_ascii_spaces, is_allowed_text_character};
 
 const ID_FIELD: &str = "id";
 const NAME_FIELD: &str = "name";
@@ -18,7 +18,8 @@ const MAX_DURATION_MIN: i64 = 1440;
 const DURATION_STEP_MIN: i64 = 5;
 
 fn valid_name(raw: &str) -> Result<String, CatalogError> {
-    let name: String = raw.trim().nfc().collect();
+    let composed: String = raw.trim().nfc().collect();
+    let name = collapse_ascii_spaces(&composed);
     let is_clean = name.chars().all(is_allowed_text_character);
     if is_clean && (1..=MAX_NAME_CHARS).contains(&name.chars().count()) {
         Ok(name)
@@ -165,3 +166,11 @@ pub fn set_service_active(
 #[cfg(test)]
 #[path = "service_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "service_name_test.rs"]
+mod name_tests;
+
+#[cfg(test)]
+#[path = "service_audit_test.rs"]
+mod audit_tests;

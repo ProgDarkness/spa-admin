@@ -25,6 +25,10 @@ export const commands = {
 	createService: (input: ServiceInput, options?: InvokeOptions) => typedError<ServiceSummary, AppError>(__TAURI_INVOKE("create_service", { input }, options)),
 	updateService: (update: ServiceUpdate, options?: InvokeOptions) => typedError<ServiceSummary, AppError>(__TAURI_INVOKE("update_service", { update }, options)),
 	setServiceActive: (activation: ServiceActivation, options?: InvokeOptions) => typedError<ServiceSummary, AppError>(__TAURI_INVOKE("set_service_active", { activation }, options)),
+	listResources: (filter: ResourceFilter, options?: InvokeOptions) => typedError<ResourceSummary[], AppError>(__TAURI_INVOKE("list_resources", { filter }, options)),
+	createResource: (input: ResourceInput, options?: InvokeOptions) => typedError<ResourceSummary, AppError>(__TAURI_INVOKE("create_resource", { input }, options)),
+	updateResource: (update: ResourceUpdate, options?: InvokeOptions) => typedError<ResourceSummary, AppError>(__TAURI_INVOKE("update_resource", { update }, options)),
+	setResourceActive: (activation: ResourceActivation, options?: InvokeOptions) => typedError<ResourceSummary, AppError>(__TAURI_INVOKE("set_resource_active", { activation }, options)),
 };
 
 /* Types */
@@ -108,6 +112,37 @@ export type RecoveryRequest = {
 
 export type RecoveryResult = {
 	recoveryCode: string,
+};
+
+export type ResourceActivation = {
+	id: number,
+	active: boolean,
+};
+
+export type ResourceFilter = {
+	includeInactive: boolean,
+};
+
+export type ResourceInput = {
+	name: string,
+	kind: ResourceKind,
+};
+
+export type ResourceKind = "cabin" | "manicure";
+
+export type ResourceSummary = {
+	id: number,
+	name: string,
+	kind: ResourceKind,
+	active: boolean,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type ResourceUpdate = {
+	id: number,
+	name: string,
+	kind: ResourceKind,
 };
 
 export type RolePermissionsUpdate = {

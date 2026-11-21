@@ -24,6 +24,10 @@
     "allow-list-services",
     "allow-create-service",
     "allow-update-service",
-    "allow-set-service-active"
+    "allow-set-service-active",
+    "allow-list-resources",
+    "allow-create-resource",
+    "allow-update-resource",
+    "allow-set-resource-active"
   ]
 }
