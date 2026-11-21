@@ -1,3 +1,5 @@
+import type { ServiceFilter, ServiceSummary } from './bindings'
+
 export type Id = number
 export type Cents = number
 export type RateE4 = number
@@ -51,16 +53,9 @@ export type Client = {
 export type ClientInput = { firstName: string; lastName: string; nationalId: string; phone: string }
 export type ClientListFilter = { query: string | null; includeDeleted: boolean }
 
-export type Service = {
-  id: Id
-  name: string
-  priceCents: Cents
-  currency: 'USD'
-  durationMin: number
-  active: boolean
-}
-export type ServiceInput = { name: string; priceCents: Cents; durationMin: number }
-export type ServiceListFilter = { includeInactive: boolean }
+export type Service = Omit<ServiceSummary, 'currency' | 'createdAt' | 'updatedAt'> & { currency: 'USD' }
+export type { ServiceInput } from './bindings'
+export type ServiceListFilter = ServiceFilter
 
 export type ResourceKind = 'cabin' | 'manicure'
 export type Resource = { id: Id; name: string; kind: ResourceKind; active: boolean }

@@ -132,6 +132,20 @@ test('setup_status informa que no falta la propietaria con los usuarios de ejemp
   })
 })
 
+test('list_services exige sesión y con la propietaria lista los ocho servicios de ejemplo', async ({ page }) => {
+  const filter = { filter: { includeInactive: true } }
+
+  expect(await invokeInPage(page, 'list_services', filter)).toMatchObject({
+    resolved: false,
+    isError: false,
+    payload: { code: 'unauthenticated' },
+  })
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+  const listed = await invokeInPage(page, 'list_services', filter)
+
+  expect(listed.resolved && Array.isArray(listed.value) && listed.value.length).toBe(8)
+})
+
 const THRESHOLD_MARGIN_MS = 5_000
 
 test('el reloj del backend es el del navegador: avanzar solo el navegador bloquea la sesión inactiva', async ({

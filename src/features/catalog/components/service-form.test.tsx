@@ -1,3 +1,4 @@
+import { mockIPC } from '@tauri-apps/api/mocks'
 import { screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getState, resetStore } from '@/lib/mock/store'
@@ -85,12 +86,90 @@ describe('ServiceForm', () => {
     expect(getState().services).toHaveLength(8)
   })
 
-  it('muestra notFound del api si el servicio editado ya no existe', async () => {
-    const { user } = renderForm({ id: 999, name: 'Fantasma', priceCents: 1_000, currency: 'USD', durationMin: 30, active: true })
+  it('muestra como alerta el validation con field id si el servicio editado ya no existe', async () => {
+    const { user, onSaved } = renderForm({ id: 999, name: 'Fantasma', priceCents: 1_000, currency: 'USD', durationMin: 30, active: true })
 
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('El servicio no existe')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Revisa el dato ingresado')
+    expect(onSaved).not.toHaveBeenCalled()
+  })
+
+  it('muestra el error de nombre repetido junto al campo Nombre y no como alerta', async () => {
+    const { user, onSaved } = renderForm()
+    await user.type(screen.getByLabelText('Nombre'), 'LIMPIEZA FACIAL (EJEMPLO)')
+    await user.type(screen.getByLabelText('Precio (USD)'), '25')
+    await user.type(screen.getByLabelText('Duración (minutos)'), '30')
+
+    await user.click(screen.getByRole('button', { name: 'Crear servicio' }))
+
+    expect(await screen.findByText('Revisa el dato ingresado')).toBeInTheDocument()
+    expect(screen.getByLabelText('Nombre')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(onSaved).not.toHaveBeenCalled()
+    expect(getState().services).toHaveLength(8)
+  })
+
+  it.each([
+    ['priceCents', 'Precio (USD)'],
+    ['durationMin', 'Duración (minutos)'],
+  ] as const)('ubica el validation del backend para %s junto al campo %s', async (field, label) => {
+    mockIPC(() => {
+      throw { code: 'validation', message: `Dato rechazado: ${field}`, field, entityIds: null }
+    })
+    const { user } = renderForm()
+    await user.type(screen.getByLabelText('Nombre'), 'Depilación')
+    await user.type(screen.getByLabelText('Precio (USD)'), '25')
+    await user.type(screen.getByLabelText('Duración (minutos)'), '30')
+
+    await user.click(screen.getByRole('button', { name: 'Crear servicio' }))
+
+    expect(await screen.findByText(`Dato rechazado: ${field}`)).toBeInTheDocument()
+    expect(screen.getByLabelText(label)).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('muestra como alerta un validation con un campo que el formulario no tiene', async () => {
+    mockIPC(() => {
+      throw { code: 'validation', message: 'Campo ajeno', field: 'otroCampo', entityIds: null }
+    })
+    const { user } = renderForm()
+    await user.type(screen.getByLabelText('Nombre'), 'Depilación')
+    await user.type(screen.getByLabelText('Precio (USD)'), '25')
+    await user.type(screen.getByLabelText('Duración (minutos)'), '30')
+
+    await user.click(screen.getByRole('button', { name: 'Crear servicio' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Campo ajeno')
+  })
+
+  it('solo ubica junto al campo los errores validation: un forbidden con field sigue siendo alerta', async () => {
+    mockIPC(() => {
+      throw { code: 'forbidden', message: 'Sin permiso', field: 'name', entityIds: null }
+    })
+    const { user } = renderForm()
+    await user.type(screen.getByLabelText('Nombre'), 'Depilación')
+    await user.type(screen.getByLabelText('Precio (USD)'), '25')
+    await user.type(screen.getByLabelText('Duración (minutos)'), '30')
+
+    await user.click(screen.getByRole('button', { name: 'Crear servicio' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sin permiso')
+    expect(screen.getByLabelText('Nombre')).not.toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('muestra el mensaje genérico cuando el canal falla', async () => {
+    mockIPC(() => {
+      throw new Error('canal caído')
+    })
+    const { user } = renderForm()
+    await user.type(screen.getByLabelText('Nombre'), 'Depilación')
+    await user.type(screen.getByLabelText('Precio (USD)'), '25')
+    await user.type(screen.getByLabelText('Duración (minutos)'), '30')
+
+    await user.click(screen.getByRole('button', { name: 'Crear servicio' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo completar la operación')
   })
 
   it('Cancelar llama onCancel sin tocar el estado', async () => {

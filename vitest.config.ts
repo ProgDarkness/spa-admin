@@ -12,7 +12,7 @@ export default defineConfig({
     globals: false,
     env: { TZ: 'America/Caracas' },
     setupFiles: ['./vitest.setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts'],
     typecheck: { enabled: true, include: ['src/**/*.test-d.ts'] },
     coverage: {
       provider: 'v8',

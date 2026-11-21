@@ -4,7 +4,7 @@ import { useForm, type Control } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import type { Service, ServiceInput } from '@/lib/model'
+import type { AppError, Service, ServiceInput } from '@/lib/model'
 import { appErrorOf } from '@/lib/result'
 import { useCreateService, useUpdateService } from '../hooks'
 import { serviceFormSchema, type ServiceFormValues } from '../schemas'
@@ -12,7 +12,19 @@ import { serviceFormSchema, type ServiceFormValues } from '../schemas'
 export type ServiceFormProps = { service: Service | null; onSaved(): void; onCancel(): void }
 
 const UNEXPECTED_ERROR_MESSAGE = 'No se pudo guardar el servicio'
+const FORM_FIELD_BY_BACKEND_FIELD: Readonly<Record<string, keyof ServiceFormValues>> = {
+  name: 'name',
+  priceCents: 'price',
+  durationMin: 'durationMin',
+}
 const EMPTY_VALUES: ServiceFormValues = { name: '', price: '', durationMin: '' }
+
+function formFieldOf(error: AppError): keyof ServiceFormValues | undefined {
+  const backendField = error.code === 'validation' ? error.field : null
+  return backendField !== null && Object.hasOwn(FORM_FIELD_BY_BACKEND_FIELD, backendField)
+    ? FORM_FIELD_BY_BACKEND_FIELD[backendField]
+    : undefined
+}
 
 function valuesOf(service: Service | null): ServiceFormValues {
   if (!service) return EMPTY_VALUES
@@ -85,8 +97,14 @@ export function ServiceForm({ service, onSaved, onCancel }: ServiceFormProps) {
       await (service ? update.mutateAsync({ id: service.id, input }) : create.mutateAsync(input))
       onSaved()
     } catch (caught) {
-      setSaveErrorMessage(appErrorOf(caught)?.message ?? UNEXPECTED_ERROR_MESSAGE)
+      reportSaveFailure(appErrorOf(caught))
     }
+  }
+
+  function reportSaveFailure(error: AppError | null) {
+    const formField = error ? formFieldOf(error) : undefined
+    if (error && formField) return form.setError(formField, { type: 'server', message: error.message })
+    setSaveErrorMessage(error?.message ?? UNEXPECTED_ERROR_MESSAGE)
   }
 
   return (

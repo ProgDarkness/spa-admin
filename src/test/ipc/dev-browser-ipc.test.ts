@@ -3,7 +3,7 @@ import { clearMocks } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEV_PASSWORD } from '@/test/ipc/auth-backend'
 import { commit, getState, resetStore } from '@/lib/mock/store'
-import { installDevBrowserIpc } from './dev-browser-ipc'
+import { DEV_BROWSER_IPC_SENTINEL, installDevBrowserIpc } from './dev-browser-ipc'
 
 type TauriWindow = { __TAURI_INTERNALS__?: unknown }
 
@@ -17,6 +17,7 @@ beforeEach(() => {
   resetStore()
   clearMocks()
   delete (window as TauriWindow).__TAURI_INTERNALS__
+  Reflect.deleteProperty(window, DEV_BROWSER_IPC_SENTINEL)
 })
 
 afterEach(() => {
@@ -62,6 +63,35 @@ describe('installDevBrowserIpc', () => {
 
     expect(getState().users.map((user) => user.username)).toEqual(['dueña'])
     expect(getState().sessionUserId).toBe(getState().users[0]?.id)
+  })
+
+  it('atiende los comandos de catálogo con la sesión iniciada y rechaza sin sesión', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    installDevBrowserIpc()
+
+    await expect(invoke('list_services', { filter: { includeInactive: true } })).rejects.toMatchObject({
+      code: 'unauthenticated',
+    })
+    await invoke('login', OWNER_CREDENTIALS)
+    const services = await invoke<unknown[]>('list_services', { filter: { includeInactive: true } })
+
+    expect(services).toHaveLength(8)
+  })
+
+  it('marca window con el centinela al instalarse', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+
+    installDevBrowserIpc()
+
+    expect(Reflect.get(window, DEV_BROWSER_IPC_SENTINEL)).toBe(true)
+  })
+
+  it('no marca window con el centinela si no se instala', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+
+    installDevBrowserIpc()
+
+    expect(DEV_BROWSER_IPC_SENTINEL in window).toBe(false)
   })
 
   it('no se instala si ya hay internals de Tauri', () => {

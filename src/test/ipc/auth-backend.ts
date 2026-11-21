@@ -1,4 +1,5 @@
 import type { ClockRollback, OwnerSetupResult, RecoveryResult, SetupStatus } from '@/lib/bindings'
+import { hasDisallowedTextCharacter, trimUnicodeWhitespace } from '@/lib/text'
 import { PERMISSION_KEYS, type Id, type LoginCredentials, type SessionUser, type SessionView } from '@/lib/model'
 import {
   forbiddenError,
@@ -38,21 +39,10 @@ function isWithinBytes(value: string, maxBytes: number): boolean {
   return byteLength > 0 && byteLength <= maxBytes
 }
 
-const DISALLOWED_USERNAME_CHARACTER = new RegExp(
-  [
-    '\\p{Cc}',
-    '[\\u00AD\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890\\u0891\\u08E2\\u180E\\u200B-\\u200F\\u202A-\\u202E]',
-    '[\\u2060-\\u2064\\u2066-\\u206F\\uFEFF\\uFFF9-\\uFFFB\\u{110BD}\\u{110CD}\\u{13430}-\\u{1343F}]',
-    '[\\u{1BCA0}-\\u{1BCA3}\\u{1D173}-\\u{1D17A}\\u{E0001}\\u{E0020}-\\u{E007F}]',
-    '[\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]',
-  ].join('|'),
-  'u',
-)
-
 function normalizedUsername(raw: string): string | null {
-  const username = raw.trim().normalize('NFC')
+  const username = trimUnicodeWhitespace(raw).normalize('NFC')
   if (!isWithinBytes(username, MAX_USERNAME_BYTES)) return null
-  return DISALLOWED_USERNAME_CHARACTER.test(username) ? null : username
+  return hasDisallowedTextCharacter(username) ? null : username
 }
 
 function foldedAsciiCase(username: string): string {

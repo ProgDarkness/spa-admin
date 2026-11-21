@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 import { createSeed } from '../../src/lib/mock/seed'
 import type { Id, SessionUser } from '../../src/lib/model'
 import { createAuthIpcBackend } from '../../src/test/ipc/auth-backend'
+import { createCatalogIpcBackend } from '../../src/test/ipc/catalog-backend'
 
 const SEED_REFERENCE_DATE = '2026-11-12'
 const BRIDGE_NAME = '__spaInvoke'
@@ -28,7 +29,7 @@ export async function installTauriIpc(page: Page, options: TauriIpcOptions = {})
   let users: readonly SessionUser[] = options.withoutUsers ? [] : createSeed(SEED_REFERENCE_DATE).users
   let sessionUserId: Id | null = null
   let nowMs = 0
-  const backend = createAuthIpcBackend(
+  const authBackend = createAuthIpcBackend(
     () => users,
     {
       read: () => sessionUserId,
@@ -46,6 +47,11 @@ export async function installTauriIpc(page: Page, options: TauriIpcOptions = {})
       ...(options.recoverableUsernames ? { recoverableUsernames: options.recoverableUsernames } : {}),
     },
   )
+
+  const backend = createCatalogIpcBackend(authBackend, {
+    session: () => users.find((user) => user.id === sessionUserId) ?? null,
+    services: createSeed(SEED_REFERENCE_DATE).services,
+  })
 
   const overrides = options.overrides ?? {}
   const repliedCommands = new Set<string>()

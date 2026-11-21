@@ -53,3 +53,13 @@ export function replaceById<T extends { id: Id }>(rows: readonly T[], updated: T
 export function appendRow<T>(rows: readonly T[], row: T): readonly T[] {
   return [...rows, row]
 }
+
+export function upsertById<T extends { id: Id }>(rows: readonly T[], row: T): readonly T[] {
+  let replaced = false
+  const mapped = rows.map((existing) => {
+    if (existing.id !== row.id) return existing
+    replaced = true
+    return row
+  })
+  return replaced ? mapped : appendRow(rows, row)
+}

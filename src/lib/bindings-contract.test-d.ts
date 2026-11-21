@@ -42,7 +42,17 @@ import type {
 import type { AppError as BindingsAppError, AppErrorCode as BindingsAppErrorCode } from './bindings'
 import type { PermissionKey as BindingsPermissionKey, SessionUser as BindingsSessionUser } from './bindings'
 import type { SessionStatus as BindingsSessionStatus, SessionView as BindingsSessionView } from './bindings'
-import type { AppError, AppErrorCode, PermissionKey, SessionUser, SessionView, SessionViewStatus } from './model'
+import type {
+  AppError,
+  AppErrorCode,
+  PermissionKey,
+  Service,
+  ServiceInput,
+  ServiceListFilter,
+  SessionUser,
+  SessionView,
+  SessionViewStatus,
+} from './model'
 
 describe('contrato de tipos entre bindings generados y model', () => {
   it('SessionUser es equivalente en ambos sentidos', () => {
@@ -136,6 +146,30 @@ describe('contrato de tipos entre bindings generados y model', () => {
     expectTypeOf(commands.createService).parameter(0).toEqualTypeOf<BindingsServiceInput>()
     expectTypeOf(commands.updateService).parameter(0).toEqualTypeOf<BindingsServiceUpdate>()
     expectTypeOf(commands.setServiceActive).parameter(0).toEqualTypeOf<BindingsServiceActivation>()
+  })
+
+  it('Service de model se deriva de ServiceSummary conservando la moneda de una sola variante', () => {
+    type ExpectedService = {
+      id: number
+      name: string
+      priceCents: number
+      currency: 'USD'
+      durationMin: number
+      active: boolean
+    }
+    expectTypeOf<Service>().toExtend<ExpectedService>()
+    expectTypeOf<ExpectedService>().toExtend<Service>()
+    expectTypeOf<Service['id' | 'name' | 'priceCents' | 'durationMin' | 'active']>().toEqualTypeOf<
+      BindingsServiceSummary['id' | 'name' | 'priceCents' | 'durationMin' | 'active']
+    >()
+    expectTypeOf<Service['currency']>().toExtend<BindingsServiceSummary['currency']>()
+    expectTypeOf<Service['currency']>().not.toEqualTypeOf<'USD' | 'VES'>()
+    expectTypeOf<keyof Service>().toEqualTypeOf<Exclude<keyof BindingsServiceSummary, 'createdAt' | 'updatedAt'>>()
+  })
+
+  it('ServiceInput y ServiceListFilter de model son los de bindings', () => {
+    expectTypeOf<ServiceInput>().toEqualTypeOf<BindingsServiceInput>()
+    expectTypeOf<ServiceListFilter>().toEqualTypeOf<BindingsServiceFilter>()
   })
 
   it('los comandos de recursos exponen sus tipos', () => {

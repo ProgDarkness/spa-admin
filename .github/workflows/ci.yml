@@ -30,6 +30,7 @@ jobs:
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run build
+      - run: bun run check:bundle
       - run: bun run test:cov
       - run: bunx playwright install --with-deps chromium
       - run: bun run e2e

@@ -115,6 +115,31 @@ describe('login', () => {
     })
   })
 
+  describe('espacios en los bordes del usuario', () => {
+    function registerAna(): void {
+      const registered: CredentialedUser = { id: 1, roleName: 'Propietaria', permissions: [], username: 'ana', password: 'clave' }
+      mockIPC(createAuthIpcBackend(() => [registered], { read: () => null, write: (id) => writes.push(id) }))
+    }
+
+    it('rechaza un usuario con U+FEFF al inicio porque no es White_Space', async () => {
+      registerAna()
+
+      const result = await commands.login({ username: '\uFEFFana', password: 'clave' })
+
+      expect(result).toEqual({ status: 'error', error: INVALID_CREDENTIALS })
+      expect(writes).toEqual([])
+    })
+
+    it('recorta U+0085 en ambos bordes del usuario porque es White_Space', async () => {
+      registerAna()
+
+      const result = await commands.login({ username: '\u0085ana\u0085', password: 'clave' })
+
+      expect(result.status).toBe('ok')
+      expect(result.status === 'ok' && result.data.username).toBe('ana')
+    })
+  })
+
   it.each([
     ['sin args', undefined],
     ['sin credentials', {}],
