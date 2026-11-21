@@ -21,6 +21,14 @@ function renderForm(options: { initialValue?: ResourceInput; result?: AppError |
   return { onSubmit, onCancel, user }
 }
 
+function validationFailure(field: string | null, message: string): AppError {
+  return { code: 'validation', message, field, entityIds: null }
+}
+
+function controlOf(label: string): HTMLElement {
+  return label === 'Tipo' ? screen.getByRole('combobox', { name: label }) : screen.getByLabelText(label)
+}
+
 describe('ResourceForm', () => {
   it('muestra campos etiquetados con los valores iniciales', () => {
     renderForm({ initialValue: { name: 'Cabina 1', kind: 'manicure' } })
@@ -59,6 +67,65 @@ describe('ResourceForm', () => {
     await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No tienes permiso para esta acción')
+  })
+
+  it.each([
+    ['name', 'Nombre'],
+    ['kind', 'Tipo'],
+  ] as const)('ubica validation del campo %s junto a su control y no como alerta', async (field, label) => {
+    const message = `Copy del backend para ${field}`
+    const { user } = renderForm({ result: validationFailure(field, message) })
+
+    await user.type(screen.getByLabelText('Nombre'), 'Sala')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(controlOf(label)).toHaveAccessibleDescription(message))
+    expect(controlOf(label)).toBeInvalid()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('no marca el otro campo cuando el error es de un solo campo', async () => {
+    const { user } = renderForm({ result: validationFailure('name', 'Nombre repetido') })
+
+    await user.type(screen.getByLabelText('Nombre'), 'Sala')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(screen.getByLabelText('Nombre')).toBeInvalid())
+    expect(screen.getByRole('combobox', { name: 'Tipo' })).not.toBeInvalid()
+  })
+
+  it.each(['id', 'priceCents', 'constructor', 'toString', '__proto__', 'hasOwnProperty'])(
+    'muestra como alerta un validation con field %s que no es del formulario',
+    async (field) => {
+      const { user } = renderForm({ result: validationFailure(field, 'Revisa el dato ingresado') })
+
+      await user.type(screen.getByLabelText('Nombre'), 'Sala')
+      await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Revisa el dato ingresado')
+      expect(screen.getByLabelText('Nombre')).toBeValid()
+    },
+  )
+
+  it('muestra como alerta un validation sin campo', async () => {
+    const { user } = renderForm({ result: validationFailure(null, 'Revisa el dato ingresado') })
+
+    await user.type(screen.getByLabelText('Nombre'), 'Sala')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Revisa el dato ingresado')
+  })
+
+  it('muestra como alerta un error que no es de validación aunque traiga field name', async () => {
+    const { user } = renderForm({
+      result: { code: 'forbidden', message: 'No tienes permiso para esta acción', field: 'name', entityIds: null },
+    })
+
+    await user.type(screen.getByLabelText('Nombre'), 'Sala')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No tienes permiso para esta acción')
+    expect(screen.getByLabelText('Nombre')).toBeValid()
   })
 
   it('no muestra alerta cuando onSubmit tiene éxito', async () => {

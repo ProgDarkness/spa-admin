@@ -3,6 +3,12 @@ import { clearMocks } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEV_PASSWORD } from '@/test/ipc/auth-backend'
 import { commit, getState, resetStore } from '@/lib/mock/store'
+import {
+  EXPECTED_DEV_RESOURCES,
+  EXPECTED_DEV_SERVICES,
+  resourceIdentitiesOf,
+  serviceIdentitiesOf,
+} from './dev-seed-expectations'
 import { DEV_BROWSER_IPC_SENTINEL, installDevBrowserIpc } from './dev-browser-ipc'
 
 type TauriWindow = { __TAURI_INTERNALS__?: unknown }
@@ -73,9 +79,22 @@ describe('installDevBrowserIpc', () => {
       code: 'unauthenticated',
     })
     await invoke('login', OWNER_CREDENTIALS)
-    const services = await invoke<unknown[]>('list_services', { filter: { includeInactive: true } })
+    const services = await invoke('list_services', { filter: { includeInactive: true } })
 
-    expect(services).toHaveLength(8)
+    expect(serviceIdentitiesOf(services)).toEqual(EXPECTED_DEV_SERVICES)
+  })
+
+  it('atiende los comandos de recursos con la sesión iniciada y rechaza sin sesión', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    installDevBrowserIpc()
+
+    await expect(invoke('list_resources', { filter: { includeInactive: true } })).rejects.toMatchObject({
+      code: 'unauthenticated',
+    })
+    await invoke('login', OWNER_CREDENTIALS)
+    const resources = await invoke('list_resources', { filter: { includeInactive: true } })
+
+    expect(resourceIdentitiesOf(resources)).toEqual(EXPECTED_DEV_RESOURCES)
   })
 
   it('marca window con el centinela al instalarse', () => {

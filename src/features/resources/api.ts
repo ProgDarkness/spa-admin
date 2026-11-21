@@ -1,12 +1,17 @@
+import { commands, type ResourceSummary } from '@/lib/bindings'
 import { nowLocal } from '@/lib/datetime'
+import { callBackend } from '@/lib/ipc'
 import { authorize } from '@/lib/mock/authorize'
-import { appendRow, commit, findById, getState, nextId, replaceById } from '@/lib/mock/store'
+import { commit, findById, getState, upsertById } from '@/lib/mock/store'
 import type { Appointment, Id, Resource, ResourceInput, ResourceListFilter, Result } from '@/lib/model'
-import { err, ok, validationError } from '@/lib/result'
-import { resourceInputSchema } from './schemas'
+import { err, mapOk, ok } from '@/lib/result'
 
-const NOT_FOUND_MESSAGE = 'El recurso no existe'
+const MISSING_RESOURCE_MESSAGE = 'El recurso no existe'
 const HAS_FUTURE_APPOINTMENTS_MESSAGE = 'El recurso tiene citas futuras que deben reubicarse antes de desactivarlo'
+const RESOURCES_MANAGE = 'resources.manage'
+const SESSION_PROBE_FILTER: ResourceListFilter = { includeInactive: false }
+
+export type FutureAppointmentSummary = Pick<Appointment, 'id' | 'startsAt'>
 
 function futureScheduledAppointmentsOf(resourceId: Id): Appointment[] {
   const now = nowLocal()
@@ -18,59 +23,61 @@ function futureScheduledAppointmentsOf(resourceId: Id): Appointment[] {
     .toSorted((first, second) => first.startsAt.localeCompare(second.startsAt) || first.id - second.id)
 }
 
-export async function listResources(filter: ResourceListFilter): Promise<Result<Resource[]>> {
-  const access = authorize(getState(), { anyOf: ['appointments.read', 'resources.manage'] })
-  if (access.status === 'error') return access
-  const rows = getState().resources.filter((resource) => filter.includeInactive || resource.active)
-  return ok([...rows])
+function toResource(summary: ResourceSummary): Resource {
+  return { id: summary.id, name: summary.name, kind: summary.kind, active: summary.active }
 }
 
-export async function createResource(input: ResourceInput): Promise<Result<Resource>> {
-  const access = authorize(getState(), 'resources.manage')
-  if (access.status === 'error') return access
-  const parsed = resourceInputSchema.safeParse(input)
-  if (!parsed.success) return validationError(parsed.error.issues)
+function mirrorResources(resources: readonly Resource[]): void {
   const state = getState()
-  const created: Resource = { id: nextId(state.resources), ...parsed.data, active: true }
-  commit({ ...state, resources: appendRow(state.resources, created) })
-  return ok(created)
+  commit({ ...state, resources: resources.reduce(upsertById, state.resources) })
 }
 
-export async function updateResource(id: Id, input: ResourceInput): Promise<Result<Resource>> {
-  const access = authorize(getState(), 'resources.manage')
-  if (access.status === 'error') return access
-  const parsed = resourceInputSchema.safeParse(input)
-  if (!parsed.success) return validationError(parsed.error.issues)
-  const state = getState()
-  const existing = findById(state.resources, id)
-  if (!existing) return err('notFound', NOT_FOUND_MESSAGE)
-  const updated: Resource = { ...existing, ...parsed.data }
-  commit({ ...state, resources: replaceById(state.resources, updated) })
-  return ok(updated)
+function mirrorResource(resource: Resource): void {
+  mirrorResources([resource])
+}
+
+function callResourceBackend(operation: () => Promise<Result<ResourceSummary>>): Promise<Result<Resource>> {
+  return callBackend(async () => mapOk(await operation(), toResource), mirrorResource)
+}
+
+export function listResources(filter: ResourceListFilter): Promise<Result<Resource[]>> {
+  return callBackend(
+    async () => mapOk(await commands.listResources(filter), (rows) => rows.map(toResource)),
+    mirrorResources,
+  )
+}
+
+export function createResource(input: ResourceInput): Promise<Result<Resource>> {
+  return callResourceBackend(() => commands.createResource(input))
+}
+
+export function updateResource(id: Id, input: ResourceInput): Promise<Result<Resource>> {
+  return callResourceBackend(() => commands.updateResource({ id, ...input }))
+}
+
+async function futureAppointmentsBlock(resourceId: Id): Promise<Result<never> | null> {
+  if (findById(getState().resources, resourceId)?.active === false) return null
+  if (authorize(getState(), RESOURCES_MANAGE).status === 'error') return null
+  const blocking = futureScheduledAppointmentsOf(resourceId)
+  if (blocking.length === 0) return null
+  const rustSession = await listResources(SESSION_PROBE_FILTER)
+  if (rustSession.status === 'error') return rustSession
+  return err('resourceHasFutureAppointments', HAS_FUTURE_APPOINTMENTS_MESSAGE, {
+    entityIds: blocking.map((appointment) => appointment.id),
+  })
 }
 
 export async function setResourceActive(id: Id, active: boolean): Promise<Result<Resource>> {
-  const access = authorize(getState(), 'resources.manage')
-  if (access.status === 'error') return access
-  const state = getState()
-  const existing = findById(state.resources, id)
-  if (!existing) return err('notFound', NOT_FOUND_MESSAGE)
-  if (!active) {
-    const blocking = futureScheduledAppointmentsOf(id)
-    if (blocking.length > 0) {
-      return err('resourceHasFutureAppointments', HAS_FUTURE_APPOINTMENTS_MESSAGE, {
-        entityIds: blocking.map((appointment) => appointment.id),
-      })
-    }
-  }
-  const updated: Resource = { ...existing, active }
-  commit({ ...state, resources: replaceById(state.resources, updated) })
-  return ok(updated)
+  const blocked = active ? null : await futureAppointmentsBlock(id)
+  if (blocked) return blocked
+  return callResourceBackend(() => commands.setResourceActive({ id, active }))
 }
 
-export async function listFutureAppointmentsOfResource(id: Id): Promise<Result<Appointment[]>> {
-  const access = authorize(getState(), 'resources.manage')
+export async function listFutureAppointmentsOfResource(id: Id): Promise<Result<FutureAppointmentSummary[]>> {
+  const access = authorize(getState(), RESOURCES_MANAGE)
   if (access.status === 'error') return access
-  if (!findById(getState().resources, id)) return err('notFound', NOT_FOUND_MESSAGE)
-  return ok(futureScheduledAppointmentsOf(id))
+  if (!findById(getState().resources, id)) return err('validation', MISSING_RESOURCE_MESSAGE, { field: 'id' })
+  const rustSession = await listResources(SESSION_PROBE_FILTER)
+  if (rustSession.status === 'error') return rustSession
+  return ok(futureScheduledAppointmentsOf(id).map(({ id: appointmentId, startsAt }) => ({ id: appointmentId, startsAt })))
 }

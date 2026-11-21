@@ -1,4 +1,4 @@
-import type { ServiceFilter, ServiceSummary } from './bindings'
+import type { ResourceFilter, ResourceSummary, ServiceFilter, ServiceSummary } from './bindings'
 
 export type Id = number
 export type Cents = number
@@ -57,10 +57,9 @@ export type Service = Omit<ServiceSummary, 'currency' | 'createdAt' | 'updatedAt
 export type { ServiceInput } from './bindings'
 export type ServiceListFilter = ServiceFilter
 
-export type ResourceKind = 'cabin' | 'manicure'
-export type Resource = { id: Id; name: string; kind: ResourceKind; active: boolean }
-export type ResourceInput = { name: string; kind: ResourceKind }
-export type ResourceListFilter = { includeInactive: boolean }
+export type Resource = Omit<ResourceSummary, 'createdAt' | 'updatedAt'>
+export type { ResourceInput, ResourceKind } from './bindings'
+export type ResourceListFilter = ResourceFilter
 
 export type PaymentMethod = { id: Id; name: string; active: boolean }
 export type ExchangeRate = { date: LocalDate; rateBsPerUsdE4: RateE4 }

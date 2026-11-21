@@ -51,6 +51,19 @@ describe('marcadores literales del bundle', () => {
     expect(FORBIDDEN_BUNDLE_MARKERS).toContain('No se pudo instalar el IPC de desarrollo')
   })
 
+  it.each([
+    'createCatalogIpcBackend',
+    'createResourcesIpcBackend',
+    'createDevBackends',
+    'composeBackends',
+    'createAuthIpcBackend',
+  ])(
+    'incluye el identificador %s de los backends simulados',
+    (identifier) => {
+      expect(FORBIDDEN_BUNDLE_MARKERS).toContain(identifier)
+    },
+  )
+
   it.each(LITERAL_MARKER_SOURCES)('el literal $marker sigue presente en $source', ({ marker, source }) => {
     const content = readFileSync(resolve(REPOSITORY_ROOT, source), 'utf8')
 

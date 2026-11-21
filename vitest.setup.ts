@@ -8,7 +8,7 @@ import { commit, getState } from '@/lib/mock/store'
 import { todayLocal } from '@/lib/datetime'
 import { resetNavigationMock } from '@/test/navigation'
 import { createAuthIpcBackend } from '@/test/ipc/auth-backend'
-import { createCatalogIpcBackend } from '@/test/ipc/catalog-backend'
+import { createDevBackends } from '@/test/ipc/dev-backends'
 
 vi.mock('next/navigation', () => import('@/test/navigation'))
 
@@ -44,9 +44,10 @@ beforeEach(() => {
     write: (id) => commit({ ...getState(), sessionUserId: id }),
   })
   mockIPC(
-    createCatalogIpcBackend(authBackend, {
+    createDevBackends({
+      auth: authBackend,
       session: () => currentUser(getState()),
-      services: createSeed(todayLocal()).services,
+      seed: createSeed(todayLocal()),
     }),
   )
 })

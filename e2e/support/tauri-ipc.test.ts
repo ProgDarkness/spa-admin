@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test'
 import { DEV_PASSWORD, IDLE_LOCK_MS } from '../../src/test/ipc/auth-backend'
+import {
+  EXPECTED_DEV_RESOURCES,
+  EXPECTED_DEV_SERVICES,
+  resourceIdentitiesOf,
+  serviceIdentitiesOf,
+} from '../../src/test/ipc/dev-seed-expectations'
 import { FIXED_NOW } from './session'
 import { installTauriIpc, type TauriIpcHandle } from './tauri-ipc'
 
@@ -132,7 +138,7 @@ test('setup_status informa que no falta la propietaria con los usuarios de ejemp
   })
 })
 
-test('list_services exige sesión y con la propietaria lista los ocho servicios de ejemplo', async ({ page }) => {
+test('list_services exige sesión y con la propietaria lista los servicios de ejemplo con sus nombres', async ({ page }) => {
   const filter = { filter: { includeInactive: true } }
 
   expect(await invokeInPage(page, 'list_services', filter)).toMatchObject({
@@ -143,7 +149,21 @@ test('list_services exige sesión y con la propietaria lista los ocho servicios 
   await invokeInPage(page, 'login', OWNER_CREDENTIALS)
   const listed = await invokeInPage(page, 'list_services', filter)
 
-  expect(listed.resolved && Array.isArray(listed.value) && listed.value.length).toBe(8)
+  expect(listed.resolved && serviceIdentitiesOf(listed.value)).toEqual(EXPECTED_DEV_SERVICES)
+})
+
+test('list_resources exige sesión y con la propietaria lista Cabina 1, Cabina 2 y Manicure (Rosa) inactivo', async ({ page }) => {
+  const filter = { filter: { includeInactive: true } }
+
+  expect(await invokeInPage(page, 'list_resources', filter)).toMatchObject({
+    resolved: false,
+    isError: false,
+    payload: { code: 'unauthenticated' },
+  })
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+  const listed = await invokeInPage(page, 'list_resources', filter)
+
+  expect(listed.resolved && resourceIdentitiesOf(listed.value)).toEqual(EXPECTED_DEV_RESOURCES)
 })
 
 const THRESHOLD_MARGIN_MS = 5_000

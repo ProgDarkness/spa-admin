@@ -18,6 +18,17 @@ type ResourceFormProps = {
 }
 
 const KINDS = Object.keys(RESOURCE_KIND_LABELS) as ResourceKind[]
+const FORM_FIELD_BY_BACKEND_FIELD: Readonly<Record<string, keyof ResourceInput>> = {
+  name: 'name',
+  kind: 'kind',
+}
+
+function formFieldOf(error: AppError): keyof ResourceInput | undefined {
+  const backendField = error.code === 'validation' ? error.field : null
+  return backendField !== null && Object.hasOwn(FORM_FIELD_BY_BACKEND_FIELD, backendField)
+    ? FORM_FIELD_BY_BACKEND_FIELD[backendField]
+    : undefined
+}
 
 function ResourceFields({ control }: { control: Control<ResourceInput> }) {
   return (
@@ -71,7 +82,14 @@ export function ResourceForm({ initialValue, submitLabel, onSubmit, onCancel }: 
   })
 
   async function submit(input: ResourceInput) {
-    setFailure(await onSubmit(input))
+    const error = await onSubmit(input)
+    const formField = error ? formFieldOf(error) : undefined
+    if (error && formField) {
+      setFailure(null)
+      form.setError(formField, { type: 'server', message: error.message })
+      return
+    }
+    setFailure(error)
   }
 
   return (

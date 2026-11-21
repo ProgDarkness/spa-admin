@@ -75,6 +75,7 @@ test.describe('mock IPC con respuestas inyectadas: no simula el contador de inte
     let attempts = 0
     await openLockedSession(page, {
       list_services: respondWith([]),
+      list_resources: respondWith([]),
       unlock: () => {
         attempts += 1
         if (attempts === 1) throw SESSION_LOCKED_ERROR

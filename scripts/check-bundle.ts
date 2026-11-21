@@ -4,6 +4,10 @@ import { join, sep } from 'node:path'
 const IDENTIFIER_MARKERS: readonly string[] = [
   'mockIPC',
   'createCatalogIpcBackend',
+  'createResourcesIpcBackend',
+  'createDevBackends',
+  'composeBackends',
+  'createAuthIpcBackend',
   'installDevBrowserIpc',
   '__spaInvoke',
 ]

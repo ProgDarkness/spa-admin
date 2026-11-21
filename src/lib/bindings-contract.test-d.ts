@@ -46,6 +46,10 @@ import type {
   AppError,
   AppErrorCode,
   PermissionKey,
+  Resource,
+  ResourceInput,
+  ResourceKind,
+  ResourceListFilter,
   Service,
   ServiceInput,
   ServiceListFilter,
@@ -190,6 +194,18 @@ describe('contrato de tipos entre bindings generados y model', () => {
     expectTypeOf(commands.createResource).parameter(0).toEqualTypeOf<BindingsResourceInput>()
     expectTypeOf(commands.updateResource).parameter(0).toEqualTypeOf<BindingsResourceUpdate>()
     expectTypeOf(commands.setResourceActive).parameter(0).toEqualTypeOf<BindingsResourceActivation>()
+  })
+
+  it('Resource de model se deriva de ResourceSummary sin marcas de tiempo', () => {
+    expectTypeOf<Resource>().toEqualTypeOf<Omit<BindingsResourceSummary, 'createdAt' | 'updatedAt'>>()
+    expectTypeOf<keyof Resource>().toEqualTypeOf<Exclude<keyof BindingsResourceSummary, 'createdAt' | 'updatedAt'>>()
+    expectTypeOf<Resource['kind']>().toEqualTypeOf<BindingsResourceKind>()
+  })
+
+  it('ResourceKind, ResourceInput y ResourceListFilter de model son los de bindings', () => {
+    expectTypeOf<ResourceKind>().toEqualTypeOf<BindingsResourceKind>()
+    expectTypeOf<ResourceInput>().toEqualTypeOf<BindingsResourceInput>()
+    expectTypeOf<ResourceListFilter>().toEqualTypeOf<BindingsResourceFilter>()
   })
 
   it('los comandos de métodos de pago exponen sus tipos', () => {
