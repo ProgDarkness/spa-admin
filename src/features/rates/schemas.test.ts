@@ -69,6 +69,28 @@ describe('fechas inexistentes', () => {
   })
 })
 
+describe('años soportados de la tasa', () => {
+  it.each(['0000-01-01', '0001-01-01', '1999-12-31', '2100-01-01', '9999-12-31'])(
+    'rechaza %s en los tres esquemas con mensaje en español',
+    (date) => {
+      const input = rateInputSchema.safeParse({ date, rateBsPerUsdE4: 365000 })
+      const fields = rateFormFieldsSchema.safeParse({ date, rateText: '36,50' })
+      const form = rateFormSchema.safeParse({ date, rateText: '36,50' })
+
+      expect(input.success).toBe(false)
+      expect(input.error?.issues[0]?.message).toBe('Ingresa una fecha válida')
+      expect(fields.error?.issues[0]?.path).toEqual(['date'])
+      expect(form.error?.issues[0]?.path).toEqual(['date'])
+    },
+  )
+
+  it.each(['2000-01-01', '2099-12-31'])('acepta %s en los tres esquemas', (date) => {
+    expect(rateInputSchema.safeParse({ date, rateBsPerUsdE4: 365000 }).success).toBe(true)
+    expect(rateFormFieldsSchema.safeParse({ date, rateText: '36,50' }).success).toBe(true)
+    expect(rateFormSchema.safeParse({ date, rateText: '36,50' }).success).toBe(true)
+  })
+})
+
 describe('rateInputSchema', () => {
   it('acepta una tasa entera dentro del rango', () => {
     expect(rateInputSchema.safeParse({ date: '2026-11-12', rateBsPerUsdE4: 1 }).success).toBe(true)

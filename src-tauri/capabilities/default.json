@@ -32,6 +32,9 @@
     "allow-list-payment-methods",
     "allow-create-payment-method",
     "allow-update-payment-method",
-    "allow-set-payment-method-active"
+    "allow-set-payment-method-active",
+    "allow-list-rates",
+    "allow-get-rate",
+    "allow-upsert-rate"
   ]
 }

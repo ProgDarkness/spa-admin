@@ -33,6 +33,9 @@ export const commands = {
 	createPaymentMethod: (input: PaymentMethodInput, options?: InvokeOptions) => typedError<PaymentMethodSummary, AppError>(__TAURI_INVOKE("create_payment_method", { input }, options)),
 	updatePaymentMethod: (update: PaymentMethodUpdate, options?: InvokeOptions) => typedError<PaymentMethodSummary, AppError>(__TAURI_INVOKE("update_payment_method", { update }, options)),
 	setPaymentMethodActive: (activation: PaymentMethodActivation, options?: InvokeOptions) => typedError<PaymentMethodSummary, AppError>(__TAURI_INVOKE("set_payment_method_active", { activation }, options)),
+	listRates: (options?: InvokeOptions) => typedError<ExchangeRate[], AppError>(__TAURI_INVOKE("list_rates", undefined, options)),
+	getRate: (date: string, options?: InvokeOptions) => typedError<ExchangeRate | null, AppError>(__TAURI_INVOKE("get_rate", { date }, options)),
+	upsertRate: (date: string, rateBsPerUsdE4: number, options?: InvokeOptions) => typedError<ExchangeRate, AppError>(__TAURI_INVOKE("upsert_rate", { date, rateBsPerUsdE4 }, options)),
 };
 
 /* Types */
@@ -73,6 +76,11 @@ export type AuditQuery = {
 export type ClockRollback = {
 	lastRecordedAt: string,
 	detectedAt: string,
+};
+
+export type ExchangeRate = {
+	date: string,
+	rateBsPerUsdE4: number,
 };
 
 export type LoginCredentials = {

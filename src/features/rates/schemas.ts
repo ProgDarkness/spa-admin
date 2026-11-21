@@ -5,7 +5,16 @@ import { MAX_RATE_E4, parseRateE4 } from '@/lib/money'
 
 const INVALID_DATE_MESSAGE = 'Ingresa una fecha válida'
 
-const dateSchema = z.string().refine(isExistingDate, INVALID_DATE_MESSAGE)
+const FIRST_RATE_YEAR = 2000
+const LAST_RATE_YEAR = 2099
+const YEAR_LENGTH = 4
+
+function isSupportedRateDate(date: string): boolean {
+  const year = Number(date.slice(0, YEAR_LENGTH))
+  return isExistingDate(date) && year >= FIRST_RATE_YEAR && year <= LAST_RATE_YEAR
+}
+
+const dateSchema = z.string().refine(isSupportedRateDate, INVALID_DATE_MESSAGE)
 
 export const rateInputSchema = z.object({
   date: dateSchema,

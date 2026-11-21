@@ -19,6 +19,7 @@ use features::catalog::commands::{
 use features::payment_methods::commands::{
     create_payment_method, list_payment_methods, set_payment_method_active, update_payment_method,
 };
+use features::rates::commands::{get_rate, list_rates, upsert_rate};
 use features::resources::commands::{
     create_resource, list_resources, set_resource_active, update_resource,
 };
@@ -61,7 +62,10 @@ fn command_catalog<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
             list_payment_methods,
             create_payment_method,
             update_payment_method,
-            set_payment_method_active
+            set_payment_method_active,
+            list_rates,
+            get_rate,
+            upsert_rate
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .disable_serde_phases()

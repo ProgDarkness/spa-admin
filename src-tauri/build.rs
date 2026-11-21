@@ -31,6 +31,9 @@ const APP_COMMANDS: &[&str] = &[
     "create_payment_method",
     "update_payment_method",
     "set_payment_method_active",
+    "list_rates",
+    "get_rate",
+    "upsert_rate",
 ];
 const WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
 

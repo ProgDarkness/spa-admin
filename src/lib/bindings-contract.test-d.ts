@@ -2,6 +2,7 @@ import { describe, expectTypeOf, it } from 'vitest'
 import { commands } from './bindings'
 import type {
   ClockRollback as BindingsClockRollback,
+  ExchangeRate as BindingsExchangeRate,
   OwnerSetup as BindingsOwnerSetup,
   OwnerSetupResult as BindingsOwnerSetupResult,
   SetupStatus as BindingsSetupStatus,
@@ -173,6 +174,13 @@ describe('contrato de tipos entre bindings generados y model', () => {
     expectTypeOf(commands.createPaymentMethod).parameter(0).toEqualTypeOf<BindingsPaymentMethodInput>()
     expectTypeOf(commands.updatePaymentMethod).parameter(0).toEqualTypeOf<BindingsPaymentMethodUpdate>()
     expectTypeOf(commands.setPaymentMethodActive).parameter(0).toEqualTypeOf<BindingsPaymentMethodActivation>()
+  })
+
+  it('los comandos de tasas de cambio exponen sus tipos', () => {
+    expectTypeOf<BindingsExchangeRate>().toEqualTypeOf<{ date: string; rateBsPerUsdE4: number }>()
+    expectTypeOf(commands.getRate).parameter(0).toEqualTypeOf<string>()
+    expectTypeOf(commands.upsertRate).parameter(0).toEqualTypeOf<string>()
+    expectTypeOf(commands.upsertRate).parameter(1).toEqualTypeOf<number>()
   })
 
   it('listAudit expone AuditQuery, AuditPage, AuditEntry y sus enums', () => {

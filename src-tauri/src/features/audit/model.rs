@@ -224,6 +224,18 @@ impl Diff {
         Self::from_fields(changes)
     }
 
+    pub fn between_in_context(context: &Value, before: &Value, after: &Value) -> Option<Diff> {
+        let Some(Diff(Value::Object(changes))) = Self::between(before, after) else {
+            return None;
+        };
+        let mut fields = match redact(context) {
+            Value::Object(fields) => fields,
+            _ => Map::new(),
+        };
+        fields.extend(changes);
+        Self::from_fields(fields)
+    }
+
     pub fn created(after: &Value) -> Option<Diff> {
         match redact(after) {
             Value::Object(fields) => Self::from_fields(fields),

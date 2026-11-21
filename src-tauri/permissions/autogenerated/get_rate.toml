@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-rate"
+description = "Enables the get_rate command without any pre-configured scope."
+commands.allow = ["get_rate"]
+
+[[permission]]
+identifier = "deny-get-rate"
+description = "Denies the get_rate command without any pre-configured scope."
+commands.deny = ["get_rate"]

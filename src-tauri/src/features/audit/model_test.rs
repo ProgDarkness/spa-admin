@@ -64,6 +64,37 @@ fn between_reports_added_and_removed_keys_with_null() {
 }
 
 #[test]
+fn between_in_context_adds_the_context_beside_the_changed_fields_only() {
+    let context = json!({"date": "2026-01-05"});
+    let before = json!({"rate": 1, "same": 7});
+    let after = json!({"rate": 2, "same": 7});
+    let diff = rendered(Diff::between_in_context(&context, &before, &after));
+    assert_eq!(
+        diff,
+        json!({"date": "2026-01-05", "rate": {"before": 1, "after": 2}})
+    );
+}
+
+#[test]
+fn between_in_context_without_changes_yields_none() {
+    let value = json!({"rate": 1});
+    let context = json!({"date": "2026-01-05"});
+    assert_eq!(Diff::between_in_context(&context, &value, &value), None);
+}
+
+#[test]
+fn between_in_context_redacts_sensitive_context_keys() {
+    let context = json!({"date": "2026-01-05", "apiToken": "t"});
+    let diff = rendered(Diff::between_in_context(
+        &context,
+        &json!({"rate": 1}),
+        &json!({"rate": 2}),
+    ));
+    assert_eq!(diff.get("apiToken"), None);
+    assert_eq!(diff["date"], json!("2026-01-05"));
+}
+
+#[test]
 fn between_equal_values_yields_none() {
     let value = json!({"a": 1});
     assert_eq!(Diff::between(&value, &value), None);
