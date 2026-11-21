@@ -4,6 +4,7 @@ use thiserror::Error;
 use crate::db::DbError;
 use crate::errors::AppError;
 use crate::features::auth::service::AuthError;
+use crate::features::named_records::RecordFailure;
 
 #[derive(Serialize, specta::Type, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +42,8 @@ pub struct PaymentMethodActivation {
     pub active: bool,
 }
 
+pub(crate) const LOG_SCOPE: &str = "payment_methods";
+
 #[derive(Debug, Error)]
 pub enum PaymentMethodsError {
     #[error("auth failure")]
@@ -55,11 +58,10 @@ impl From<PaymentMethodsError> for AppError {
     fn from(error: PaymentMethodsError) -> Self {
         match error {
             PaymentMethodsError::Auth(inner) => AppError::from(inner),
-            PaymentMethodsError::Validation { field } => AppError::validation(field),
-            PaymentMethodsError::Db(inner) => {
-                eprintln!("payment_methods: {inner}");
-                AppError::internal()
+            PaymentMethodsError::Validation { field } => {
+                RecordFailure::Validation { field }.into_app_error(LOG_SCOPE)
             }
+            PaymentMethodsError::Db(inner) => RecordFailure::Db(inner).into_app_error(LOG_SCOPE),
         }
     }
 }

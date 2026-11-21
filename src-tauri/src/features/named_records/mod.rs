@@ -1,3 +1,6 @@
+mod failure;
+
+pub use failure::RecordFailure;
 use rusqlite::{params, Connection};
 use unicode_normalization::UnicodeNormalization;
 

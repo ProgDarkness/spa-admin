@@ -97,3 +97,8 @@ fn database_errors_map_to_internal_without_the_cause() {
     assert_eq!(mapped, AppError::internal());
     assert!(!format!("{mapped:?}").contains("payment_methods"));
 }
+
+#[test]
+fn log_scope_names_the_slice() {
+    assert_eq!(LOG_SCOPE, "payment_methods");
+}

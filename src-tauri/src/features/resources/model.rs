@@ -4,6 +4,7 @@ use thiserror::Error;
 use crate::db::DbError;
 use crate::errors::AppError;
 use crate::features::auth::service::AuthError;
+use crate::features::named_records::RecordFailure;
 
 #[derive(Serialize, Deserialize, specta::Type, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -68,6 +69,8 @@ pub struct ResourceActivation {
     pub active: bool,
 }
 
+pub(crate) const LOG_SCOPE: &str = "resources";
+
 #[derive(Debug, Error)]
 pub enum ResourcesError {
     #[error("auth failure")]
@@ -82,11 +85,10 @@ impl From<ResourcesError> for AppError {
     fn from(error: ResourcesError) -> Self {
         match error {
             ResourcesError::Auth(inner) => AppError::from(inner),
-            ResourcesError::Validation { field } => AppError::validation(field),
-            ResourcesError::Db(inner) => {
-                eprintln!("resources: {inner}");
-                AppError::internal()
+            ResourcesError::Validation { field } => {
+                RecordFailure::Validation { field }.into_app_error(LOG_SCOPE)
             }
+            ResourcesError::Db(inner) => RecordFailure::Db(inner).into_app_error(LOG_SCOPE),
         }
     }
 }
