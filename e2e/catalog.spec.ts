@@ -1,6 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { FIXED_TODAY, goToSection, signInAs } from './support/session'
-import { installTauriIpc } from './support/tauri-ipc'
 
 const NEW_SERVICE = { name: 'Reflexología podal', price: '25,00', durationMin: '45' }
 const EDITED_SERVICE = { name: 'Reflexología integral', price: '31,50', durationMin: '60' }

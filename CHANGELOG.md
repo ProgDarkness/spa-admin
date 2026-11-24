@@ -99,6 +99,37 @@ Migraciones con copia previa, auth con bloqueo persistente y sesión bloqueable,
 - `users.manage` es control total de usuarios y roles: puede asignar cualquier rol (incluido el de la Propietaria), restablecer la contraseña de cualquier cuenta y conceder `users.manage` a otra cuenta. Es riesgo aceptado (ADR 0006); los intentos denegados no se auditan.
 - Windows: `restrict_to_owner` aplica `0700` y `0600` solo en Unix. En Windows no altera permisos del directorio, de `spa.db` ni de los `.bak`, y la protección descansa en la ACL heredada de `%APPDATA%` y en el cifrado SQLCipher (ADR 0002, punto 11).
 
+### Fase 3: Catálogo, recursos, métodos de pago y tasas
+
+Catálogo, recursos, métodos de pago y tasas de cambio en Rust, con auditoría de negocio completa (D15) y pantallas del front contra el backend real. Sin publicar. Decisiones en `docs/adr/0007-catalogo-y-auditoria-de-negocio.md`; descripción de la PR en `docs/pr/fase3-catalogo.md`.
+
+#### Added
+
+- Migración `0005_audit_business.sql`: reconstruye `audit_log` con 24 acciones (antes 16) y 10 entidades (antes 3), con triggers de solo inserción. La `0003` no cambia.
+- Migraciones `0006_services.sql`, `0007_resources.sql`, `0008_payment_methods.sql` y `0009_exchange_rates.sql`. Recursos y métodos de pago se desactivan, no se borran.
+- 15 comandos IPC nuevos (31 en total): servicios (4), recursos (4), métodos de pago (4) y tasas (`list_rates`, `get_rate`, `upsert_rate`).
+- Tasas por fecha con año entre 2000 y 2099 (CHECK en SQL y en `features/rates/model.rs`).
+- Acciones de auditoría genéricas `create`, `update`, `deactivate`, `reactivate` (y `soft_delete`, `void`, `backup_created`, `backup_restored` en el catálogo D15), escritas en la transacción de cada acción.
+- Pantallas contra Rust: catálogo (`/catalogo`), recursos (`/ajustes/recursos`), métodos de pago (`/ajustes/metodos-pago`) y tasas (`/ajustes/tasas`).
+- Navegación filtrada por permisos con `NavItem.permissions` (`useCanAny`, `src/components/sidebar-nav.tsx`).
+- Seed de ejemplo de servicios y tasas solo en compilación de depuración y con `SPA_DEV_SEED_PASSWORD`.
+- Guarda D9 transitoria en el front: un recurso con citas futuras programadas no se desactiva. La guarda real en Rust llega en la Fase 5.
+- Script `bun run check:bundle` (`scripts/check-bundle.ts`, `scripts/check-bundle-cli.ts`): detecta marcadores prohibidos y centinelas del seed en el bundle estático (`out/`).
+- `src/lib/mirror-sync.ts` (`createMirrorSync`): sincronización de espejos con descarte de respuestas obsoletas.
+- Pruebas e2e de catálogo, recursos, tasas, métodos de pago y rol de solo lectura (`e2e/catalog.spec.ts`).
+
+#### Changed
+
+- Espejos del store mock: los `list*` piden la colección completa a Rust y la reflejan entera; `mirror-sync` descarta respuestas obsoletas. `createAppointment` y `createPayment` refrescan el espejo antes de validar.
+- Tipos `Service`, `Resource`, `PaymentMethod` y `ExchangeRate` del front derivados de `src/lib/bindings.ts`.
+- `AuditAction` y `AuditEntity` de `src/lib/bindings.ts` ampliados (cambio aditivo).
+- Validación común de nombres y claves en `src-tauri/src/features/named_records/`, compartida por servicios, recursos y métodos de pago; las tasas reutilizan de ese módulo la conversión de errores y el registro de auditoría (`record_change`).
+
+#### Security
+
+- Seed del mock aún presente en el bundle de producción hasta la Fase 6 (decisión del usuario, 2026-11-24). `check:bundle` avisa con centinelas del seed y no bloquea (`SEED_SENTINELS_BLOCK_BUNDLE = false`).
+- Seed de desarrollo de Rust excluido de release (`#[cfg(debug_assertions)]`).
+
 ## [0.2.0] - 2026-11-13
 
 Rediseño visual «Piedra y bronce». Sin cambios de lógica de dominio ni de textos. Decisiones en `docs/design/piedra-y-bronce.md`.
