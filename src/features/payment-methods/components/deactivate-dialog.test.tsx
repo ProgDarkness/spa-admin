@@ -56,6 +56,35 @@ describe('DeactivateDialog de métodos de pago', () => {
     expect(onConfirm).not.toHaveBeenCalled()
   })
 
+  it('Escape cierra sin confirmar', async () => {
+    const onConfirm = vi.fn().mockResolvedValue(null)
+    const { onClose, user } = renderDialog(onConfirm)
+
+    await user.keyboard('{Escape}')
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
+  it('clic fuera del diálogo cierra sin confirmar', async () => {
+    const onConfirm = vi.fn().mockResolvedValue(null)
+    const { onClose, user } = renderDialog(onConfirm)
+
+    await user.click(document.body.querySelector('[data-slot="dialog-overlay"]') as HTMLElement)
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
+  it('clic dentro del diálogo no lo cierra', async () => {
+    const { onClose, user } = renderDialog(vi.fn().mockResolvedValue(null))
+
+    await user.click(screen.getByRole('dialog', { name: 'Desactivar Zelle' }))
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
   it('deshabilita Desactivar y Cancelar mientras confirma', async () => {
     const pending = deferred<AppError | null>()
     const { user } = renderDialog(() => pending.promise)
