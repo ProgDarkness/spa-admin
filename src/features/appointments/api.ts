@@ -1,4 +1,6 @@
 import { addMinutes, crossesMidnight, dateOf, nowLocal, type TimeRange } from '@/lib/datetime'
+import { listResources } from '@/features/resources/api'
+import { listServices } from '@/features/catalog/api'
 import { authorize } from '@/lib/mock/authorize'
 import { appendRow, commit, findById, getState, nextId, replaceById } from '@/lib/mock/store'
 import type {
@@ -25,6 +27,15 @@ const APPOINTMENT_NOT_FOUND_MESSAGE = 'La cita no existe'
 const CROSSES_MIDNIGHT_MESSAGE = 'La cita no puede terminar después de la medianoche'
 const OVERLAP_MESSAGE = 'El recurso ya tiene una cita en ese horario'
 const INVALID_TRANSITION_MESSAGE = 'La cita no admite esa operación en su estado actual'
+
+const INCLUDE_INACTIVE = { includeInactive: true }
+
+async function refreshCatalogFromRust(): Promise<Result<never> | null> {
+  const [services, resources] = await Promise.all([listServices(INCLUDE_INACTIVE), listResources(INCLUDE_INACTIVE)])
+  if (services.status === 'error') return services
+  if (resources.status === 'error') return resources
+  return null
+}
 
 type Slot = { startsAt: LocalDateTime; durationMin: number; resourceId: Id }
 
@@ -71,6 +82,8 @@ export async function createAppointment(input: AppointmentInput): Promise<Result
   if (access.status === 'error') return access
   const parsed = appointmentInputSchema.safeParse(input)
   if (!parsed.success) return validationError(parsed.error.issues)
+  const refreshFailure = await refreshCatalogFromRust()
+  if (refreshFailure) return refreshFailure
   const state = getState()
   const { clientId, serviceId, resourceId, startsAt, notes } = parsed.data
   const client = findById(state.clients, clientId)

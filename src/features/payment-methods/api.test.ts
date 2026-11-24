@@ -74,14 +74,14 @@ describe('listPaymentMethods', () => {
     expect(await listPaymentMethods(ALL)).toMatchObject({ status: 'error', error: { code: 'forbidden' } })
   })
 
-  it('envía el filtro tal cual al comando list_payment_methods', async () => {
+  it('pide siempre la colección completa a list_payment_methods sea cual sea el filtro del llamador', async () => {
     signInAs(MANAGER)
 
     await listPaymentMethods({ includeInactive: false })
     await listPaymentMethods(ALL)
 
     expect(calls).toEqual([
-      { cmd: 'list_payment_methods', args: { filter: { includeInactive: false } } },
+      { cmd: 'list_payment_methods', args: { filter: { includeInactive: true } } },
       { cmd: 'list_payment_methods', args: { filter: ALL } },
     ])
   })
@@ -96,7 +96,7 @@ describe('listPaymentMethods', () => {
     )
   })
 
-  it('refleja en el mock lo que dice Rust sin perder los inactivos que el filtro omite', async () => {
+  it('con includeInactive false refleja la colección completa en el store y devuelve solo los activos', async () => {
     signInAs(MANAGER)
     await setPaymentMethodActive(2, false)
     commit({
@@ -104,11 +104,13 @@ describe('listPaymentMethods', () => {
       paymentMethods: getState().paymentMethods.map((method) => (method.id === 1 ? { ...method, name: 'Viejo' } : method)),
     })
 
-    await listPaymentMethods({ includeInactive: false })
+    const result = await listPaymentMethods({ includeInactive: false })
 
     expect(getState().paymentMethods).toHaveLength(SEED_METHOD_COUNT)
     expect(getState().paymentMethods.find((method) => method.id === 1)?.name).toBe('Efectivo')
     expect(getState().paymentMethods.find((method) => method.id === 2)?.active).toBe(false)
+    expect(result.status === 'ok' && result.data).toHaveLength(SEED_METHOD_COUNT - 1)
+    expect(result.status === 'ok' && result.data.some((method) => method.id === 2)).toBe(false)
   })
 
   it('no toca el mock cuando Rust responde con error', async () => {

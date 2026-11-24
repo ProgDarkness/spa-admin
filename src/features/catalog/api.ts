@@ -1,10 +1,14 @@
 import { commands, type ServiceSummary } from '@/lib/bindings'
 import { callBackend } from '@/lib/ipc'
+import { createMirrorSync, visibleRows } from '@/lib/mirror-sync'
 import { commit, getState, upsertById } from '@/lib/mock/store'
 import type { Id, Result, Service, ServiceInput, ServiceListFilter } from '@/lib/model'
 import { mapOk } from '@/lib/result'
 
 const SERVICE_CURRENCY = 'USD'
+const FULL_COLLECTION: ServiceListFilter = { includeInactive: true }
+
+const mirrorSync = createMirrorSync()
 
 function toService(summary: ServiceSummary): Service {
   return {
@@ -17,21 +21,25 @@ function toService(summary: ServiceSummary): Service {
   }
 }
 
-function mirrorServices(services: readonly Service[]): void {
-  const state = getState()
-  commit({ ...state, services: services.reduce(upsertById, state.services) })
+function replaceServices(services: readonly Service[]): void {
+  commit({ ...getState(), services })
 }
 
 function mirrorService(service: Service): void {
-  mirrorServices([service])
+  const state = getState()
+  commit({ ...state, services: upsertById(state.services, service) })
 }
 
 function callServiceBackend(operation: () => Promise<Result<ServiceSummary>>): Promise<Result<Service>> {
-  return callBackend(async () => mapOk(await operation(), toService), mirrorService)
+  return callBackend(async () => mapOk(await operation(), toService), mirrorSync.reflectMutation(mirrorService))
 }
 
-export function listServices(filter: ServiceListFilter): Promise<Result<Service[]>> {
-  return callBackend(async () => mapOk(await commands.listServices(filter), (rows) => rows.map(toService)), mirrorServices)
+export async function listServices(filter: ServiceListFilter): Promise<Result<Service[]>> {
+  const full = await mirrorSync.list(
+    async () => mapOk(await commands.listServices(FULL_COLLECTION), (rows) => rows.map(toService)),
+    replaceServices,
+  )
+  return mapOk(full, (services) => visibleRows(services, filter))
 }
 
 export function createService(input: ServiceInput): Promise<Result<Service>> {

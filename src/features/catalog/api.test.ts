@@ -58,14 +58,14 @@ describe('listServices', () => {
     })
   })
 
-  it('envía el filtro tal cual al comando list_services', async () => {
+  it('pide siempre la colección completa a list_services sea cual sea el filtro del llamador', async () => {
     signInAs('lectura')
 
     await listServices({ includeInactive: false })
     await listServices({ includeInactive: true })
 
     expect(calls).toEqual([
-      { cmd: 'list_services', args: { filter: { includeInactive: false } } },
+      { cmd: 'list_services', args: { filter: { includeInactive: true } } },
       { cmd: 'list_services', args: { filter: { includeInactive: true } } },
     ])
   })
@@ -98,16 +98,18 @@ describe('listServices', () => {
     )
   })
 
-  it('refleja en el mock lo que dice Rust sin perder los inactivos que el filtro omite', async () => {
+  it('con includeInactive false refleja la colección completa en el store y devuelve solo los activos', async () => {
     signInAs('lectura')
     const stale = getState().services.map((service) => (service.id === 1 ? { ...service, name: 'Nombre viejo' } : service))
     commit({ ...getState(), services: stale })
 
-    await listServices({ includeInactive: false })
+    const result = await listServices({ includeInactive: false })
 
     expect(getState().services).toHaveLength(SEED_SERVICE_COUNT)
     expect(getState().services.find((service) => service.id === 1)?.name).toBe('Limpieza facial (ejemplo)')
     expect(getState().services.find((service) => service.id === INACTIVE_SEED_ID)?.active).toBe(false)
+    expect(result.status === 'ok' && result.data).toHaveLength(SEED_ACTIVE_COUNT)
+    expect(result.status === 'ok' && result.data.every((service) => service.active)).toBe(true)
   })
 
   it('no toca el mock cuando Rust responde con error', async () => {

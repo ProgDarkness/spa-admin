@@ -115,14 +115,14 @@ describe('listResources', () => {
     expect(result.status).toBe('ok')
   })
 
-  it('envía el filtro tal cual al comando list_resources', async () => {
+  it('pide siempre la colección completa a list_resources sea cual sea el filtro del llamador', async () => {
     signInAs(MANAGER)
 
     await listResources({ includeInactive: false })
     await listResources({ includeInactive: true })
 
     expect(calls).toEqual([
-      { cmd: 'list_resources', args: { filter: { includeInactive: false } } },
+      { cmd: 'list_resources', args: { filter: { includeInactive: true } } },
       { cmd: 'list_resources', args: { filter: { includeInactive: true } } },
     ])
   })
@@ -153,16 +153,18 @@ describe('listResources', () => {
     )
   })
 
-  it('refleja en el mock lo que dice Rust sin perder los inactivos que el filtro omite', async () => {
+  it('con includeInactive false refleja la colección completa en el store y devuelve solo los activos', async () => {
     signInAs(MANAGER)
     const stale = getState().resources.map((resource) => (resource.id === 1 ? { ...resource, name: 'Nombre viejo' } : resource))
     commit({ ...getState(), resources: stale })
 
-    await listResources({ includeInactive: false })
+    const result = await listResources({ includeInactive: false })
 
     expect(getState().resources).toHaveLength(SEED_RESOURCE_COUNT)
     expect(getState().resources.find((resource) => resource.id === 1)?.name).toBe('Cabina 1')
     expect(getState().resources.find((resource) => resource.id === INACTIVE_MANICURE)?.active).toBe(false)
+    expect(result.status === 'ok' && result.data).toHaveLength(SEED_RESOURCE_COUNT - 1)
+    expect(result.status === 'ok' && result.data.every((resource) => resource.active)).toBe(true)
   })
 
   it('no toca el mock cuando Rust responde con error', async () => {
@@ -518,7 +520,7 @@ describe('setResourceActive: guarda transitoria de citas futuras (D9)', () => {
 
     await setResourceActive(CABIN_WITH_FUTURE, false)
 
-    expect(calls).toEqual([{ cmd: 'list_resources', args: { filter: { includeInactive: false } } }])
+    expect(calls).toEqual([{ cmd: 'list_resources', args: { filter: { includeInactive: true } } }])
   })
 
   it.each(['sessionLocked', 'unauthenticated', 'forbidden', 'internal'] as const)(
@@ -621,7 +623,7 @@ describe('listFutureAppointmentsOfResource', () => {
 
     await listFutureAppointmentsOfResource(CABIN_WITH_FUTURE)
 
-    expect(calls).toEqual([{ cmd: 'list_resources', args: { filter: { includeInactive: false } } }])
+    expect(calls).toEqual([{ cmd: 'list_resources', args: { filter: { includeInactive: true } } }])
   })
 
   it.each(['sessionLocked', 'unauthenticated', 'forbidden', 'internal'] as const)(

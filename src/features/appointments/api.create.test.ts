@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { getState } from '@/lib/mock/store'
+import { getState, type StoreState } from '@/lib/mock/store'
 import type { AppointmentStatus } from '@/lib/model'
 import {
   BROW_SERVICE_ID,
@@ -21,6 +21,19 @@ import {
 } from '@/test/appointment-fixtures'
 import { signInAs } from '@/test/session'
 import { createAppointment, transitionAppointment } from './api'
+
+function withoutRefreshedCatalogs(state: StoreState): Omit<StoreState, 'services' | 'resources'> {
+  return Object.fromEntries(
+    Object.entries(state).filter(([key]) => key !== 'services' && key !== 'resources'),
+  ) as Omit<StoreState, 'services' | 'resources'>
+}
+
+function expectRecordsUntouched(before: StoreState): void {
+  expect(withoutRefreshedCatalogs(getState())).toEqual(withoutRefreshedCatalogs(before))
+  expect(getState().clients).toBe(before.clients)
+  expect(getState().appointments).toBe(before.appointments)
+  expect(getState().payments).toBe(before.payments)
+}
 
 beforeEach(resetWithEmptyAgenda)
 
@@ -103,7 +116,7 @@ describe('createAppointment', () => {
     const error = errorOf(await createAppointment(inputTemplate({ resourceId: INACTIVE_MANICURE })))
 
     expect(error.code).toBe('resourceInactive')
-    expect(getState()).toBe(before)
+    expectRecordsUntouched(before)
   })
 
   it('crea con estado scheduled, endsAt = inicio + duración y snapshots del servicio', async () => {
@@ -158,7 +171,7 @@ describe('createAppointment', () => {
     const error = errorOf(await createAppointment(inputTemplate({ startsAt: `${DAY}T23:30` })))
 
     expect(error.code).toBe('crossesMidnight')
-    expect(getState()).toBe(before)
+    expectRecordsUntouched(before)
   })
 
   it('rechaza un solape exacto con overlap y entityIds de la cita en conflicto', async () => {
@@ -169,7 +182,7 @@ describe('createAppointment', () => {
     const error = errorOf(await createAppointment(inputTemplate({ startsAt: `${DAY}T10:00` })))
 
     expect(error).toMatchObject({ code: 'overlap', entityIds: [41] })
-    expect(getState()).toBe(before)
+    expectRecordsUntouched(before)
   })
 
   it('lista todas las citas en conflicto', async () => {

@@ -26,6 +26,10 @@ export const FORBIDDEN_BUNDLE_MARKERS: readonly string[] = [
   ...IDENTIFIER_MARKERS,
 ]
 
+export const SEED_SENTINEL_MARKERS: readonly string[] = ['Manicure (Rosa)', '(ejemplo)', 'Cabina 1', 'createSeed']
+
+export const SEED_SENTINELS_BLOCK_BUNDLE = false
+
 export const MAX_BUNDLE_FILE_BYTES = 50 * 1024 * 1024
 
 const STATIC_ASSETS_PREFIX = join('_next', 'static') + sep
@@ -65,14 +69,34 @@ export function assertCompleteBundle(directory: string): void {
   }
 }
 
-export function findForbiddenMarkers(
+function findMarkers(
   directory: string,
-  { maxFileBytes = MAX_BUNDLE_FILE_BYTES }: BundleScanOptions = {},
+  markers: readonly string[],
+  { maxFileBytes = MAX_BUNDLE_FILE_BYTES }: BundleScanOptions,
 ): ForbiddenMarkerHit[] {
   return listBundleFiles(directory).flatMap((file) => {
     const path = join(directory, file)
     if (statSync(path).size > maxFileBytes) throw new Error(`${file} supera el tope de ${maxFileBytes} bytes`)
     const content = readFileSync(path, 'latin1')
-    return FORBIDDEN_BUNDLE_MARKERS.filter((marker) => content.includes(marker)).map((marker) => ({ file, marker }))
+    return markers.filter((marker) => content.includes(marker)).map((marker) => ({ file, marker }))
   })
+}
+
+export function findForbiddenMarkers(directory: string, options: BundleScanOptions = {}): ForbiddenMarkerHit[] {
+  return findMarkers(directory, FORBIDDEN_BUNDLE_MARKERS, options)
+}
+
+export function findSeedSentinels(directory: string, options: BundleScanOptions = {}): ForbiddenMarkerHit[] {
+  return findMarkers(directory, SEED_SENTINEL_MARKERS, options)
+}
+
+export type ExitCodeInput = {
+  forbiddenHits: readonly ForbiddenMarkerHit[]
+  seedHits: readonly ForbiddenMarkerHit[]
+  seedBlocking: boolean
+}
+
+export function resolveExitCode({ forbiddenHits, seedHits, seedBlocking }: ExitCodeInput): number {
+  const blockingSeedHits = seedBlocking ? seedHits : []
+  return forbiddenHits.length + blockingSeedHits.length === 0 ? 0 : 1
 }
