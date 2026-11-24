@@ -1,9 +1,17 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as resourcesApi from '@/features/resources/api'
 import { commit, getState, resetStore } from '@/lib/mock/store'
+import type { Resource, Result } from '@/lib/model'
 import { freezeDate } from '@/test/clock'
+import { deferred } from '@/test/deferred'
 import { renderWithProviders } from '@/test/render'
 import ResourcesPage from './page'
+
+vi.mock('@/features/resources/api', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/features/resources/api')>()
+  return { ...original, listResources: vi.fn(original.listResources) }
+})
 
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
@@ -34,6 +42,16 @@ describe('ResourcesPage', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Recursos' })).toBeInTheDocument()
     expect(await screen.findByRole('row', { name: /Cabina 2/ })).toBeInTheDocument()
     expect(screen.getByRole('row', { name: /Manicure \(Rosa\)/ })).toBeInTheDocument()
+  })
+
+  it('muestra el estado de carga sin el estado vacío mientras lista', async () => {
+    const pending = deferred<Result<Resource[]>>()
+    vi.mocked(resourcesApi.listResources).mockReturnValueOnce(pending.promise)
+    renderWithProviders(<ResourcesPage />, { as: 'propietaria' })
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Cargando recursos…')
+    expect(screen.queryByText('No hay recursos para mostrar')).not.toBeInTheDocument()
+    pending.resolve({ status: 'ok', data: [] })
   })
 
   it('el filtro Mostrar inactivos oculta los inactivos', async () => {

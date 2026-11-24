@@ -17,6 +17,7 @@ import {
 import { createAppointment, moveAppointment, transitionAppointment } from './appointments/api'
 import { createService, setServiceActive, updateService } from './catalog/api'
 import { createClient, reactivateClient, softDeleteClient, updateClient } from './clients/api'
+import { createPaymentMethod, setPaymentMethodActive, updatePaymentMethod } from './payment-methods/api'
 import { createPayment, voidPayment } from './payments/api'
 import { upsertRate } from './rates/api'
 import { createResource, setResourceActive, updateResource } from './resources/api'
@@ -25,6 +26,7 @@ const APPOINTMENT_ID = 100
 const CASH_METHOD = 1
 const CLIENT_INPUT = { firstName: 'Ana', lastName: 'Pérez', nationalId: 'V-99999999', phone: '04121234567' }
 const SERVICE_INPUT = { name: 'Servicio nuevo', priceCents: 1500, durationMin: 30 }
+const PAYMENT_METHOD_INPUT = { name: 'Cripto' }
 const RESOURCE_INPUT = { name: 'Cabina nueva', kind: 'cabin' } as const
 
 type Mutation = { name: string; run: () => Promise<Result<unknown>> }
@@ -43,6 +45,9 @@ const ALL_MUTATIONS: readonly Mutation[] = [
   { name: 'createResource', run: () => createResource(RESOURCE_INPUT) },
   { name: 'updateResource', run: () => updateResource(CABIN_ONE, RESOURCE_INPUT) },
   { name: 'setResourceActive', run: () => setResourceActive(CABIN_ONE, false) },
+  { name: 'createPaymentMethod', run: () => createPaymentMethod(PAYMENT_METHOD_INPUT) },
+  { name: 'updatePaymentMethod', run: () => updatePaymentMethod(CASH_METHOD, PAYMENT_METHOD_INPUT) },
+  { name: 'setPaymentMethodActive', run: () => setPaymentMethodActive(CASH_METHOD, false) },
   { name: 'upsertRate', run: () => upsertRate(DAY, 370000) },
   {
     name: 'createPayment',
@@ -65,6 +70,9 @@ const RECEPTION_FORBIDDEN: readonly Mutation[] = [
   ALL_MUTATIONS.find((mutation) => mutation.name === 'createResource'),
   ALL_MUTATIONS.find((mutation) => mutation.name === 'updateResource'),
   ALL_MUTATIONS.find((mutation) => mutation.name === 'setResourceActive'),
+  ALL_MUTATIONS.find((mutation) => mutation.name === 'createPaymentMethod'),
+  ALL_MUTATIONS.find((mutation) => mutation.name === 'updatePaymentMethod'),
+  ALL_MUTATIONS.find((mutation) => mutation.name === 'setPaymentMethodActive'),
   { name: 'transitionAppointment reopen', run: () => transitionAppointment(APPOINTMENT_ID, 'reopen') },
 ].filter((mutation): mutation is Mutation => mutation !== undefined)
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetStore } from '@/lib/mock/store'
 import type { AppError, Resource } from '@/lib/model'
 import { freezeDate } from '@/test/clock'
+import { deferred } from '@/test/deferred'
 import { renderWithProviders } from '@/test/render'
 import { DeactivateDialog } from './deactivate-dialog'
 
@@ -17,8 +18,8 @@ function appError(overrides: Partial<AppError>): AppError {
   return { code: 'forbidden', message: 'No tienes permiso para esta acción', field: null, entityIds: null, ...overrides }
 }
 
-function renderDialog(result: AppError | null) {
-  const onConfirm = vi.fn().mockResolvedValue(result)
+function renderDialog(result: AppError | null, pendingResult?: Promise<AppError | null>) {
+  const onConfirm = vi.fn(() => pendingResult ?? Promise.resolve(result))
   const onClose = vi.fn()
   const rendered = renderWithProviders(<DeactivateDialog resource={CABIN} onConfirm={onConfirm} onClose={onClose} />, {
     as: 'propietaria',
@@ -42,6 +43,17 @@ describe('DeactivateDialog', () => {
 
     expect(onConfirm).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('deshabilita Desactivar y Cancelar mientras confirma', async () => {
+    const pending = deferred<AppError | null>()
+    const { user } = renderDialog(null, pending.promise)
+
+    await user.click(screen.getByRole('button', { name: 'Desactivar' }))
+
+    expect(screen.getByRole('button', { name: 'Desactivar' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+    pending.resolve(null)
   })
 
   it('Cancelar cierra sin confirmar', async () => {

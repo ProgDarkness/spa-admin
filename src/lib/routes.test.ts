@@ -16,6 +16,7 @@ describe('ROUTES', () => {
       metrics: '/metricas',
       resources: '/ajustes/recursos',
       rates: '/ajustes/tasas',
+      paymentMethods: '/ajustes/metodos-pago',
     })
   })
 })
@@ -34,21 +35,23 @@ describe('clientRecordHref', () => {
 })
 
 describe('NAV_ITEMS', () => {
-  it('mapea cada entrada a su permiso', () => {
-    const permissionByHref = Object.fromEntries(NAV_ITEMS.map((item) => [item.href, item.permission]))
+  it('mapea cada entrada a sus permisos', () => {
+    const permissionByHref = Object.fromEntries(NAV_ITEMS.map((item) => [item.href, item.permissions]))
     expect(permissionByHref).toEqual({
-      [ROUTES.appointments]: 'appointments.read',
-      [ROUTES.clients]: 'clients.read',
-      [ROUTES.catalog]: 'catalog.read',
-      [ROUTES.metrics]: 'metrics.read',
-      [ROUTES.resources]: 'resources.manage',
-      [ROUTES.rates]: 'rates.manage',
+      [ROUTES.appointments]: ['appointments.read'],
+      [ROUTES.clients]: ['clients.read'],
+      [ROUTES.catalog]: ['catalog.read'],
+      [ROUTES.metrics]: ['metrics.read'],
+      [ROUTES.resources]: ['resources.manage'],
+      [ROUTES.rates]: ['rates.manage'],
+      [ROUTES.paymentMethods]: ['catalog.read', 'payments.read'],
     })
   })
 
   it('usa permisos válidos, etiquetas únicas y hrefs únicos', () => {
     for (const item of NAV_ITEMS) {
-      expect(PERMISSION_KEYS).toContain(item.permission)
+      expect(item.permissions.length).toBeGreaterThan(0)
+      for (const permission of item.permissions) expect(PERMISSION_KEYS).toContain(permission)
       expect(item.label.trim()).not.toBe('')
     }
     expect(new Set(NAV_ITEMS.map((item) => item.label)).size).toBe(NAV_ITEMS.length)

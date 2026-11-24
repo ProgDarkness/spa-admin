@@ -244,9 +244,13 @@ export function useSession(): SessionContextValue {
   return value
 }
 
-export function useCan(permission: PermissionKey): boolean {
+export function useCanAny(permissions: readonly PermissionKey[]): boolean {
   const { user } = useSession()
-  return user?.permissions.includes(permission) ?? false
+  return permissions.some((permission) => user?.permissions.includes(permission) ?? false)
+}
+
+export function useCan(permission: PermissionKey): boolean {
+  return useCanAny([permission])
 }
 
 export function RequireSession({ children }: { children: ReactNode }) {

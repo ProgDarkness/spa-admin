@@ -3,10 +3,10 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { NAV_ITEMS, type NavItem } from '@/lib/routes'
-import { useCan } from '@/lib/session'
+import { useCanAny } from '@/lib/session'
 
 function NavLink({ item }: { item: NavItem }) {
-  const isAllowed = useCan(item.permission)
+  const isAllowed = useCanAny(item.permissions)
   const isActive = usePathname() === item.href
   if (!isAllowed) return null
 
