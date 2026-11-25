@@ -4,12 +4,13 @@ import type {
   Client,
   ExchangeRate,
   Id,
+  LocalDate,
   Payment,
   PaymentMethod,
   Resource,
   Service,
 } from '@/lib/model'
-import { createSeed, type MockUser } from './seed'
+import type { MockUser } from './seed'
 
 export type StoreState = Readonly<{
   users: readonly MockUser[]
@@ -23,7 +24,26 @@ export type StoreState = Readonly<{
   payments: readonly Payment[]
 }>
 
-let state: StoreState = createSeed(todayLocal())
+export type StoreSeeder = (today: LocalDate) => StoreState
+
+export const EMPTY_STATE: StoreState = {
+  users: [],
+  sessionUserId: null,
+  clients: [],
+  services: [],
+  resources: [],
+  paymentMethods: [],
+  rates: [],
+  appointments: [],
+  payments: [],
+}
+
+let seeder: StoreSeeder = () => EMPTY_STATE
+let state: StoreState = EMPTY_STATE
+
+export function setStoreSeeder(next: StoreSeeder): void {
+  seeder = next
+}
 
 export function getState(): StoreState {
   return state
@@ -35,7 +55,7 @@ export function commit(next: StoreState): StoreState {
 }
 
 export function resetStore(): void {
-  state = createSeed(todayLocal())
+  state = seeder(todayLocal())
 }
 
 export function nextId(rows: readonly { id: Id }[]): Id {

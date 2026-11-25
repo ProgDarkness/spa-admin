@@ -15,6 +15,7 @@ import { voidFormSchema, type VoidFormValues } from '../schemas'
 export type VoidDialogProps = { payment: Payment; onClose: () => void }
 
 const UNEXPECTED_ERROR_MESSAGE = 'No se pudo anular el pago'
+const REASON_SERVER_FIELD = 'reason'
 
 function useVoidSubmission(payment: Payment, onClose: () => void, form: UseFormReturn<VoidFormValues>) {
   const [failureMessage, setFailureMessage] = useState<string | null>(null)
@@ -22,6 +23,7 @@ function useVoidSubmission(payment: Payment, onClose: () => void, form: UseFormR
 
   async function submit(values: VoidFormValues) {
     setFailureMessage(null)
+    form.clearErrors()
     const parsed = voidFormSchema.safeParse(values)
     if (!parsed.success) {
       form.setError('reason', { message: parsed.error.issues[0]?.message ?? UNEXPECTED_ERROR_MESSAGE })
@@ -31,7 +33,12 @@ function useVoidSubmission(payment: Payment, onClose: () => void, form: UseFormR
       await voidPayment.mutateAsync({ id: payment.id, reason: parsed.data.reason })
       onClose()
     } catch (caught) {
-      setFailureMessage(appErrorOf(caught)?.message ?? UNEXPECTED_ERROR_MESSAGE)
+      const appError = appErrorOf(caught)
+      if (appError?.field === REASON_SERVER_FIELD) {
+        form.setError('reason', { message: appError.message })
+        return
+      }
+      setFailureMessage(appError?.message ?? UNEXPECTED_ERROR_MESSAGE)
     }
   }
 

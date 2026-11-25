@@ -1,10 +1,16 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { createSeed } from '@/lib/mock/seed'
 import {
   appointmentIdentitiesOf,
   clientIdentitiesOf,
   EXPECTED_DEV_APPOINTMENTS,
   EXPECTED_DEV_CLIENTS,
   EXPECTED_DEV_PAYMENT_METHODS,
+  EXPECTED_DEV_PAYMENTS,
+  paymentIdentitiesOf,
+  SEED_REFERENCE_DATE,
   EXPECTED_DEV_RATES,
   EXPECTED_DEV_RESOURCES,
   EXPECTED_DEV_SERVICES,
@@ -13,6 +19,18 @@ import {
   resourceIdentitiesOf,
   serviceIdentitiesOf,
 } from './dev-seed-expectations'
+
+const SEED_ROW = /seed\(\s*(\d+),\s*(\d+),\s*PaymentCurrency::(Usd|Ves),\s*([\d_]+),\s*(true|false),?\s*\)/g
+const EXPECTED_ROW =
+  /\(\s*(\d+),\s*(\d+),\s*(\d+),\s*"(USD|VES)",\s*([\d_]+),\s*(?:None|Some\(\s*([\d_]+),?\s*\)),\s*([\d_]+),\s*(?:None|Some\(\s*(VOID_REASON|"[^"]*"),?\s*\)),?\s*\)/g
+
+function rustSource(file: string): string {
+  return readFileSync(resolve(__dirname, '../../../src-tauri/src', file), 'utf8')
+}
+
+function digitsOf(raw: string | undefined): number {
+  return Number((raw ?? '').replaceAll('_', ''))
+}
 
 describe('resourceIdentitiesOf', () => {
   it('conserva solo id, name, kind y active de cada fila', () => {
@@ -192,5 +210,77 @@ describe('esperados del seed de desarrollo', () => {
       [15, 7, 5, 3, '2026-10-17T10:00', '2026-10-17T11:00', 'completed', 2000, 60],
       [16, 5, 4, 3, '2026-11-10T12:00', '2026-11-10T12:45', 'completed', 1500, 45],
     ])
+  })
+
+  it('los pagos esperados son los once del mock con la tasa 365000 y solo el pago 7 anulado', () => {
+    expect(EXPECTED_DEV_PAYMENTS).toEqual([
+      { id: 1, appointmentId: 1, methodId: 1, currency: 'USD', amountCents: 3500, rateBsPerUsdE4: null, usdEquivalentCents: 3500, voidReason: null },
+      { id: 2, appointmentId: 2, methodId: 2, currency: 'VES', amountCents: 182500, rateBsPerUsdE4: 365000, usdEquivalentCents: 5000, voidReason: null },
+      { id: 3, appointmentId: 4, methodId: 3, currency: 'USD', amountCents: 2000, rateBsPerUsdE4: null, usdEquivalentCents: 2000, voidReason: null },
+      { id: 4, appointmentId: 4, methodId: 2, currency: 'VES', amountCents: 73000, rateBsPerUsdE4: 365000, usdEquivalentCents: 2000, voidReason: null },
+      { id: 5, appointmentId: 8, methodId: 4, currency: 'USD', amountCents: 12000, rateBsPerUsdE4: null, usdEquivalentCents: 12000, voidReason: null },
+      { id: 6, appointmentId: 9, methodId: 3, currency: 'USD', amountCents: 6000, rateBsPerUsdE4: null, usdEquivalentCents: 6000, voidReason: null },
+      { id: 7, appointmentId: 9, methodId: 1, currency: 'USD', amountCents: 1000, rateBsPerUsdE4: null, usdEquivalentCents: 1000, voidReason: 'Monto digitado por error' },
+      { id: 8, appointmentId: 10, methodId: 1, currency: 'USD', amountCents: 1500, rateBsPerUsdE4: null, usdEquivalentCents: 1500, voidReason: null },
+      { id: 9, appointmentId: 13, methodId: 1, currency: 'USD', amountCents: 3500, rateBsPerUsdE4: null, usdEquivalentCents: 3500, voidReason: null },
+      { id: 10, appointmentId: 14, methodId: 1, currency: 'USD', amountCents: 1500, rateBsPerUsdE4: null, usdEquivalentCents: 1500, voidReason: null },
+      { id: 11, appointmentId: 15, methodId: 5, currency: 'VES', amountCents: 73000, rateBsPerUsdE4: 365000, usdEquivalentCents: 2000, voidReason: null },
+    ])
+  })
+
+  it('los pagos esperados coinciden con los del seed del mock', () => {
+    expect(paymentIdentitiesOf(createSeed(SEED_REFERENCE_DATE).payments)).toEqual(EXPECTED_DEV_PAYMENTS)
+  })
+
+  it('los pagos esperados coinciden con la tabla SEED_PAYMENTS y las constantes del seed de Rust', () => {
+    const source = rustSource('dev_seed_payments.rs')
+    const rows = [...source.matchAll(SEED_ROW)].map((match) => ({
+      appointmentId: Number(match[1]),
+      methodId: Number(match[2]),
+      currency: match[3]?.toUpperCase(),
+      amountCents: digitsOf(match[4]),
+      isVoided: match[5] === 'true',
+    }))
+    const rate = digitsOf(source.match(/const SEED_RATE_E4: i64 =\s*([\d_]+)\s*;/)?.[1])
+    const reason = source.match(/const VOID_REASON: &str =\s*"([^"]*)"\s*;/)?.[1]
+
+    expect(rows).toEqual(
+      EXPECTED_DEV_PAYMENTS.map(({ appointmentId, methodId, currency, amountCents, voidReason }) => ({
+        appointmentId,
+        methodId,
+        currency,
+        amountCents,
+        isVoided: voidReason !== null,
+      })),
+    )
+    expect(EXPECTED_DEV_PAYMENTS.filter((payment) => payment.currency === 'VES').map((payment) => payment.rateBsPerUsdE4)).toEqual(
+      rows.filter((row) => row.currency === 'VES').map(() => rate),
+    )
+    expect(EXPECTED_DEV_PAYMENTS.flatMap((payment) => (payment.voidReason === null ? [] : [payment.voidReason]))).toEqual([reason])
+  })
+
+  it('los pagos esperados coinciden con la tabla EXPECTED del test de Rust: tasa, equivalente y motivo exacto', () => {
+    const source = rustSource('dev_seed_payments_test.rs')
+    const reason = source.match(/const VOID_REASON: &str =\s*"([^"]*)"\s*;/)?.[1]
+    const rows = [...source.matchAll(EXPECTED_ROW)].map((match) => ({
+      id: Number(match[1]),
+      appointmentId: Number(match[2]),
+      methodId: Number(match[3]),
+      currency: match[4],
+      amountCents: digitsOf(match[5]),
+      rateBsPerUsdE4: match[6] ? digitsOf(match[6]) : null,
+      usdEquivalentCents: digitsOf(match[7]),
+      voidReason: match[8] ? (match[8] === 'VOID_REASON' ? reason : match[8].slice(1, -1)) : null,
+    }))
+
+    expect(rows).toEqual(EXPECTED_DEV_PAYMENTS)
+  })
+
+  it('el parseo tolera tuplas y filas partidas en varias líneas por rustfmt', () => {
+    const multiline = `seed(\n        9,\n        1,\n        PaymentCurrency::Usd,\n        3_500,\n        true,\n    )`
+    const tuple = `(\n        7,\n        9,\n        1,\n        "USD",\n        1_000,\n        None,\n        1_000,\n        Some(VOID_REASON),\n    )`
+
+    expect(multiline.match(SEED_ROW)?.[0]).toBe(multiline)
+    expect(tuple.match(EXPECTED_ROW)?.[0]).toBe(tuple)
   })
 })

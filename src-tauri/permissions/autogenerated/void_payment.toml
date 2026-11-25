@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-void-payment"
+description = "Enables the void_payment command without any pre-configured scope."
+commands.allow = ["void_payment"]
+
+[[permission]]
+identifier = "deny-void-payment"
+description = "Denies the void_payment command without any pre-configured scope."
+commands.deny = ["void_payment"]

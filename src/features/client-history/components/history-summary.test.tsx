@@ -35,6 +35,8 @@ function historyWith(overrides: Partial<ClientHistory>): ClientHistory {
     totalMinutes: 0,
     paidByCurrency: { USD: 0, VES: 0 },
     collectedOnNonCompletedByCurrency: { USD: 0, VES: 0 },
+    pendingByCurrency: { USD: 0, VES: 0 },
+    vesUsdEquivalentOfCompleted: 0,
     ...overrides,
   }
 }
@@ -44,10 +46,16 @@ function summary() {
 }
 
 function textOf(label: string): string {
-  return normalized(summary().getByText(new RegExp(`^${label}`)).textContent ?? '')
+  return normalized(summary().getByText(new RegExp(`^${label.replace(/[()]/g, '\\$&')}`)).textContent ?? '')
 }
 
 describe('HistorySummary', () => {
+  it('la región de totales anuncia sus cambios con aria-live polite', () => {
+    render(<HistorySummary history={historyWith({})} />)
+
+    expect(screen.getByRole('region', { name: 'Resumen' })).toHaveAttribute('aria-live', 'polite')
+  })
+
   it('sin datos muestra ceros y 0 min', () => {
     render(<HistorySummary history={historyWith({})} />)
 
@@ -87,17 +95,32 @@ describe('HistorySummary', () => {
     )
   })
 
-  it('calcula el equivalente USD solo con pagos vigentes de citas completadas', () => {
-    const entries = [
-      entry({
-        id: 1,
-        status: 'completed',
-        payments: [payment({ id: 1, usdEquivalentCents: 2000 }), payment({ id: 2, usdEquivalentCents: 900, voidedAt: '2026-11-12T10:00' })],
-      }),
-      entry({ id: 2, status: 'cancelled', payments: [payment({ id: 3, usdEquivalentCents: 700 })] }),
-    ]
-    render(<HistorySummary history={historyWith({ entries })} />)
+  it('muestra el equivalente USD de pagos en VES que entrega Rust sin recalcularlo', () => {
+    const entries = [entry({ id: 1, status: 'completed', payments: [payment({ id: 1, usdEquivalentCents: 1 })] })]
+    render(<HistorySummary history={historyWith({ entries, vesUsdEquivalentOfCompleted: 2000 })} />)
 
     expect(textOf('Equivalente en USD')).toBe(normalized(`Equivalente en USD de pagos en VES: ${formatCents(2000, 'USD')}`))
+  })
+
+  it('muestra los cobros pendientes de citas programadas o en curso por moneda', () => {
+    render(<HistorySummary history={historyWith({ pendingByCurrency: { USD: 1500, VES: 73000 } })} />)
+
+    expect(textOf('Cobros pendientes (citas programadas o en curso) en USD')).toBe(
+      normalized(`Cobros pendientes (citas programadas o en curso) en USD: ${formatCents(1500, 'USD')}`),
+    )
+    expect(textOf('Cobros pendientes (citas programadas o en curso) en VES')).toBe(
+      normalized(`Cobros pendientes (citas programadas o en curso) en VES: ${formatCents(73000, 'VES')}`),
+    )
+  })
+
+  it('los cobros pendientes no se mezclan con lo cobrado en citas no completadas', () => {
+    render(
+      <HistorySummary
+        history={historyWith({ pendingByCurrency: { USD: 100, VES: 0 }, collectedOnNonCompletedByCurrency: { USD: 900, VES: 0 } })}
+      />,
+    )
+
+    expect(textOf('Cobros pendientes (citas programadas o en curso) en USD')).toContain(normalized(formatCents(100, 'USD')))
+    expect(textOf('Cobrado en citas no completadas en USD')).toContain(normalized(formatCents(900, 'USD')))
   })
 })

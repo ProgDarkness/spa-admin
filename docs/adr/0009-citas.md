@@ -116,6 +116,7 @@
 - `src/features/payments/api.ts` (`createPayment`), `src/features/metrics/api.ts` y `src/features/client-history/api.ts` llaman a `syncAppointmentsMirror()` antes de validar o calcular.
 - Requieren `appointments.read` o `appointments.write`. Los roles seed (Propietaria, Recepción, Solo lectura) cumplen esa condición.
 - Mutar una cita invalida las claves de métricas, historial y pagos en `hooks.ts`.
+- **Cerrado en Fase 6** para `payments` y `client-history` (ADR 0010, sección 12). `metrics` sigue leyendo el espejo de citas hasta la Fase 7.
 
 ### 13. Backend simulado y paridad
 
@@ -131,7 +132,7 @@
 
 ### 15. Decisiones del usuario
 
-- **P1:** los pagos de seed del mock enganchados a las citas 1 a 16 se aceptan en builds de producción. **No distribuir builds antes de la Fase 6**, que retira el mock del bundle.
+- **P1:** los pagos de seed del mock enganchados a las citas 1 a 16 se aceptan en builds de producción. **No distribuir builds antes de la Fase 6**, que retira el mock del bundle. **Cerrado en Fase 6** (ADR 0010, sección 10): el seed sale del bundle de producción.
 - **P2:** guarda D9 = cualquier cita `scheduled` con `ends_at > now` (cubre atrasadas sin cerrar). Se alinea el mock.
 - **P3:** borrar un cliente con citas futuras se permite, sin guarda.
 

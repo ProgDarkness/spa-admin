@@ -1,11 +1,12 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { commands } from '@/lib/bindings'
+import { commands, type ExchangeRate } from '@/lib/bindings'
 import { settle } from '@/lib/ipc'
 import { MAX_RATE_E4 } from '@/lib/money'
 import { createSeed } from '@/lib/mock/seed'
 import type { PermissionKey, SessionUser } from '@/lib/model'
 import { createRatesIpcBackend } from './rates-backend'
+import { createSharedRows } from './shared-rows'
 
 const TODAY = '2026-11-12'
 const SEED = createSeed(TODAY)
@@ -240,5 +241,19 @@ describe('sin borrado y enrutamiento', () => {
 
     expect(other('list_rates', undefined)).toHaveLength(SEED_RATE_COUNT)
     expect(SEED.rates).toHaveLength(SEED_RATE_COUNT)
+  })
+})
+
+describe('filas compartidas', () => {
+  it('publica las tasas iniciales y cada alta o corrección', async () => {
+    const shared = createSharedRows<ExchangeRate>()
+    mockIPC(createRatesIpcBackend(failWhenUnrouted, { session: () => session, rates: SEED.rates, shared }))
+    expect(shared.read()).toHaveLength(SEED_RATE_COUNT)
+
+    await commands.upsertRate(NEW_DATE, 7)
+    await commands.upsertRate(TODAY, 1)
+
+    expect(shared.read()).toHaveLength(SEED_RATE_COUNT + 1)
+    expect(shared.read().find((row) => row.date === TODAY)?.rateBsPerUsdE4).toBe(1)
   })
 })

@@ -35,6 +35,8 @@ pub enum SetupError {
     SeedCatalogRejected,
     #[error("seed appointment rejected")]
     SeedAppointmentRejected(#[source] crate::features::appointments::model::AppointmentError),
+    #[error("seed payment rejected")]
+    SeedPaymentRejected(#[source] crate::features::payments::model::PaymentError),
 }
 
 const DIRECTORY_MODE: u32 = 0o700;
@@ -67,9 +69,8 @@ fn seed_for_development(
         Ok(crate::dev_seed::seed_if_empty(conn, passwords, read_env)
             .and_then(|()| crate::dev_seed_catalog::seed_catalog_if_empty(conn, read_env))
             .and_then(|()| crate::dev_seed_clients::seed_clients_if_empty(conn, read_env))
-            .and_then(|()| {
-                crate::dev_seed_appointments::seed_appointments_if_empty(conn, read_env)
-            }))
+            .and_then(|()| crate::dev_seed_appointments::seed_appointments_if_empty(conn, read_env))
+            .and_then(|()| crate::dev_seed_payments::seed_payments_if_empty(conn, read_env)))
     })?
 }
 

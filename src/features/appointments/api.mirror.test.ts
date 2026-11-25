@@ -115,18 +115,39 @@ describe('syncAppointmentsMirror', () => {
     expect(getState().appointments.map((row) => row.id)).toEqual([7])
   })
 
-  it('descarta una lista obsoleta que llega después de una mutación', async () => {
+  it('reintenta una lista obsoleta por una mutación y aplica la lectura nueva con la cita creada', async () => {
     const pending = deferred<AppointmentSummary[]>()
-    stubIpc((cmd) => (cmd === 'list_all_appointments' ? pending.promise : summary({ id: 9 })))
+    let listCalls = 0
+    stubIpc((cmd) => {
+      if (cmd !== 'list_all_appointments') return summary({ id: 9 })
+      listCalls += 1
+      return listCalls === 1 ? pending.promise : [summary({ id: 1 }), summary({ id: 9 })]
+    })
 
     const sync = syncAppointmentsMirror()
     await createAppointment(inputTemplate())
     pending.resolve([summary({ id: 1 })])
-    await sync
+    const result = await sync
 
-    expect(getState().appointments.map((row) => row.id)).toEqual([9])
+    expect(listCalls).toBe(2)
+    expect(dataOf(result).map((row) => row.id)).toEqual([1, 9])
+    expect(getState().appointments.map((row) => row.id)).toEqual([1, 9])
+  })
+
+  it('si la lista nunca se puede aplicar devuelve un error interno y no un ok parcial', async () => {
+    stubIpc((cmd) => (cmd === 'list_all_appointments' ? mutateDuringList() : summary({ id: 9 })))
+
+    const result = await syncAppointmentsMirror()
+
+    expect(errorOf(result).code).toBe('internal')
+    expect(calls.filter((call) => call.cmd === 'list_all_appointments')).toHaveLength(3)
   })
 })
+
+async function mutateDuringList(): Promise<AppointmentSummary[]> {
+  await createAppointment(inputTemplate())
+  return [summary({ id: 1 })]
+}
 
 describe('mutaciones', () => {
   it('createAppointment envía la entrada a Rust sin validar ni medianoche ni solape localmente y refleja la cita', async () => {

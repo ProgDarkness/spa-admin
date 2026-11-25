@@ -4,6 +4,7 @@ import { commit, getState } from '@/lib/mock/store'
 import type { Payment } from '@/lib/model'
 import { formatCents as formatCentsRaw } from '@/lib/money'
 import { appointmentTemplate, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import { PaymentList } from './payment-list'
 
@@ -52,6 +53,7 @@ beforeEach(() => {
   resetWithEmptyAgenda()
   seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID }))
   commit({ ...getState(), payments: [USD_ACTIVE, VES_ACTIVE, USD_VOIDED] })
+  installDevIpc()
 })
 
 describe('PaymentList', () => {
@@ -70,6 +72,7 @@ describe('PaymentList', () => {
 
   it('muestra Método eliminado cuando el método ya cargó y no existe', async () => {
     commit({ ...getState(), payments: [payment({ id: 9, methodId: 999 })] })
+    installDevIpc()
     renderWithProviders(<PaymentList appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
 
     expect(await screen.findByText(/Método eliminado/)).toBeInTheDocument()
@@ -98,6 +101,7 @@ describe('PaymentList', () => {
 
   it('informa cuando la cita no tiene pagos', async () => {
     commit({ ...getState(), payments: [] })
+    installDevIpc()
     renderWithProviders(<PaymentList appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
 
     const message = await screen.findByText('Esta cita aún no tiene pagos.')

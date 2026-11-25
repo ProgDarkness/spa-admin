@@ -47,9 +47,19 @@ export const commands = {
 	moveAppointment: (movement: AppointmentMove, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("move_appointment", { movement }, options)),
 	transitionAppointment: (request: AppointmentTransitionRequest, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("transition_appointment", { request }, options)),
 	listFutureAppointmentsOfResource: (id: number, options?: InvokeOptions) => typedError<FutureAppointment[], AppError>(__TAURI_INVOKE("list_future_appointments_of_resource", { id }, options)),
+	listPayments: (appointmentId: number, options?: InvokeOptions) => typedError<PaymentSummary[], AppError>(__TAURI_INVOKE("list_payments", { appointmentId }, options)),
+	listAllPayments: (options?: InvokeOptions) => typedError<PaymentSummary[], AppError>(__TAURI_INVOKE("list_all_payments", undefined, options)),
+	createPayment: (input: PaymentInput, options?: InvokeOptions) => typedError<PaymentSummary, AppError>(__TAURI_INVOKE("create_payment", { input }, options)),
+	voidPayment: (request: PaymentVoidRequest, options?: InvokeOptions) => typedError<PaymentSummary, AppError>(__TAURI_INVOKE("void_payment", { request }, options)),
+	getClientHistory: (clientId: number, options?: InvokeOptions) => typedError<ClientHistory, AppError>(__TAURI_INVOKE("get_client_history", { clientId }, options)),
 };
 
 /* Types */
+export type AmountsByCurrency = {
+	USD: number,
+	VES: number,
+};
+
 export type AppError = {
 	code: AppErrorCode,
 	message: string,
@@ -57,7 +67,7 @@ export type AppError = {
 	entityIds: number[] | null,
 };
 
-export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "notFound" | "nationalIdTaken" | "clientDeletedReactivate" | "overlap" | "crossesMidnight" | "invalidTransition" | "resourceInactive" | "resourceHasFutureAppointments" | "internal";
+export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "notFound" | "nationalIdTaken" | "clientDeletedReactivate" | "overlap" | "crossesMidnight" | "invalidTransition" | "resourceInactive" | "resourceHasFutureAppointments" | "rateMissing" | "alreadyVoided" | "internal";
 
 export type AppointmentInput = {
 	clientId: number,
@@ -136,6 +146,22 @@ export type ClientFilter = {
 	includeDeleted: boolean,
 };
 
+export type ClientHistory = {
+	client: ClientSummary,
+	entries: ClientHistoryEntry[],
+	totalMinutes: number,
+	paidByCurrency: AmountsByCurrency,
+	collectedOnNonCompletedByCurrency: AmountsByCurrency,
+	pendingByCurrency: AmountsByCurrency,
+	vesUsdEquivalentOfCompleted: number,
+};
+
+export type ClientHistoryEntry = {
+	serviceName: string,
+	resourceName: string,
+	payments: PaymentSummary[],
+} & AppointmentSummary;
+
 export type ClientInput = {
 	firstName: string,
 	lastName: string,
@@ -206,6 +232,16 @@ export type PasswordReset = {
 	newPassword: string,
 };
 
+export type PaymentCurrency = "USD" | "VES";
+
+export type PaymentInput = {
+	appointmentId: number,
+	methodId: number,
+	currency: PaymentCurrency,
+	amountCents: number,
+	rateBsPerUsdE4: number | null,
+};
+
 export type PaymentMethodActivation = {
 	id: number,
 	active: boolean,
@@ -230,6 +266,25 @@ export type PaymentMethodSummary = {
 export type PaymentMethodUpdate = {
 	id: number,
 	name: string,
+};
+
+export type PaymentSummary = {
+	id: number,
+	appointmentId: number,
+	methodId: number,
+	currency: PaymentCurrency,
+	amountCents: number,
+	rateBsPerUsdE4: number | null,
+	usdEquivalentCents: number,
+	paidAt: string,
+	voidedAt: string | null,
+	voidedBy: number | null,
+	voidReason: string | null,
+};
+
+export type PaymentVoidRequest = {
+	id: number,
+	reason: string,
 };
 
 export type PermissionKey = "clients.read" | "clients.write" | "catalog.read" | "catalog.write" | "resources.manage" | "appointments.read" | "appointments.write" | "appointments.reopen" | "payments.read" | "payments.write" | "rates.manage" | "metrics.read" | "audit.read" | "users.manage" | "backup.manage";

@@ -3,7 +3,7 @@ import { clearMocks } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEV_PASSWORD } from '@/test/ipc/auth-backend'
 import { freezeDate } from '@/test/clock'
-import { commit, getState, resetStore } from '@/lib/mock/store'
+import { commit, EMPTY_STATE, getState, resetStore } from '@/lib/mock/store'
 import {
   clientIdentitiesOf,
   EXPECTED_DEV_CLIENTS,
@@ -47,6 +47,37 @@ describe('installDevBrowserIpc', () => {
     expect(installed).toBe(true)
     await expect(invoke('login', OWNER_CREDENTIALS)).resolves.toMatchObject({ username: 'propietaria' })
     expect(getState().sessionUserId).toBe(1)
+  })
+
+  it('siembra el store vacío con el seed de ejemplo al instalarse', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    commit(EMPTY_STATE)
+
+    installDevBrowserIpc()
+
+    expect(getState().users.length).toBeGreaterThan(0)
+    expect(getState().clients.length).toBeGreaterThan(0)
+  })
+
+  it('no pisa un estado ya mutado al instalarse', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const mutated = { ...EMPTY_STATE, clients: [], sessionUserId: 7 }
+    commit(mutated)
+
+    installDevBrowserIpc()
+
+    expect(getState()).toBe(mutated)
+  })
+
+  it('instalarse dos veces conserva el estado sembrado por la primera', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    commit(EMPTY_STATE)
+    installDevBrowserIpc()
+    const afterFirstInstall = getState()
+
+    installDevBrowserIpc()
+
+    expect(getState()).toBe(afterFirstInstall)
   })
 
   it('responde setup_status sin primer arranque pendiente y registra la actividad', async () => {

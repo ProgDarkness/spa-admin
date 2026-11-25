@@ -45,6 +45,11 @@ const APP_COMMANDS: &[&str] = &[
     "move_appointment",
     "transition_appointment",
     "list_future_appointments_of_resource",
+    "list_payments",
+    "list_all_payments",
+    "create_payment",
+    "void_payment",
+    "get_client_history",
 ];
 const WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
 

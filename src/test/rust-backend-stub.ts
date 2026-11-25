@@ -1,6 +1,6 @@
 import { mockIPC } from '@tauri-apps/api/mocks'
 import { getState } from '@/lib/mock/store'
-import type { Appointment, Client, ExchangeRate, PaymentMethod, Resource, Service } from '@/lib/model'
+import type { Appointment, Client, ExchangeRate, Payment, PaymentMethod, Resource, Service } from '@/lib/model'
 
 const STUB_INSTANT = '2026-11-12T09:00:00Z'
 
@@ -11,6 +11,7 @@ export type RustCatalogData = Readonly<{
   rates?: readonly ExchangeRate[]
   clients?: readonly Client[]
   appointments?: readonly Appointment[]
+  payments?: readonly Payment[]
   failing?: readonly string[]
 }>
 
@@ -30,6 +31,7 @@ const LIST_HANDLERS: Readonly<Record<string, Handler>> = {
   list_clients: ({ clients = getState().clients }) => clients,
   list_appointments: ({ appointments = getState().appointments }) => appointments,
   list_all_appointments: ({ appointments = getState().appointments }) => appointments,
+  list_all_payments: ({ payments = getState().payments }) => payments,
 }
 
 function includeInactiveOf(args: unknown): boolean {

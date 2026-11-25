@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DEV_BROWSER_IPC_SENTINEL } from '@/test/ipc/dev-browser-ipc'
 import {
@@ -66,6 +66,8 @@ describe('marcadores literales del bundle', () => {
     'createRatesIpcBackend',
     'createClientsIpcBackend',
     'createAppointmentsIpcBackend',
+    'createPaymentsIpcBackend',
+    'createClientHistoryIpcBackend',
     'createDevBackends',
     'composeBackends',
     'createAuthIpcBackend',
@@ -91,8 +93,40 @@ describe('marcadores literales del bundle', () => {
   })
 })
 
-describe('centinelas del seed (informativos)', () => {
-  const SEED_SENTINELS = ['Manicure (Rosa)', '(ejemplo)', 'Cabina 1', 'createSeed', 'V-26789012']
+describe('centinelas del seed (bloqueantes)', () => {
+  const IDENTIFIER_SENTINELS_REMOVED_BY_MINIFICATION = ['createSeed']
+  const SURVIVING_LITERAL_SENTINELS = [
+    'Manicure (Rosa)',
+    '(ejemplo)',
+    'Cabina 1',
+    'V-26789012',
+    'Cita seed inexistente',
+    '0414-1234567',
+    'E-81234567',
+    'V-14567890',
+  ]
+  const SEED_SENTINELS = [...IDENTIFIER_SENTINELS_REMOVED_BY_MINIFICATION, ...SURVIVING_LITERAL_SENTINELS]
+
+  it.each(SURVIVING_LITERAL_SENTINELS)('el literal %s existe en el código del seed y por eso sobrevive a la minificación', (literal) => {
+    const seedSource = readFileSync(join(REPOSITORY_ROOT, 'src/lib/mock/seed.ts'), 'utf8')
+
+    expect(seedSource).toContain(literal)
+  })
+
+  it.each(SURVIVING_LITERAL_SENTINELS)('el literal %s no aparece en el código de producción legítimo', (literal) => {
+    const offenders = readdirSync(join(REPOSITORY_ROOT, 'src'), { recursive: true, encoding: 'utf8' })
+      .filter((file) => /\.tsx?$/.test(file) && !/\.test(-d)?\.tsx?$/.test(file))
+      .filter((file) => !file.startsWith(`test${sep}`) && !file.startsWith(join('lib', 'mock', 'seed')))
+      .filter((file) => readFileSync(join(REPOSITORY_ROOT, 'src', file), 'utf8').includes(literal))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('un bundle minificado que solo conserva literales del seed sigue siendo detectado sin el identificador', () => {
+    writeFileSync(join(outputDirectory, 'chunk.js'), 'a=[{p:"0414-1234567"},{p:"E-81234567"}]')
+
+    expect(findSeedSentinels(outputDirectory).map(({ marker }) => marker)).toEqual(['0414-1234567', 'E-81234567'])
+  })
 
   it.each(SEED_SENTINELS)('incluye el centinela %s', (sentinel) => {
     expect(SEED_SENTINEL_MARKERS).toContain(sentinel)
@@ -102,8 +136,8 @@ describe('centinelas del seed (informativos)', () => {
     SEED_SENTINELS.forEach((sentinel) => expect(FORBIDDEN_BUNDLE_MARKERS).not.toContain(sentinel))
   })
 
-  it('no bloquea el bundle por ahora', () => {
-    expect(SEED_SENTINELS_BLOCK_BUNDLE).toBe(false)
+  it('bloquea el bundle si reaparece el seed', () => {
+    expect(SEED_SENTINELS_BLOCK_BUNDLE).toBe(true)
   })
 
   it('detecta un centinela en un archivo del bundle', () => {

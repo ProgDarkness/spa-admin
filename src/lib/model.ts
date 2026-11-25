@@ -130,6 +130,8 @@ export type ClientHistory = {
   totalMinutes: number
   paidByCurrency: AmountsByCurrency
   collectedOnNonCompletedByCurrency: AmountsByCurrency
+  pendingByCurrency: AmountsByCurrency
+  vesUsdEquivalentOfCompleted: Cents
 }
 export type AppointmentCounts = {
   scheduled: number

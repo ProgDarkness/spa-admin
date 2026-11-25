@@ -20,6 +20,11 @@ type Feedback = { kind: 'saved' } | { kind: 'failed'; message: string } | null
 
 const EMPTY_VALUES: PaymentFormValues = { methodId: '', currency: 'USD', amount: '', rate: '' }
 const FORM_FIELDS = ['methodId', 'amount', 'rate'] as const
+const FORM_FIELD_OF_SERVER_FIELD: ReadonlyMap<string, (typeof FORM_FIELDS)[number]> = new Map([
+  ['methodId', 'methodId'],
+  ['amountCents', 'amount'],
+  ['rateBsPerUsdE4', 'rate'],
+])
 const UNEXPECTED_ERROR_MESSAGE = 'No se pudo registrar el pago'
 
 function isFormField(name: unknown): name is (typeof FORM_FIELDS)[number] {
@@ -44,6 +49,7 @@ function usePaymentSubmission(appointmentId: number, onSaved: (() => void) | und
 
   async function submit(values: PaymentFormValues) {
     setFeedback(null)
+    form.clearErrors()
     const parsed = paymentFormSchema.safeParse(values)
     if (!parsed.success) {
       parsed.error.issues.forEach(({ path, message }) => {
@@ -58,7 +64,13 @@ function usePaymentSubmission(appointmentId: number, onSaved: (() => void) | und
       setFeedback({ kind: 'saved' })
       onSaved?.()
     } catch (caught) {
-      setFeedback({ kind: 'failed', message: appErrorOf(caught)?.message ?? UNEXPECTED_ERROR_MESSAGE })
+      const appError = appErrorOf(caught)
+      const target = FORM_FIELD_OF_SERVER_FIELD.get(appError?.field ?? '')
+      if (appError && target) {
+        form.setError(target, { message: appError.message })
+        return
+      }
+      setFeedback({ kind: 'failed', message: appError?.message ?? UNEXPECTED_ERROR_MESSAGE })
     }
   }
 

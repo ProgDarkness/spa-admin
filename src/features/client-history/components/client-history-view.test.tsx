@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { commit, getState, resetStore } from '@/lib/mock/store'
+import { createPayment } from '@/features/payments/api'
 import { formatCents } from '@/lib/money'
 import { freezeDate } from '@/test/clock'
 import { renderWithProviders } from '@/test/render'
@@ -26,6 +27,16 @@ async function summaryOf() {
 }
 
 describe('ClientHistoryView', () => {
+  it('muestra el adelanto de una cita programada como cobro pendiente y no como pagado', async () => {
+    commit({ ...getState(), sessionUserId: getState().users.find((user) => user.username === 'recepcion')?.id ?? null })
+    await createPayment({ appointmentId: 12, methodId: 1, currency: 'USD', amountCents: 1500, rateBsPerUsdE4: null })
+    renderWithProviders(<ClientHistoryView clientId={MARIA_ID} />, { as: 'recepcion' })
+
+    const summary = await summaryOf()
+    expect(summary.getByText(line('Cobros pendientes (citas programadas o en curso) en USD', 1500, 'USD'))).toBeInTheDocument()
+    expect(summary.getByText(line('Pagado en USD', 5500, 'USD'))).toBeInTheDocument()
+  })
+
   it('muestra el nombre y los datos del cliente', async () => {
     renderWithProviders(<ClientHistoryView clientId={MARIA_ID} />, { as: 'recepcion' })
 

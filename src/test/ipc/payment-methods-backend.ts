@@ -8,6 +8,7 @@ import type {
 import type { PaymentMethod, SessionUser } from '@/lib/model'
 import type { IpcBackend } from './auth-backend'
 import { validationError } from './ipc-errors'
+import type { SharedRows } from './shared-rows'
 import {
   booleanField,
   nextRecordId,
@@ -23,6 +24,7 @@ import {
 export type PaymentMethodsBackendOptions = {
   session: () => SessionUser | null
   paymentMethods: readonly PaymentMethod[]
+  shared?: SharedRows<PaymentMethodSummary>
   now?: () => number
 }
 
@@ -60,6 +62,12 @@ function asSummary(method: PaymentMethod, instant: string): PaymentMethodSummary
 export function createPaymentMethodsIpcBackend(next: IpcBackend, options: PaymentMethodsBackendOptions): IpcBackend {
   const now = options.now ?? Date.now
   let rows: readonly PaymentMethodSummary[] = options.paymentMethods.map((method) => asSummary(method, toInstant(now())))
+  options.shared?.write(rows)
+
+  function setRows(updated: readonly PaymentMethodSummary[]): void {
+    rows = updated
+    options.shared?.write(updated)
+  }
 
   function validName(raw: unknown): string {
     const name = normalizedRecordName(raw)
@@ -97,7 +105,7 @@ export function createPaymentMethodsIpcBackend(next: IpcBackend, options: Paymen
       createdAt: instant,
       updatedAt: instant,
     }
-    rows = [...rows, created]
+    setRows([...rows, created])
     return created
   }
 
@@ -109,7 +117,7 @@ export function createPaymentMethodsIpcBackend(next: IpcBackend, options: Paymen
     ensureNameFree(name, before.id)
     if (before.name === name) return before
     const after: PaymentMethodSummary = { ...before, name, updatedAt: toInstant(now()) }
-    rows = replaceRecord(rows, after)
+    setRows(replaceRecord(rows, after))
     return after
   }
 
@@ -120,7 +128,7 @@ export function createPaymentMethodsIpcBackend(next: IpcBackend, options: Paymen
     const before = requireMethod(fields.id)
     if (before.active === active) return before
     const after: PaymentMethodSummary = { ...before, active, updatedAt: toInstant(now()) }
-    rows = replaceRecord(rows, after)
+    setRows(replaceRecord(rows, after))
     return after
   }
 

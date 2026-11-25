@@ -185,6 +185,35 @@ Citas en Rust con solape transaccional, máquina de estados, reapertura restring
 - Auditoría de citas sin texto de notas.
 - Seed del mock aún presente en el bundle de producción hasta la Fase 6. Los pagos de seed apuntan a las citas 1 a 16 (decisión aceptada; no distribuir builds antes de la Fase 6).
 
+### Fase 6: Pagos e historial
+
+Pagos en Rust con tasa copiada al registrarse, anulación con motivo e historial de cliente calculado en el backend. El seed del mock sale del bundle de producción y el centinela de `check:bundle` pasa a bloquear. Sin publicar. Decisiones en `docs/adr/0010-pagos-e-historial.md`; descripción de la PR en `docs/pr/fase6-pagos.md`.
+
+#### Added
+
+- Migración `0012_appointment_payments.sql`: tabla `appointment_payments` con CHECKs por moneda, tasa copiada (sin FK a `exchange_rates`) y triggers que impiden borrar pagos y modificar pagos anulados o columnas económicas.
+- Fórmula half-up entera del equivalente USD, idéntica en SQL, Rust (`i128`) y TypeScript (`BigInt`), con vectores compartidos en `src/lib/usd-equivalent-vectors.json`.
+- 5 comandos IPC nuevos (47 en total): `list_payments`, `list_all_payments`, `create_payment`, `void_payment` y `get_client_history`.
+- Anulación con motivo de 1 a 200 caracteres, sin caracteres de control, y auditoría `void` sin importes.
+- Historial de cliente en Rust: minutos de citas completadas y pagos por moneda, separados por estado de cita (completadas, canceladas y no asistió, pendientes).
+- Errores nuevos `rateMissing` y `alreadyVoided`.
+- Seed de depuración de pagos sobre las citas 1 a 16, solo en compilación de depuración.
+- Espejo de pagos en el front (`syncPaymentsMirror()`) y backends simulados con paridad frente a Rust.
+- `aria-live="polite"` en los mensajes de formulario.
+
+#### Changed
+
+- Pagos y métricas sincronizan el espejo de pagos desde Rust. Pagos deja de depender del espejo de citas, y el historial de cliente se calcula en Rust (`compute.ts` eliminado).
+- Pagos en VES usan la tasa del día por defecto, editable. Corregir después la tasa del día no altera los pagos ya registrados.
+- El bundle de producción ya no incluye el seed del mock: la app arranca vacía hasta sincronizar con Rust.
+
+#### Security
+
+- Permisos `payments.read` y `payments.write` validados en Rust en cada comando; las escrituras comprueban el permiso dentro de la transacción. Anular exige `payments.write` (Propietaria y Recepción).
+- Historial de cliente: exige `clients.read`, `appointments.read` y `payments.read`.
+- Pagos inmutables a nivel de base de datos (triggers) y tasa congelada en cada pago.
+- Centinelas del seed bloqueantes en CI (`check:bundle`).
+
 ## [0.2.0] - 2026-11-13
 
 Rediseño visual «Piedra y bronce». Sin cambios de lógica de dominio ni de textos. Decisiones en `docs/design/piedra-y-bronce.md`.

@@ -12,64 +12,108 @@ import {
   resetWithEmptyAgenda,
   seedAppointments,
 } from '@/test/appointment-fixtures'
-import { upsertRate } from '@/features/rates/api'
-import { createPayment, listPayments, voidPayment } from './api'
+import { deferred } from '@/test/deferred'
+import { stubRustCatalog } from '@/test/rust-backend-stub'
+import { createPayment, listPayments, syncPaymentsMirror, voidPayment } from './api'
 
 const APPOINTMENT_ID = 100
+const OTHER_APPOINTMENT_ID = 101
 const CASH_METHOD = 1
 const MOBILE_METHOD = 2
-const TODAY = NOW.slice(0, 10)
 const DAY_RATE = 365000
-const OWNER_ID = 1
 const RECEPTION_ID = 2
-
-function input(overrides: Partial<PaymentInput> = {}): PaymentInput {
-  return {
-    appointmentId: APPOINTMENT_ID,
-    methodId: CASH_METHOD,
-    currency: 'USD',
-    amountCents: 2000,
-    rateBsPerUsdE4: null,
-    ...overrides,
-  }
+const STALE_PAYMENT: Payment = {
+  id: 777,
+  appointmentId: APPOINTMENT_ID,
+  methodId: CASH_METHOD,
+  currency: 'USD',
+  amountCents: 100,
+  rateBsPerUsdE4: null,
+  usdEquivalentCents: 100,
+  paidAt: NOW,
+  voidedAt: null,
+  voidedBy: null,
+  voidReason: null,
 }
 
-function withoutTodayRate(): void {
-  commit({ ...getState(), rates: getState().rates.filter((rate) => rate.date !== TODAY) })
-  installDevIpc()
+type InvokeHook = (cmd: string, args?: unknown) => Promise<unknown>
+
+function input(overrides: Partial<PaymentInput> = {}): PaymentInput {
+  return { appointmentId: APPOINTMENT_ID, methodId: CASH_METHOD, currency: 'USD', amountCents: 2000, rateBsPerUsdE4: null, ...overrides }
+}
+
+function recordInvokedCommands(): string[] {
+  const internals = Reflect.get(window, '__TAURI_INTERNALS__') as { invoke: InvokeHook }
+  const original = internals.invoke
+  const calls: string[] = []
+  internals.invoke = (cmd, args) => {
+    calls.push(cmd)
+    return original(cmd, args)
+  }
+  return calls
+}
+
+function delayFirstReplyOf(command: string, gate: Promise<void>): void {
+  const internals = Reflect.get(window, '__TAURI_INTERNALS__') as { invoke: InvokeHook }
+  const original = internals.invoke
+  let isPending = true
+  internals.invoke = async (cmd, args) => {
+    const value = await original(cmd, args)
+    if (cmd === command && isPending) {
+      isPending = false
+      await gate
+    }
+    return value
+  }
 }
 
 beforeEach(() => {
   resetWithEmptyAgenda()
-  seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID }))
   commit({ ...getState(), payments: [] })
+  seedAppointments(
+    appointmentTemplate({ id: APPOINTMENT_ID }),
+    appointmentTemplate({ id: OTHER_APPOINTMENT_ID, startsAt: '2026-11-13T14:00', endsAt: '2026-11-13T15:00' }),
+  )
   signInAs('recepcion')
 })
 
-describe('createPayment en USD', () => {
-  it('guarda rate null y equivalente igual al monto', async () => {
+describe('createPayment', () => {
+  it('registra el pago en Rust, lo devuelve y lo refleja en el espejo', async () => {
     const created = dataOf(await createPayment(input({ amountCents: 3500 })))
 
     expect(created).toMatchObject({
       id: 1,
       appointmentId: APPOINTMENT_ID,
-      methodId: CASH_METHOD,
       currency: 'USD',
       amountCents: 3500,
       rateBsPerUsdE4: null,
       usdEquivalentCents: 3500,
       paidAt: NOW,
       voidedAt: null,
-      voidedBy: null,
-      voidReason: null,
     })
     expect(getState().payments).toEqual([created])
+    expect(dataOf(await listPayments(APPOINTMENT_ID))).toEqual([created])
   })
 
-  it('ignora una tasa enviada y guarda null', async () => {
+  it('un pago VES sin tasa usa la tasa del día que decide Rust', async () => {
+    const created = dataOf(await createPayment(input({ currency: 'VES', amountCents: 182500, methodId: MOBILE_METHOD })))
+
+    expect(created.rateBsPerUsdE4).toBe(DAY_RATE)
+    expect(created.usdEquivalentCents).toBe(5000)
+  })
+
+  it('una tasa explícita viaja a Rust y se guarda copiada', async () => {
+    const created = dataOf(await createPayment(input({ currency: 'VES', amountCents: 73000, rateBsPerUsdE4: 400000 })))
+
+    expect(created.rateBsPerUsdE4).toBe(400000)
+    expect(created.usdEquivalentCents).toBe(1825)
+  })
+
+  it('un pago USD ignora una tasa enviada y guarda null', async () => {
     const created = dataOf(await createPayment(input({ rateBsPerUsdE4: 400000 })))
 
     expect(created.rateBsPerUsdE4).toBeNull()
+    expect(created.usdEquivalentCents).toBe(2000)
   })
 
   it('permite pagos mixtos USD y VES en la misma cita con ids secuenciales', async () => {
@@ -79,163 +123,97 @@ describe('createPayment en USD', () => {
     expect([usd.id, ves.id]).toEqual([1, 2])
     expect(dataOf(await listPayments(APPOINTMENT_ID))).toHaveLength(2)
   })
-})
 
-describe('createPayment en VES', () => {
-  it('sin tasa del día ni tasa manual devuelve rateMissing y no guarda', async () => {
-    withoutTodayRate()
-
-    const result = await createPayment(input({ currency: 'VES', amountCents: 73000 }))
-
-    expect(errorOf(result).code).toBe('rateMissing')
-    expect(getState().payments).toEqual([])
-  })
-
-  it('usa la tasa manual indicada y la guarda', async () => {
-    withoutTodayRate()
-
+  it('una tasa manual pisa la del día aunque haya una registrada', async () => {
     const created = dataOf(await createPayment(input({ currency: 'VES', amountCents: 73000, rateBsPerUsdE4: 365000 })))
 
     expect(created.rateBsPerUsdE4).toBe(365000)
     expect(created.usdEquivalentCents).toBe(2000)
   })
 
-  it('prefiere la tasa manual sobre la del día', async () => {
-    dataOf(await upsertRate(TODAY, 400000))
-
-    const created = dataOf(await createPayment(input({ currency: 'VES', amountCents: 73000, rateBsPerUsdE4: 365000 })))
-
-    expect(created.rateBsPerUsdE4).toBe(365000)
-    expect(created.usdEquivalentCents).toBe(2000)
-  })
-
-  it('sin tasa manual usa la tasa del día', async () => {
-    const created = dataOf(await createPayment(input({ currency: 'VES', amountCents: 182500 })))
-
-    expect(created.rateBsPerUsdE4).toBe(DAY_RATE)
-    expect(created.usdEquivalentCents).toBe(5000)
-  })
-
-  it.each([
-    ['sube en el .5 exacto', 1, 20000, 1],
-    ['sube 1.5 a 2', 3, 20000, 2],
-    ['baja por debajo de .5', 4, 30000, 1],
-    ['sube justo en .5 con 3 divisores', 3, 60000, 1],
-  ])('redondea half-up: %s', async (_name, amountCents, rate, expected) => {
-    const created = dataOf(await createPayment(input({ currency: 'VES', amountCents, rateBsPerUsdE4: rate })))
-
-    expect(created.usdEquivalentCents).toBe(expected)
-  })
-
-  it('calcula el equivalente de un monto grande sin perder precisión', async () => {
-    const created = dataOf(
-      await createPayment(input({ currency: 'VES', amountCents: 100_000_000_000, rateBsPerUsdE4: 365000 })),
-    )
-
-    expect(created.usdEquivalentCents).toBe(2_739_726_027)
-  })
-
-  it('conserva su tasa cuando luego se corrige la tasa del día', async () => {
-    const created = dataOf(await createPayment(input({ currency: 'VES', amountCents: 182500 })))
-
-    dataOf(await upsertRate(TODAY, 500000))
-
-    const [stored] = dataOf(await listPayments(APPOINTMENT_ID))
-    expect(stored).toEqual(created)
-    expect(stored?.rateBsPerUsdE4).toBe(DAY_RATE)
-    expect(stored?.usdEquivalentCents).toBe(5000)
-  })
-})
-
-describe('createPayment reglas de cita y método', () => {
-  it.each(['scheduled', 'inProgress', 'completed', 'cancelled', 'noShow'] as const)(
-    'permite pagar una cita %s',
-    async (status) => {
-      seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID, status }))
-
-      expect((await createPayment(input())).status).toBe('ok')
-    },
-  )
-
-  it('devuelve notFound con field appointmentId si la cita no existe', async () => {
-    const error = errorOf(await createPayment(input({ appointmentId: MISSING_ID })))
-
-    expect(error).toMatchObject({ code: 'notFound', field: 'appointmentId' })
-  })
-
-  it('devuelve notFound con field methodId si el método no existe', async () => {
-    const error = errorOf(await createPayment(input({ methodId: MISSING_ID })))
-
-    expect(error).toMatchObject({ code: 'notFound', field: 'methodId' })
-  })
-
-  it('rechaza un método inactivo con validation en methodId', async () => {
-    commit({
-      ...getState(),
-      paymentMethods: getState().paymentMethods.map((method) =>
-        method.id === CASH_METHOD ? { ...method, active: false } : method,
-      ),
-    })
+  it('sin tasa manual ni tasa del día devuelve rateMissing y no guarda', async () => {
+    commit({ ...getState(), rates: [] })
     installDevIpc()
 
-    const result = await createPayment(input())
+    const error = errorOf(await createPayment(input({ currency: 'VES', amountCents: 73000 })))
 
-    expect(errorOf(result)).toMatchObject({ code: 'validation', field: 'methodId' })
+    expect(error).toMatchObject({ code: 'rateMissing', field: 'rateBsPerUsdE4' })
     expect(getState().payments).toEqual([])
   })
 
-  it('valida el esquema antes de buscar entidades', async () => {
-    const error = errorOf(await createPayment(input({ appointmentId: MISSING_ID, amountCents: 0 })))
+  it('no consulta métodos, tasas ni citas antes de crear', async () => {
+    const calls = recordInvokedCommands()
 
-    expect(error).toMatchObject({ code: 'validation', field: 'amountCents' })
+    dataOf(await createPayment(input({ currency: 'VES', amountCents: 73000 })))
+
+    expect(calls).toEqual(['create_payment'])
   })
 
-  it('verifica la existencia de la cita antes que el estado del método', async () => {
-    const error = errorOf(await createPayment(input({ appointmentId: MISSING_ID, methodId: MISSING_ID })))
+  it('devuelve los errores de Rust sin tocar el espejo', async () => {
+    commit({ ...getState(), rates: [] })
+    installDevIpc()
+    const before = getState().payments
 
-    expect(error.field).toBe('appointmentId')
+    const missingRate = errorOf(await createPayment(input({ currency: 'VES', amountCents: 73000 })))
+    const missingAppointment = errorOf(await createPayment(input({ appointmentId: MISSING_ID })))
+    const invalidAmount = errorOf(await createPayment(input({ amountCents: 0 })))
+
+    expect(missingRate).toMatchObject({ code: 'rateMissing', field: 'rateBsPerUsdE4' })
+    expect(missingAppointment).toMatchObject({ code: 'notFound', field: 'appointmentId' })
+    expect(invalidAmount).toMatchObject({ code: 'validation', field: 'amountCents' })
+    expect(getState().payments).toBe(before)
   })
-})
 
-describe('permisos', () => {
-  it('exige sesión en las tres operaciones', async () => {
+  it('el usuario de solo lectura recibe forbidden desde Rust', async () => {
+    signInAs('lectura')
+
+    expect(errorOf(await createPayment(input())).code).toBe('forbidden')
+    expect(getState().payments).toEqual([])
+  })
+
+  it('sin sesión recibe unauthenticated', async () => {
     commit({ ...getState(), sessionUserId: null })
 
-    expect(errorOf(await listPayments(APPOINTMENT_ID)).code).toBe('unauthenticated')
     expect(errorOf(await createPayment(input())).code).toBe('unauthenticated')
-    expect(errorOf(await voidPayment(1, 'x')).code).toBe('unauthenticated')
   })
 
-  it('el usuario de lectura puede listar pero no crear ni anular', async () => {
-    const created = dataOf(await createPayment(input()))
-    signInAs('lectura')
+  it('un fallo del canal es internal y no toca el espejo', async () => {
+    stubRustCatalog({ failing: ['create_payment'] })
 
-    expect(dataOf(await listPayments(APPOINTMENT_ID))).toEqual([created])
-    expect(errorOf(await createPayment(input())).code).toBe('forbidden')
-    expect(errorOf(await voidPayment(created.id, 'motivo')).code).toBe('forbidden')
-    expect(getState().payments).toEqual([created])
+    expect(errorOf(await createPayment(input())).code).toBe('internal')
+    expect(getState().payments).toEqual([])
   })
 
-  it('autoriza antes de validar', async () => {
-    signInAs('lectura')
+  it('no muta la entrada congelada ni el arreglo previo del espejo', async () => {
+    const before = getState().payments
 
-    expect(errorOf(await createPayment(input({ amountCents: 0 }))).code).toBe('forbidden')
+    dataOf(await createPayment(Object.freeze(input())))
+
+    expect(before).toEqual([])
+    expect(getState().payments).not.toBe(before)
   })
 })
 
 describe('listPayments', () => {
-  it('devuelve solo los pagos de la cita incluidos los anulados', async () => {
-    seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID }), appointmentTemplate({ id: 101, startsAt: '2026-11-13T14:00', endsAt: '2026-11-13T15:00' }))
+  it('lee de Rust solo los pagos de la cita, anulados incluidos, sin tocar el espejo', async () => {
     const first = dataOf(await createPayment(input()))
-    dataOf(await createPayment(input({ appointmentId: 101 })))
+    dataOf(await createPayment(input({ appointmentId: OTHER_APPOINTMENT_ID })))
     const voided = dataOf(await voidPayment(first.id, 'error'))
+    commit({ ...getState(), payments: [] })
 
     expect(dataOf(await listPayments(APPOINTMENT_ID))).toEqual([voided])
+    expect(getState().payments).toEqual([])
   })
 
   it('devuelve lista vacía para una cita sin pagos o inexistente', async () => {
     expect(dataOf(await listPayments(APPOINTMENT_ID))).toEqual([])
     expect(dataOf(await listPayments(MISSING_ID))).toEqual([])
+  })
+
+  it('sin sesión es unauthenticated', async () => {
+    commit({ ...getState(), sessionUserId: null })
+
+    expect(errorOf(await listPayments(APPOINTMENT_ID)).code).toBe('unauthenticated')
   })
 })
 
@@ -246,52 +224,32 @@ describe('voidPayment', () => {
     paymentId = dataOf(await createPayment(input())).id
   })
 
-  it('guarda voidedAt, voidedBy del usuario en sesión y el motivo recortado', async () => {
-    signInAs('propietaria')
-
+  it('guarda cuándo, quién y el motivo recortado y reemplaza la fila del espejo', async () => {
     const voided = dataOf(await voidPayment(paymentId, '  Monto digitado por error  '))
 
-    expect(voided).toMatchObject({
-      id: paymentId,
-      voidedAt: NOW,
-      voidedBy: OWNER_ID,
-      voidReason: 'Monto digitado por error',
-      amountCents: 2000,
-    })
+    expect(voided).toMatchObject({ id: paymentId, voidedAt: NOW, voidedBy: RECEPTION_ID, voidReason: 'Monto digitado por error' })
     expect(getState().payments).toEqual([voided])
   })
 
-  it('registra como voidedBy a quien anula, no a quien cobró', async () => {
-    const voided = dataOf(await voidPayment(paymentId, 'error'))
-
-    expect(voided.voidedBy).toBe(RECEPTION_ID)
-  })
-
-  it.each(['', '   ', '\t\n'])('exige motivo no vacío (%j)', async (reason) => {
-    const error = errorOf(await voidPayment(paymentId, reason))
-
-    expect(error).toMatchObject({ code: 'validation', field: 'reason' })
+  it.each(['', '   ', '\t\n'])('Rust rechaza el motivo %j en reason y el espejo sigue activo', async (reason) => {
+    expect(errorOf(await voidPayment(paymentId, reason))).toMatchObject({ code: 'validation', field: 'reason' })
     expect(getState().payments[0]?.voidedAt).toBeNull()
   })
 
-  it('la doble anulación devuelve alreadyVoided y conserva la primera', async () => {
+  it('la doble anulación es alreadyVoided con el id y conserva la primera', async () => {
     const first = dataOf(await voidPayment(paymentId, 'primero'))
 
     const error = errorOf(await voidPayment(paymentId, 'segundo'))
 
-    expect(error.code).toBe('alreadyVoided')
+    expect(error).toMatchObject({ code: 'alreadyVoided', entityIds: [paymentId] })
     expect(getState().payments).toEqual([first])
   })
 
-  it('devuelve notFound si el pago no existe', async () => {
+  it('un pago inexistente es notFound', async () => {
     expect(errorOf(await voidPayment(MISSING_ID, 'motivo')).code).toBe('notFound')
   })
 
-  it('valida el motivo antes de buscar el pago', async () => {
-    expect(errorOf(await voidPayment(MISSING_ID, ' ')).code).toBe('validation')
-  })
-
-  it('no elimina el pago ni toca los demás', async () => {
+  it('no toca los demás pagos del espejo', async () => {
     const other = dataOf(await createPayment(input({ amountCents: 500 })))
 
     dataOf(await voidPayment(paymentId, 'error'))
@@ -299,37 +257,79 @@ describe('voidPayment', () => {
     expect(getState().payments).toHaveLength(2)
     expect(getState().payments.find((row) => row.id === other.id)).toEqual(other)
   })
-})
 
-describe('inmutabilidad', () => {
-  it('createPayment no muta el arreglo ni la entrada previa', async () => {
-    const before = getState().payments
-    const frozen = Object.freeze(input())
-
-    dataOf(await createPayment(frozen))
-
-    expect(before).toEqual([])
-    expect(getState().payments).not.toBe(before)
-  })
-
-  it('voidPayment reemplaza el objeto sin mutar el original', async () => {
-    const created = dataOf(await createPayment(input()))
+  it('reemplaza el objeto sin mutar el original', async () => {
+    const created = getState().payments[0] as Payment
     const snapshot: Payment = { ...created }
-    const previousList = getState().payments
 
     dataOf(await voidPayment(created.id, 'error'))
 
     expect(created).toEqual(snapshot)
-    expect(previousList[0]).toBe(created)
-    expect(getState().payments).not.toBe(previousList)
+    expect(getState().payments[0]).not.toBe(created)
   })
 
-  it('un resultado de lectura no altera el store al modificarlo', async () => {
-    dataOf(await createPayment(input()))
-    const listed = dataOf(await listPayments(APPOINTMENT_ID))
+  it('el usuario de solo lectura recibe forbidden', async () => {
+    signInAs('lectura')
 
-    listed.pop()
+    expect(errorOf(await voidPayment(paymentId, 'motivo')).code).toBe('forbidden')
+  })
+})
 
-    expect(getState().payments).toHaveLength(1)
+describe('syncPaymentsMirror', () => {
+  it('reemplaza el espejo con todos los pagos de Rust', async () => {
+    const created = dataOf(await createPayment(input()))
+    commit({ ...getState(), payments: [] })
+
+    const synced = dataOf(await syncPaymentsMirror())
+
+    expect(synced).toEqual([created])
+    expect(getState().payments).toEqual([created])
+  })
+
+  it('descarta del espejo un pago que Rust no devuelve', async () => {
+    commit({ ...getState(), payments: [STALE_PAYMENT] })
+
+    dataOf(await syncPaymentsMirror())
+
+    expect(getState().payments).toEqual([])
+  })
+
+  it('un fallo del canal es internal y deja el espejo intacto', async () => {
+    const before = getState().payments
+    stubRustCatalog({ failing: ['list_all_payments'] })
+
+    expect(errorOf(await syncPaymentsMirror()).code).toBe('internal')
+    expect(getState().payments).toBe(before)
+  })
+
+  it('una lectura obsoleta por una mutación se reintenta y devuelve ok con el pago nuevo', async () => {
+    const gate = deferred<void>()
+    delayFirstReplyOf('list_all_payments', gate.promise)
+
+    const slow = syncPaymentsMirror()
+    const created = dataOf(await createPayment(input()))
+    gate.resolve()
+
+    expect(dataOf(await slow)).toEqual([created])
+    expect(getState().payments).toEqual([created])
+  })
+
+  it('si la lectura nunca se puede aplicar devuelve un error interno y no un ok parcial', async () => {
+    const internals = Reflect.get(window, '__TAURI_INTERNALS__') as { invoke: InvokeHook }
+    const original = internals.invoke
+    internals.invoke = async (cmd, args) => {
+      if (cmd === 'list_all_payments') await createPayment(input())
+      return original(cmd, args)
+    }
+
+    expect(errorOf(await syncPaymentsMirror()).code).toBe('internal')
+  })
+
+  it('sin sesión devuelve unauthenticated y no toca el espejo', async () => {
+    commit({ ...getState(), sessionUserId: null })
+    const before = getState().payments
+
+    expect(errorOf(await syncPaymentsMirror()).code).toBe('unauthenticated')
+    expect(getState().payments).toBe(before)
   })
 })

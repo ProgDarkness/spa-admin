@@ -173,3 +173,42 @@ fn a_missing_appointment_is_not_found_without_a_field() {
     assert_eq!(value["message"], "La cita no existe");
     assert_eq!(value["field"], json!(null));
 }
+
+#[test]
+fn rate_missing_points_at_the_rate_field() {
+    let value = serialized(AppError::rate_missing());
+    assert_eq!(value["code"], "rateMissing");
+    assert_eq!(
+        value["message"],
+        "Falta la tasa de hoy; registra la tasa o indícala manualmente"
+    );
+    assert_eq!(value["field"], "rateBsPerUsdE4");
+    assert_eq!(value["entityIds"], json!(null));
+}
+
+#[test]
+fn already_voided_carries_the_payment_id() {
+    let value = serialized(AppError::already_voided(9));
+    assert_eq!(value["code"], "alreadyVoided");
+    assert_eq!(value["message"], "El pago ya fue anulado");
+    assert_eq!(value["field"], json!(null));
+    assert_eq!(value["entityIds"], json!([9]));
+}
+
+#[test]
+fn a_missing_payment_is_not_found_without_a_field() {
+    let value = serialized(AppError::payment_not_found());
+    assert_eq!(value["code"], "notFound");
+    assert_eq!(value["message"], "El pago no existe");
+    assert_eq!(value["field"], json!(null));
+}
+
+#[test]
+fn missing_appointment_and_method_references_have_their_own_messages() {
+    let appointment = serialized(AppError::missing_reference("appointmentId"));
+    let method = serialized(AppError::missing_reference("methodId"));
+    assert_eq!(appointment["field"], "appointmentId");
+    assert_eq!(appointment["message"], "La cita no existe");
+    assert_eq!(method["field"], "methodId");
+    assert_eq!(method["message"], "El método de pago no existe");
+}

@@ -4,8 +4,12 @@ import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { createSeed } from '@/lib/mock/seed'
 import { todayLocal } from '@/lib/datetime'
+import { resetStore, setStoreSeeder } from '@/lib/mock/store'
 import { resetNavigationMock } from '@/test/navigation'
 import { installDevIpc } from '@/test/dev-ipc'
+
+setStoreSeeder(createSeed)
+resetStore()
 
 vi.mock('next/navigation', () => import('@/test/navigation'))
 

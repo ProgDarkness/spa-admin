@@ -79,16 +79,18 @@ describe('getMonthlyMetrics contra el seed con hoy 2026-11-12', () => {
     expect(dataOf(await getMonthlyMetrics('2025-01')).appointments.completed).toBe(0)
   })
 
-  it('deja el store con las mismas filas tras sincronizar las citas, sin importar su orden', async () => {
+  it('deja el store con las mismas filas tras sincronizar citas y pagos, sin importar su orden', async () => {
     const before = getState()
 
     await getMonthlyMetrics('2026-11')
 
-    const byId = (rows: typeof before.appointments) => rows.toSorted((first, second) => first.id - second.id)
-    expect({ ...getState(), appointments: byId(getState().appointments) }).toEqual({
-      ...before,
-      appointments: byId(before.appointments),
+    const byId = <T extends { id: number }>(rows: readonly T[]) => rows.toSorted((first, second) => first.id - second.id)
+    const normalized = (state: typeof before) => ({
+      ...state,
+      appointments: byId(state.appointments),
+      payments: byId(state.payments),
     })
+    expect(normalized(getState())).toEqual(normalized(before))
     commit(before)
   })
 })

@@ -13,6 +13,7 @@ const ALL_PERMISSIONS: PermissionKey[] = [
   'appointments.read',
   'appointments.write',
   'payments.read',
+  'payments.write',
   'rates.manage',
   'clients.read',
   'clients.write',
@@ -134,6 +135,43 @@ describe('createDevBackends', () => {
     )
   })
 
+  it('atiende los pagos con los once del seed, incluido el anulado', () => {
+    const listed = devBackends()('list_all_payments', undefined) as { id: number; voidedAt: string | null }[]
+
+    expect(listed).toHaveLength(11)
+    expect(listed.filter((payment) => payment.voidedAt !== null).map((payment) => payment.id)).toEqual([7])
+  })
+
+  it('un pago creado ve las citas, los métodos y las tasas del mismo backend compuesto', () => {
+    const backend = devBackends()
+    backend('upsert_rate', { date: '2030-01-01', rateBsPerUsdE4: 400_000 })
+    backend('set_payment_method_active', { activation: { id: 3, active: false } })
+
+    const created = backend('create_payment', {
+      input: { appointmentId: 5, methodId: 1, currency: 'USD', amountCents: 1_000, rateBsPerUsdE4: null },
+    })
+
+    expect(created).toMatchObject({ id: 12, appointmentId: 5, currency: 'USD' })
+    expect(() =>
+      backend('create_payment', {
+        input: { appointmentId: 5, methodId: 3, currency: 'USD', amountCents: 1_000, rateBsPerUsdE4: null },
+      }),
+    ).toThrow(expect.objectContaining({ code: 'validation', field: 'methodId' }))
+  })
+
+  it('el historial de cliente refleja el seed y los pagos creados después', () => {
+    const backend = devBackends()
+    const before = backend('get_client_history', { clientId: 1 }) as { paidByCurrency: { USD: number }; pendingByCurrency: { USD: number } }
+    backend('create_payment', {
+      input: { appointmentId: 12, methodId: 1, currency: 'USD', amountCents: 1_000, rateBsPerUsdE4: null },
+    })
+    const after = backend('get_client_history', { clientId: 1 }) as { pendingByCurrency: { USD: number } }
+
+    expect(before.paidByCurrency.USD).toBe(5_500)
+    expect(before.pendingByCurrency.USD).toBe(0)
+    expect(after.pendingByCurrency.USD).toBe(1_000)
+  })
+
   it('delega en el backend de autenticación todo lo demás', () => {
     expect(devBackends()('current_session', undefined)).toEqual({ cmd: 'current_session', reply: 'auth' })
   })
@@ -183,7 +221,12 @@ describe('createDevBackends', () => {
     first('create_client', {
       input: { firstName: 'Nueva', lastName: 'Persona', nationalId: 'V-30111222', phone: '0414-5550000' },
     })
+    first('create_payment', {
+      input: { appointmentId: 5, methodId: 1, currency: 'USD', amountCents: 1_000, rateBsPerUsdE4: null },
+    })
 
+    expect(second('list_all_payments', undefined)).toHaveLength(SEED.payments.length)
+    expect(first('list_all_payments', undefined)).toHaveLength(SEED.payments.length + 1)
     expect(second('list_resources', LIST_ALL)).toHaveLength(SEED.resources.length)
     expect(second('list_services', LIST_ALL)).toHaveLength(SEED.services.length)
     expect(second('list_payment_methods', LIST_ALL)).toHaveLength(SEED.paymentMethods.length)
