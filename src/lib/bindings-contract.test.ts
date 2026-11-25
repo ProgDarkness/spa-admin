@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { commands } from './bindings'
 
 describe('contrato entre bindings generados y model', () => {
-  it('commands expone exactamente los 42 comandos de la aplicación', () => {
+  it('commands expone exactamente los 47 comandos de la aplicación', () => {
     expect(Object.keys(commands).sort()).toEqual([
       'createAppointment',
       'createClient',
+      'createPayment',
       'createPaymentMethod',
       'createResource',
       'createRole',
@@ -13,13 +14,16 @@ describe('contrato entre bindings generados y model', () => {
       'createUser',
       'currentSession',
       'getClient',
+      'getClientHistory',
       'getRate',
       'listAllAppointments',
+      'listAllPayments',
       'listAppointments',
       'listAudit',
       'listClients',
       'listFutureAppointmentsOfResource',
       'listPaymentMethods',
+      'listPayments',
       'listRates',
       'listResources',
       'listRoles',
@@ -46,6 +50,7 @@ describe('contrato entre bindings generados y model', () => {
       'updateService',
       'updateUser',
       'upsertRate',
+      'voidPayment',
     ])
   })
 })

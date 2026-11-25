@@ -30,7 +30,7 @@ fn stored_status(row: &Row<'_>, index: usize) -> rusqlite::Result<AppointmentSta
         .ok_or_else(|| rusqlite::Error::InvalidColumnType(index, "status".to_string(), Type::Text))
 }
 
-fn appointment_summary(row: &Row<'_>) -> rusqlite::Result<AppointmentSummary> {
+pub(crate) fn appointment_summary(row: &Row<'_>) -> rusqlite::Result<AppointmentSummary> {
     Ok(AppointmentSummary {
         id: row.get(0)?,
         client_id: row.get(1)?,

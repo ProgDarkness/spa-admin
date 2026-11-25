@@ -7,6 +7,8 @@ pub mod dev_seed_appointments;
 pub mod dev_seed_catalog;
 #[cfg(debug_assertions)]
 pub mod dev_seed_clients;
+#[cfg(debug_assertions)]
+pub mod dev_seed_payments;
 pub mod errors;
 pub mod features;
 pub mod keystore;
@@ -26,11 +28,15 @@ use features::auth::recover::recover_password;
 use features::catalog::commands::{
     create_service, list_services, set_service_active, update_service,
 };
+use features::client_history::commands::get_client_history;
 use features::clients::commands::{
     create_client, get_client, list_clients, set_client_deleted, update_client,
 };
 use features::payment_methods::commands::{
     create_payment_method, list_payment_methods, set_payment_method_active, update_payment_method,
+};
+use features::payments::commands::{
+    create_payment, list_all_payments, list_payments, void_payment,
 };
 use features::rates::commands::{get_rate, list_rates, upsert_rate};
 use features::resources::commands::{
@@ -90,7 +96,12 @@ fn command_catalog<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
             create_appointment,
             move_appointment,
             transition_appointment,
-            list_future_appointments_of_resource
+            list_future_appointments_of_resource,
+            list_payments,
+            list_all_payments,
+            create_payment,
+            void_payment,
+            get_client_history
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .disable_serde_phases()

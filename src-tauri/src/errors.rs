@@ -16,6 +16,8 @@ pub enum AppErrorCode {
     InvalidTransition,
     ResourceInactive,
     ResourceHasFutureAppointments,
+    RateMissing,
+    AlreadyVoided,
     Internal,
 }
 
@@ -49,6 +51,12 @@ const CLIENT_MISSING_MESSAGE: &str = "El cliente no existe";
 const SERVICE_MISSING_MESSAGE: &str = "El servicio no existe";
 const RESOURCE_MISSING_MESSAGE: &str = "El recurso no existe";
 const UNKNOWN_REFERENCE_MESSAGE: &str = "El registro no existe";
+const RATE_MISSING_MESSAGE: &str = "Falta la tasa de hoy; registra la tasa o indícala manualmente";
+const ALREADY_VOIDED_MESSAGE: &str = "El pago ya fue anulado";
+const PAYMENT_NOT_FOUND_MESSAGE: &str = "El pago no existe";
+const APPOINTMENT_MISSING_MESSAGE: &str = "La cita no existe";
+const METHOD_MISSING_MESSAGE: &str = "El método de pago no existe";
+const RATE_FIELD: &str = "rateBsPerUsdE4";
 const NATIONAL_ID_FIELD: &str = "nationalId";
 const STARTS_AT_FIELD: &str = "startsAt";
 const RESOURCE_ID_FIELD: &str = "resourceId";
@@ -156,12 +164,32 @@ impl AppError {
             "clientId" => CLIENT_MISSING_MESSAGE,
             "serviceId" => SERVICE_MISSING_MESSAGE,
             "resourceId" => RESOURCE_MISSING_MESSAGE,
+            "appointmentId" => APPOINTMENT_MISSING_MESSAGE,
+            "methodId" => METHOD_MISSING_MESSAGE,
             _ => UNKNOWN_REFERENCE_MESSAGE,
         };
         Self {
             field: Some(field.to_string()),
             ..Self::without_details(AppErrorCode::NotFound, message)
         }
+    }
+
+    pub fn rate_missing() -> Self {
+        Self {
+            field: Some(RATE_FIELD.to_string()),
+            ..Self::without_details(AppErrorCode::RateMissing, RATE_MISSING_MESSAGE)
+        }
+    }
+
+    pub fn already_voided(payment_id: i64) -> Self {
+        Self {
+            entity_ids: Some(vec![payment_id]),
+            ..Self::without_details(AppErrorCode::AlreadyVoided, ALREADY_VOIDED_MESSAGE)
+        }
+    }
+
+    pub fn payment_not_found() -> Self {
+        Self::without_details(AppErrorCode::NotFound, PAYMENT_NOT_FOUND_MESSAGE)
     }
 
     pub fn internal() -> Self {

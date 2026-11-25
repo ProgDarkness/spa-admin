@@ -1,0 +1,102 @@
+[
+  {
+    "amountCents": 0,
+    "rateE4": 365000,
+    "expected": 0
+  },
+  {
+    "amountCents": 1,
+    "rateE4": 20000,
+    "expected": 1
+  },
+  {
+    "amountCents": 1,
+    "rateE4": 20001,
+    "expected": 0
+  },
+  {
+    "amountCents": 3,
+    "rateE4": 20000,
+    "expected": 2
+  },
+  {
+    "amountCents": 1,
+    "rateE4": 30000,
+    "expected": 0
+  },
+  {
+    "amountCents": 19,
+    "rateE4": 365000,
+    "expected": 1
+  },
+  {
+    "amountCents": 100000,
+    "rateE4": 365000,
+    "expected": 2740
+  },
+  {
+    "amountCents": 146000,
+    "rateE4": 365000,
+    "expected": 4000
+  },
+  {
+    "amountCents": 182500,
+    "rateE4": 365000,
+    "expected": 5000
+  },
+  {
+    "amountCents": 73000,
+    "rateE4": 365000,
+    "expected": 2000
+  },
+  {
+    "amountCents": 5,
+    "rateE4": 10000,
+    "expected": 5
+  },
+  {
+    "amountCents": 1,
+    "rateE4": 1,
+    "expected": 10000
+  },
+  {
+    "amountCents": 1,
+    "rateE4": 100000000000,
+    "expected": 0
+  },
+  {
+    "amountCents": 99999999999,
+    "rateE4": 365000,
+    "expected": 2739726027
+  },
+  {
+    "amountCents": 100000000000,
+    "rateE4": 1,
+    "expected": 1000000000000000
+  },
+  {
+    "amountCents": 100000000000,
+    "rateE4": 100000000000,
+    "expected": 10000
+  },
+  {
+    "amountCents": 100000000000,
+    "rateE4": 365000,
+    "expected": 2739726027
+  },
+  {
+    "amountCents": 100000000000,
+    "rateE4": 10000,
+    "expected": 100000000000
+  },
+  {
+    "amountCents": 7,
+    "rateE4": 13333,
+    "expected": 5
+  },
+  {
+    "amountCents": 123456789,
+    "rateE4": 987654321,
+    "expected": 1250
+  }
+]

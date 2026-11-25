@@ -46,6 +46,11 @@
     "allow-create-appointment",
     "allow-move-appointment",
     "allow-transition-appointment",
-    "allow-list-future-appointments-of-resource"
+    "allow-list-future-appointments-of-resource",
+    "allow-list-payments",
+    "allow-list-all-payments",
+    "allow-create-payment",
+    "allow-void-payment",
+    "allow-get-client-history"
   ]
 }
