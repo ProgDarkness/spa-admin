@@ -324,30 +324,6 @@ fn listing_includes_every_status_ordered_by_start_then_id() {
 }
 
 #[test]
-fn listing_everything_spans_every_date_and_status_ordered_by_start_then_id() {
-    let conn = database();
-    let far_future = add(&conn, 1, "2027-06-30T09:00", "2027-06-30T10:00");
-    let ancient = add(&conn, 1, "2024-01-02T09:00", "2024-01-02T10:00");
-    let cancelled = add_with_status(
-        &conn,
-        2,
-        FIRST_SLOT,
-        "2026-11-12T11:00",
-        AppointmentStatus::Cancelled,
-    );
-    let tied = add(&conn, 1, FIRST_SLOT, "2026-11-12T11:00");
-
-    let rows = list_all_appointments(&conn).unwrap();
-
-    assert_eq!(ids_of(&rows), vec![ancient, cancelled, tied, far_future]);
-}
-
-#[test]
-fn listing_everything_on_an_empty_table_is_empty() {
-    assert!(list_all_appointments(&database()).unwrap().is_empty());
-}
-
-#[test]
 fn update_slot_changes_resource_and_times_and_stamps_the_actor() {
     let conn = database();
     let id = add(&conn, 1, FIRST_SLOT, "2026-11-12T11:00");

@@ -7,15 +7,7 @@ use crate::features::appointments::model::AppointmentSummary;
 use crate::features::auth::service::AuthError;
 use crate::features::clients::model::ClientSummary;
 use crate::features::named_records::RecordFailure;
-use crate::features::payments::model::PaymentSummary;
-
-#[derive(Serialize, specta::Type, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct AmountsByCurrency {
-    #[serde(rename = "USD")]
-    pub usd: i64,
-    #[serde(rename = "VES")]
-    pub ves: i64,
-}
+use crate::features::payments::model::{AmountsByCurrency, PaymentSummary};
 
 #[derive(Serialize, specta::Type, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

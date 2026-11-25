@@ -31,6 +31,14 @@ impl PaymentCurrency {
     }
 }
 
+#[derive(Serialize, specta::Type, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AmountsByCurrency {
+    #[serde(rename = "USD")]
+    pub usd: i64,
+    #[serde(rename = "VES")]
+    pub ves: i64,
+}
+
 #[derive(Serialize, specta::Type, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentSummary {

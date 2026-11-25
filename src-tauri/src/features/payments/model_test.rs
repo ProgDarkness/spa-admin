@@ -117,3 +117,24 @@ fn validation_keeps_the_field_and_database_failures_do_not_leak() {
     assert_eq!(validation.field.as_deref(), Some("reason"));
     assert_eq!(database, AppError::internal());
 }
+
+#[test]
+fn amounts_serialize_with_iso_currency_keys() {
+    let amounts = AmountsByCurrency {
+        usd: 1500,
+        ves: 73_000,
+    };
+
+    assert_eq!(
+        serde_json::to_value(amounts).unwrap(),
+        json!({ "USD": 1500, "VES": 73_000 })
+    );
+}
+
+#[test]
+fn empty_amounts_are_zero_in_both_currencies() {
+    assert_eq!(
+        AmountsByCurrency::default(),
+        AmountsByCurrency { usd: 0, ves: 0 }
+    );
+}
