@@ -1,10 +1,11 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { commands, type ResourceKind } from '@/lib/bindings'
+import { commands, type AppointmentSummary, type ResourceKind } from '@/lib/bindings'
 import { settle } from '@/lib/ipc'
 import { createSeed } from '@/lib/mock/seed'
 import type { PermissionKey, SessionUser } from '@/lib/model'
 import { createResourcesIpcBackend } from './resources-backend'
+import { createSharedRows, type SharedRows } from './shared-rows'
 
 const SEED = createSeed('2026-11-12')
 const SEED_RESOURCE_COUNT = 3
@@ -18,6 +19,23 @@ const validInput: { name: string; kind: ResourceKind } = { name: 'Sala de masaje
 
 let nowMs: number
 let session: SessionUser | null
+let appointments: SharedRows<AppointmentSummary>
+
+function appointmentRow(overrides: Partial<AppointmentSummary> = {}): AppointmentSummary {
+  return {
+    id: 100,
+    clientId: 1,
+    serviceId: 1,
+    resourceId: 1,
+    startsAt: '2026-11-13T10:00',
+    endsAt: '2026-11-13T11:00',
+    status: 'scheduled',
+    priceCentsSnapshot: 3_500,
+    durationMinSnapshot: 60,
+    notes: null,
+    ...overrides,
+  }
+}
 
 function userWith(...permissions: PermissionKey[]): SessionUser {
   return { id: 50, username: 'tester', roleName: 'Prueba', permissions }
@@ -30,10 +48,12 @@ function failWhenUnrouted(command: string): never {
 beforeEach(() => {
   nowMs = Date.UTC(2026, 10, 12, 13, 0, 0)
   session = userWith('resources.manage')
+  appointments = createSharedRows()
   mockIPC(
     createResourcesIpcBackend(failWhenUnrouted, {
       session: () => session,
       resources: SEED.resources,
+      appointments,
       now: () => nowMs,
     }),
   )
@@ -328,11 +348,101 @@ describe('setResourceActive', () => {
   })
 })
 
+describe('filtro de listado', () => {
+  it.each([['sí'], [1], [null], [undefined]])('rechaza includeInactive %j con validation sobre includeInactive', async (includeInactive) => {
+    const outcome = await commands.listResources({ includeInactive } as never)
+
+    expect(outcome).toMatchObject({ status: 'error', error: { code: 'validation', field: 'includeInactive' } })
+  })
+})
+
+describe('guarda de citas futuras', () => {
+  it('bloquear la desactivación lista los ids de las citas scheduled que aún no terminaron', async () => {
+    appointments.write([
+      appointmentRow({ id: 7, startsAt: '2026-11-14T10:00', endsAt: '2026-11-14T11:00' }),
+      appointmentRow({ id: 5 }),
+      appointmentRow({ id: 9, resourceId: 2 }),
+    ])
+
+    const outcome = await commands.setResourceActive({ id: 1, active: false })
+
+    expect(outcome).toMatchObject({
+      status: 'error',
+      error: { code: 'resourceHasFutureAppointments', field: null, entityIds: [5, 7] },
+    })
+    const listed = await commands.listResources({ includeInactive: true })
+    expect(listed.status === 'ok' && listed.data.find((resource) => resource.id === 1)?.active).toBe(true)
+  })
+
+  it('una scheduled atrasada que aún no termina o que no se cerró bloquea y una terminada antes de ahora no', async () => {
+    appointments.write([
+      appointmentRow({ id: 1, startsAt: '2026-11-12T08:30', endsAt: '2026-11-12T09:30' }),
+      appointmentRow({ id: 2, startsAt: '2026-11-12T07:00', endsAt: '2026-11-12T09:00' }),
+    ])
+
+    const outcome = await commands.setResourceActive({ id: 1, active: false })
+
+    expect(outcome).toMatchObject({ error: { code: 'resourceHasFutureAppointments', entityIds: [1] } })
+  })
+
+  it('las citas en curso, canceladas, no asistidas, completadas o pasadas no bloquean', async () => {
+    appointments.write([
+      appointmentRow({ id: 1, status: 'inProgress' }),
+      appointmentRow({ id: 2, status: 'cancelled' }),
+      appointmentRow({ id: 3, status: 'noShow' }),
+      appointmentRow({ id: 4, status: 'completed' }),
+      appointmentRow({ id: 5, startsAt: '2026-11-10T10:00', endsAt: '2026-11-10T11:00' }),
+    ])
+
+    expect(await commands.setResourceActive({ id: 1, active: false })).toMatchObject({ status: 'ok', data: { active: false } })
+  })
+
+  it('reactivar y repetir el estado actual no consultan la guarda', async () => {
+    appointments.write([appointmentRow({ resourceId: INACTIVE_SEED_ID })])
+
+    const reactivated = await commands.setResourceActive({ id: INACTIVE_SEED_ID, active: true })
+    const unchanged = await commands.setResourceActive({ id: 1, active: true })
+
+    expect(reactivated).toMatchObject({ status: 'ok', data: { active: true } })
+    expect(unchanged).toMatchObject({ status: 'ok' })
+  })
+
+  it('listFutureAppointmentsOfResource devuelve id y startsAt ordenados', async () => {
+    appointments.write([
+      appointmentRow({ id: 7, startsAt: '2026-11-14T10:00', endsAt: '2026-11-14T11:00' }),
+      appointmentRow({ id: 5 }),
+      appointmentRow({ id: 6, status: 'cancelled' }),
+    ])
+
+    const outcome = await commands.listFutureAppointmentsOfResource(1)
+
+    expect(outcome).toEqual({
+      status: 'ok',
+      data: [
+        { id: 5, startsAt: '2026-11-13T10:00' },
+        { id: 7, startsAt: '2026-11-14T10:00' },
+      ],
+    })
+  })
+
+  it('listFutureAppointmentsOfResource exige resources.manage y un recurso existente', async () => {
+    const missing = await commands.listFutureAppointmentsOfResource(999)
+    session = userWith('appointments.read')
+    const forbidden = await commands.listFutureAppointmentsOfResource(1)
+    session = null
+    const anonymous = await commands.listFutureAppointmentsOfResource(1)
+
+    expect(missing).toMatchObject(validation('id'))
+    expect(forbidden).toMatchObject({ error: { code: 'forbidden' } })
+    expect(anonymous).toMatchObject({ error: { code: 'unauthenticated' } })
+  })
+})
+
 describe('enrutamiento', () => {
   it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])(
     'trata %s como comando desconocido y lo delega sin tocar el prototipo',
     (command) => {
-      const backend = createResourcesIpcBackend(failWhenUnrouted, { session: () => session, resources: SEED.resources })
+      const backend = createResourcesIpcBackend(failWhenUnrouted, { session: () => session, resources: SEED.resources, appointments: createSharedRows() })
 
       expect(() => backend(command, {})).toThrow(`IPC no simulado: ${command}`)
     },
@@ -344,6 +454,7 @@ describe('enrutamiento', () => {
       createResourcesIpcBackend((command) => (command === 'setup_status' ? { needsOwner: false, clockRollback: null } : null), {
         session: () => session,
         resources: SEED.resources,
+        appointments: createSharedRows(),
       }),
     )
 
@@ -351,7 +462,7 @@ describe('enrutamiento', () => {
   })
 
   it('el estado es propio de cada instancia', async () => {
-    const other = createResourcesIpcBackend(failWhenUnrouted, { session: () => session, resources: SEED.resources })
+    const other = createResourcesIpcBackend(failWhenUnrouted, { session: () => session, resources: SEED.resources, appointments: createSharedRows() })
     await commands.createResource(validInput)
 
     expect(other('list_resources', { filter: { includeInactive: true } })).toHaveLength(SEED_RESOURCE_COUNT)

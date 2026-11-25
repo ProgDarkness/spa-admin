@@ -4,7 +4,7 @@ use super::DbError;
 
 pub(super) type Migration = (u32, &'static str);
 
-const MIGRATIONS: [Migration; 10] = [
+const MIGRATIONS: [Migration; 11] = [
     (1, include_str!("migrations/0001_auth.sql")),
     (2, include_str!("migrations/0002_username_nocase.sql")),
     (3, include_str!("migrations/0003_audit_log.sql")),
@@ -15,6 +15,7 @@ const MIGRATIONS: [Migration; 10] = [
     (8, include_str!("migrations/0008_payment_methods.sql")),
     (9, include_str!("migrations/0009_exchange_rates.sql")),
     (10, include_str!("migrations/0010_clients.sql")),
+    (11, include_str!("migrations/0011_appointments.sql")),
 ];
 
 pub fn migrate(conn: &mut Connection) -> Result<(), DbError> {
@@ -75,3 +76,7 @@ mod exchange_rates_tests;
 #[cfg(test)]
 #[path = "migrations_clients_test.rs"]
 mod clients_tests;
+
+#[cfg(test)]
+#[path = "migrations_appointments_test.rs"]
+mod appointments_tests;

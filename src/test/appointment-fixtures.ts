@@ -43,6 +43,7 @@ export function appointmentTemplate(overrides: Partial<Appointment> = {}): Appoi
 
 export function seedAppointments(...rows: Appointment[]): void {
   commit({ ...getState(), appointments: rows })
+  installDevIpc()
 }
 
 export function inputTemplate(overrides: Partial<AppointmentInput> = {}): AppointmentInput {

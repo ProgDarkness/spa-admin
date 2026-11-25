@@ -156,6 +156,35 @@ Clientes en Rust con cédula V|E|J normalizada, búsqueda, auditoría de negocio
 - El diff de auditoría guarda nombre, apellido, cédula y teléfono en claro (D15; visible para `audit.read`). Decisión consciente en ADR 0008.
 - Seed del mock aún presente en el bundle de producción hasta la Fase 6, con el centinela `V-26789012` informativo.
 
+### Fase 5: Citas
+
+Citas en Rust con solape transaccional, máquina de estados, reapertura restringida a la Propietaria y guarda D9 real en el backend. Sin publicar. Decisiones en `docs/adr/0009-citas.md`; descripción de la PR en `docs/pr/fase5-citas.md`.
+
+#### Added
+
+- Migración `0011_appointments.sql`: tabla `appointments` con CHECK de formato `YYYY-MM-DDTHH:MM`, de `ends_at` (igual a inicio más duración del snapshot, mismo día o medianoche), de duración (1 a 1440 minutos) y de notas (hasta 500 caracteres).
+- 6 comandos IPC nuevos (42 en total): `list_appointments`, `list_all_appointments`, `create_appointment`, `move_appointment`, `transition_appointment`, `list_future_appointments_of_resource`.
+- Solape `[inicio, fin)` comprobado dentro de `BEGIN IMMEDIATE` por recurso, con error `overlap` y los ids de las citas en conflicto.
+- Máquina de estados de `rules.ts` en Rust. Atajo de completar solo con hora pasada. Mover solo en `scheduled`, con duración congelada.
+- Reapertura con `appointments.reopen`, solo para la Propietaria, con revalidación de solape.
+- Guarda D9 en Rust: desactivar un recurso con citas `scheduled` con `ends_at > now` devuelve `resourceHasFutureAppointments` con los ids bloqueantes.
+- Errores nuevos `overlap`, `crossesMidnight`, `invalidTransition`, `resourceInactive` y `resourceHasFutureAppointments`.
+- Auditoría de citas (`create`, `update` con diff). Las notas aparecen como `hasNotes` y `notesChanged`, nunca en claro.
+- Seed de desarrollo de 16 citas, solo en compilación de depuración y con `SPA_DEV_SEED_PASSWORD`.
+- Backend simulado de citas con paridad frente a Rust (`src/test/ipc/appointments-backend.ts`) y pruebas e2e (`e2e/appointments.spec.ts`).
+
+#### Changed
+
+- `syncAppointmentsMirror()` trae la colección completa; `listAppointments(rango)` es lectura filtrada y no reemplaza el espejo. Las mutaciones reflejan el resultado de Rust.
+- Desactivar un recurso con citas futuras se rechaza en Rust, no solo en el front.
+- Pagos, métricas e historial de cliente sincronizan citas antes de calcular (acoplamiento transitorio hasta las Fases 6 y 7).
+
+#### Security
+
+- Permisos `appointments.read`, `appointments.write`, `appointments.reopen` y `resources.manage` validados en Rust en cada comando, dentro de la transacción en las escrituras.
+- Auditoría de citas sin texto de notas.
+- Seed del mock aún presente en el bundle de producción hasta la Fase 6. Los pagos de seed apuntan a las citas 1 a 16 (decisión aceptada; no distribuir builds antes de la Fase 6).
+
 ## [0.2.0] - 2026-11-13
 
 Rediseño visual «Piedra y bronce». Sin cambios de lógica de dominio ni de textos. Decisiones en `docs/design/piedra-y-bronce.md`.

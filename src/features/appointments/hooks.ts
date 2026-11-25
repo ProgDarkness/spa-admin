@@ -12,7 +12,12 @@ import { QUERY_KEYS } from '@/lib/query-keys'
 import { unwrap } from '@/lib/result'
 import { createAppointment, listAppointments, moveAppointment, transitionAppointment } from './api'
 
-const DEPENDENT_KEYS = [QUERY_KEYS.appointments, QUERY_KEYS.clientHistory, QUERY_KEYS.metrics] as const
+const DEPENDENT_KEYS = [
+  QUERY_KEYS.appointments,
+  QUERY_KEYS.clientHistory,
+  QUERY_KEYS.metrics,
+  QUERY_KEYS.payments,
+] as const
 
 export function useAppointments(range: AppointmentRange) {
   return useQuery({

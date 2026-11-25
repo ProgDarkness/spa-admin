@@ -5,6 +5,7 @@ import { commands, type AppErrorCode } from '@/lib/bindings'
 import { createSeed } from '@/lib/mock/seed'
 import type { SessionUser } from '@/lib/model'
 import { createResourcesIpcBackend } from './resources-backend'
+import { createSharedRows } from './shared-rows'
 
 const OWNER: SessionUser = { id: 1, username: 'dueña', roleName: 'Propietaria', permissions: ['appointments.read', 'resources.manage'] }
 const SUMMARY_KEYS = ['active', 'createdAt', 'id', 'kind', 'name', 'updatedAt']
@@ -28,7 +29,7 @@ beforeEach(() => {
     (cmd) => {
       throw new Error(`IPC no simulado: ${cmd}`)
     },
-    { session: () => session, resources: createSeed('2026-11-12').resources },
+    { session: () => session, resources: createSeed('2026-11-12').resources, appointments: createSharedRows() },
   )
   mockIPC((cmd, args) => {
     invoked.push({ cmd, args })

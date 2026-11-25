@@ -8,6 +8,7 @@ const IDENTIFIER_MARKERS: readonly string[] = [
   'createPaymentMethodsIpcBackend',
   'createRatesIpcBackend',
   'createClientsIpcBackend',
+  'createAppointmentsIpcBackend',
   'createDevBackends',
   'composeBackends',
   'createAuthIpcBackend',

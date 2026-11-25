@@ -25,8 +25,8 @@ const INCLUDING_INACTIVE: ResourceFilter = ResourceFilter {
     include_inactive: true,
 };
 
-struct Fixture {
-    app: App<MockRuntime>,
+pub(super) struct Fixture {
+    pub(super) app: App<MockRuntime>,
 }
 
 fn add_role(conn: &rusqlite::Connection, name: &str, permissions: &[&str]) -> i64 {
@@ -52,7 +52,7 @@ fn add_user(conn: &rusqlite::Connection, username: &str, role_id: i64) {
     insert_user(conn, &row, None).unwrap();
 }
 
-fn fixture() -> Fixture {
+pub(super) fn fixture() -> Fixture {
     let mut conn = rusqlite::Connection::open_in_memory().unwrap();
     conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
     migrate(&mut conn).unwrap();
@@ -71,7 +71,7 @@ fn fixture() -> Fixture {
     Fixture { app }
 }
 
-fn sign_in_as(fixture: &Fixture, username: &str) {
+pub(super) fn sign_in_as(fixture: &Fixture, username: &str) {
     let db: tauri::State<'_, Database> = fixture.app.state();
     let session: tauri::State<'_, SessionState> = fixture.app.state();
     let user = db
@@ -93,12 +93,12 @@ fn sign_in_as(fixture: &Fixture, username: &str) {
     session.start(user, Beat::now()).unwrap();
 }
 
-fn lock_session(fixture: &Fixture) {
+pub(super) fn lock_session(fixture: &Fixture) {
     let session: tauri::State<'_, SessionState> = fixture.app.state();
     session.force_lock().unwrap();
 }
 
-fn session_end(fixture: &Fixture) {
+pub(super) fn session_end(fixture: &Fixture) {
     let session: tauri::State<'_, SessionState> = fixture.app.state();
     session.end().unwrap();
 }
@@ -122,7 +122,11 @@ fn call_update(fixture: &Fixture, update: ResourceUpdate) -> Result<ResourceSumm
     update_resource(update, fixture.app.state(), fixture.app.state())
 }
 
-fn call_set_active(fixture: &Fixture, id: i64, active: bool) -> Result<ResourceSummary, AppError> {
+pub(super) fn call_set_active(
+    fixture: &Fixture,
+    id: i64,
+    active: bool,
+) -> Result<ResourceSummary, AppError> {
     set_resource_active(
         ResourceActivation { id, active },
         fixture.app.state(),

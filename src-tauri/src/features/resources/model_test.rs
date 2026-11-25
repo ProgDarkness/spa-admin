@@ -139,3 +139,17 @@ fn database_errors_map_to_internal_without_the_cause() {
 fn log_scope_names_the_slice() {
     assert_eq!(LOG_SCOPE, "resources");
 }
+
+#[test]
+fn future_appointments_map_to_the_blocking_error_with_their_ids() {
+    let error = AppError::from(ResourcesError::HasFutureAppointments {
+        appointment_ids: vec![5, 12],
+    });
+
+    assert_eq!(
+        error,
+        AppError::resource_has_future_appointments(vec![5, 12])
+    );
+    assert_eq!(error.code, AppErrorCode::ResourceHasFutureAppointments);
+    assert_eq!(error.entity_ids, Some(vec![5, 12]));
+}

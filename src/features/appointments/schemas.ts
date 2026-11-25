@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { addMinutes, isExistingDate, LOCAL_DATE_TIME_PATTERN } from '@/lib/datetime'
-import type { AppointmentInput, AppointmentMove, AppointmentRange, Id } from '@/lib/model'
+import { addMinutes, LOCAL_DATE_TIME_PATTERN } from '@/lib/datetime'
+import type { AppointmentInput, AppointmentMove, Id } from '@/lib/model'
 
 export const START_STEP_MIN = 5
 
@@ -10,8 +10,6 @@ const MAX_NOTES_LENGTH = 500
 const NOTES_TOO_LONG_MESSAGE = `Las notas no pueden superar ${MAX_NOTES_LENGTH} caracteres`
 const WHOLE_NUMBER_PATTERN = /^\d+$/
 const MINUTES_START_INDEX = 'YYYY-MM-DDTHH:'.length
-
-const idSchema = z.number().int().positive()
 
 function isExistingDateTime(startsAt: string): boolean {
   return LOCAL_DATE_TIME_PATTERN.test(startsAt) && addMinutes(startsAt, 0) === startsAt
@@ -31,37 +29,6 @@ const notesTextSchema = z.string().trim().max(MAX_NOTES_LENGTH, NOTES_TOO_LONG_M
 function emptyToNull(text: string): string | null {
   return text === '' ? null : text
 }
-
-const notesSchema = notesTextSchema.nullable().transform((notes) => emptyToNull(notes ?? ''))
-
-export const appointmentInputSchema = z.object({
-  clientId: idSchema,
-  serviceId: idSchema,
-  resourceId: idSchema,
-  startsAt: startsAtSchema,
-  notes: notesSchema,
-}) satisfies z.ZodType<AppointmentInput>
-
-export const appointmentMoveSchema = z.object({
-  startsAt: startsAtSchema,
-  resourceId: idSchema,
-}) satisfies z.ZodType<AppointmentMove>
-
-const INVALID_DATE_MESSAGE = 'Ingresa una fecha válida'
-const INVERTED_RANGE_MESSAGE = 'La fecha final no puede ser anterior a la inicial'
-
-const dateSchema = z.string().refine(isExistingDate, INVALID_DATE_MESSAGE)
-
-export const appointmentRangeSchema = z
-  .object({
-    from: dateSchema,
-    to: dateSchema,
-    resourceId: idSchema.nullable(),
-  })
-  .refine((range) => range.from <= range.to, {
-    path: ['to'],
-    message: INVERTED_RANGE_MESSAGE,
-  }) satisfies z.ZodType<AppointmentRange>
 
 export type AppointmentFormValues = {
   clientId: string

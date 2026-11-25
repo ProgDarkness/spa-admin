@@ -33,6 +33,8 @@ pub enum SetupError {
     SeedPasswordTooShort,
     #[error("seed catalog rejected")]
     SeedCatalogRejected,
+    #[error("seed appointment rejected")]
+    SeedAppointmentRejected(#[source] crate::features::appointments::model::AppointmentError),
 }
 
 const DIRECTORY_MODE: u32 = 0o700;
@@ -64,7 +66,10 @@ fn seed_for_development(
     database.with_conn(|conn| {
         Ok(crate::dev_seed::seed_if_empty(conn, passwords, read_env)
             .and_then(|()| crate::dev_seed_catalog::seed_catalog_if_empty(conn, read_env))
-            .and_then(|()| crate::dev_seed_clients::seed_clients_if_empty(conn, read_env)))
+            .and_then(|()| crate::dev_seed_clients::seed_clients_if_empty(conn, read_env))
+            .and_then(|()| {
+                crate::dev_seed_appointments::seed_appointments_if_empty(conn, read_env)
+            }))
     })?
 }
 

@@ -1,3 +1,4 @@
+import { syncAppointmentsMirror } from '@/features/appointments/api'
 import { getClient } from '@/features/clients/api'
 import { authorize } from '@/lib/mock/authorize'
 import { getState, type StoreState } from '@/lib/mock/store'
@@ -23,13 +24,16 @@ export async function getClientHistory(clientId: Id): Promise<Result<ClientHisto
   if (refreshed.status === 'error') return refreshed
   const deniedAfterRefresh = firstDenial(getState())
   if (deniedAfterRefresh) return deniedAfterRefresh
+  const synced = await syncAppointmentsMirror()
+  if (synced.status === 'error') return synced
+  const latest = getState()
   return ok(
     buildClientHistory({
       client: refreshed.data,
-      appointments: state.appointments,
-      payments: state.payments,
-      services: state.services,
-      resources: state.resources,
+      appointments: latest.appointments,
+      payments: latest.payments,
+      services: latest.services,
+      resources: latest.resources,
     }),
   )
 }

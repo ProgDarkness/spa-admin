@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-transition-appointment"
+description = "Enables the transition_appointment command without any pre-configured scope."
+commands.allow = ["transition_appointment"]
+
+[[permission]]
+identifier = "deny-transition-appointment"
+description = "Denies the transition_appointment command without any pre-configured scope."
+commands.deny = ["transition_appointment"]

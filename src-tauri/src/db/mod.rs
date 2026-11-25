@@ -23,6 +23,8 @@ pub enum DbError {
     UnknownPermission,
     #[error("invalid instant")]
     InvalidInstant,
+    #[error("invalid local minute")]
+    InvalidLocalMinute,
     #[error("audit action does not apply to this entity")]
     InvalidAuditPair,
 }
@@ -43,6 +45,26 @@ pub(crate) fn require_valid_instant(
     }
 }
 
+pub(crate) fn require_valid_local_minute(
+    conn: &rusqlite::Connection,
+    local_minute: &str,
+) -> Result<(), DbError> {
+    let is_valid: bool = conn.query_row(
+        "SELECT strftime('%Y-%m-%dT%H:%M', ?1) IS ?1",
+        [local_minute],
+        |row| row.get(0),
+    )?;
+    if is_valid {
+        Ok(())
+    } else {
+        Err(DbError::InvalidLocalMinute)
+    }
+}
+
 #[cfg(test)]
 #[path = "utc_format_test.rs"]
 mod utc_format_tests;
+
+#[cfg(test)]
+#[path = "local_minute_test.rs"]
+mod local_minute_tests;

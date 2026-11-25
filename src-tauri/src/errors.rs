@@ -11,6 +11,11 @@ pub enum AppErrorCode {
     NotFound,
     NationalIdTaken,
     ClientDeletedReactivate,
+    Overlap,
+    CrossesMidnight,
+    InvalidTransition,
+    ResourceInactive,
+    ResourceHasFutureAppointments,
     Internal,
 }
 
@@ -33,7 +38,20 @@ const NOT_FOUND_MESSAGE: &str = "Cliente no encontrado";
 const NATIONAL_ID_TAKEN_MESSAGE: &str = "Ya existe un cliente con esa cédula";
 const CLIENT_DELETED_REACTIVATE_MESSAGE: &str =
     "Ya existió un cliente eliminado con esa cédula. ¿Reactivarlo?";
+const OVERLAP_MESSAGE: &str = "El recurso ya tiene una cita en ese horario";
+const CROSSES_MIDNIGHT_MESSAGE: &str = "La cita no puede terminar después de la medianoche";
+const INVALID_TRANSITION_MESSAGE: &str = "La cita no admite esa operación en su estado actual";
+const RESOURCE_INACTIVE_MESSAGE: &str = "El recurso está inactivo";
+const HAS_FUTURE_APPOINTMENTS_MESSAGE: &str =
+    "El recurso tiene citas futuras que deben reubicarse antes de desactivarlo";
+const APPOINTMENT_NOT_FOUND_MESSAGE: &str = "La cita no existe";
+const CLIENT_MISSING_MESSAGE: &str = "El cliente no existe";
+const SERVICE_MISSING_MESSAGE: &str = "El servicio no existe";
+const RESOURCE_MISSING_MESSAGE: &str = "El recurso no existe";
+const UNKNOWN_REFERENCE_MESSAGE: &str = "El registro no existe";
 const NATIONAL_ID_FIELD: &str = "nationalId";
+const STARTS_AT_FIELD: &str = "startsAt";
+const RESOURCE_ID_FIELD: &str = "resourceId";
 
 impl AppError {
     fn without_details(code: AppErrorCode, message: &str) -> Self {
@@ -90,6 +108,59 @@ impl AppError {
                 AppErrorCode::ClientDeletedReactivate,
                 CLIENT_DELETED_REACTIVATE_MESSAGE,
             )
+        }
+    }
+
+    pub fn overlap(conflicting_ids: Vec<i64>) -> Self {
+        Self {
+            field: Some(STARTS_AT_FIELD.to_string()),
+            entity_ids: Some(conflicting_ids),
+            ..Self::without_details(AppErrorCode::Overlap, OVERLAP_MESSAGE)
+        }
+    }
+
+    pub fn crosses_midnight() -> Self {
+        Self {
+            field: Some(STARTS_AT_FIELD.to_string()),
+            ..Self::without_details(AppErrorCode::CrossesMidnight, CROSSES_MIDNIGHT_MESSAGE)
+        }
+    }
+
+    pub fn invalid_transition() -> Self {
+        Self::without_details(AppErrorCode::InvalidTransition, INVALID_TRANSITION_MESSAGE)
+    }
+
+    pub fn resource_inactive() -> Self {
+        Self {
+            field: Some(RESOURCE_ID_FIELD.to_string()),
+            ..Self::without_details(AppErrorCode::ResourceInactive, RESOURCE_INACTIVE_MESSAGE)
+        }
+    }
+
+    pub fn resource_has_future_appointments(blocking_ids: Vec<i64>) -> Self {
+        Self {
+            entity_ids: Some(blocking_ids),
+            ..Self::without_details(
+                AppErrorCode::ResourceHasFutureAppointments,
+                HAS_FUTURE_APPOINTMENTS_MESSAGE,
+            )
+        }
+    }
+
+    pub fn appointment_not_found() -> Self {
+        Self::without_details(AppErrorCode::NotFound, APPOINTMENT_NOT_FOUND_MESSAGE)
+    }
+
+    pub fn missing_reference(field: &str) -> Self {
+        let message = match field {
+            "clientId" => CLIENT_MISSING_MESSAGE,
+            "serviceId" => SERVICE_MISSING_MESSAGE,
+            "resourceId" => RESOURCE_MISSING_MESSAGE,
+            _ => UNKNOWN_REFERENCE_MESSAGE,
+        };
+        Self {
+            field: Some(field.to_string()),
+            ..Self::without_details(AppErrorCode::NotFound, message)
         }
     }
 

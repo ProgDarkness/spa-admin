@@ -41,6 +41,12 @@ export const commands = {
 	createClient: (input: ClientInput, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("create_client", { input }, options)),
 	updateClient: (update: ClientUpdate, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("update_client", { update }, options)),
 	setClientDeleted: (deletion: ClientDeletion, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("set_client_deleted", { deletion }, options)),
+	listAppointments: (range: AppointmentRange, options?: InvokeOptions) => typedError<AppointmentSummary[], AppError>(__TAURI_INVOKE("list_appointments", { range }, options)),
+	listAllAppointments: (options?: InvokeOptions) => typedError<AppointmentSummary[], AppError>(__TAURI_INVOKE("list_all_appointments", undefined, options)),
+	createAppointment: (input: AppointmentInput, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("create_appointment", { input }, options)),
+	moveAppointment: (movement: AppointmentMove, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("move_appointment", { movement }, options)),
+	transitionAppointment: (request: AppointmentTransitionRequest, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("transition_appointment", { request }, options)),
+	listFutureAppointmentsOfResource: (id: number, options?: InvokeOptions) => typedError<FutureAppointment[], AppError>(__TAURI_INVOKE("list_future_appointments_of_resource", { id }, options)),
 };
 
 /* Types */
@@ -51,7 +57,49 @@ export type AppError = {
 	entityIds: number[] | null,
 };
 
-export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "notFound" | "nationalIdTaken" | "clientDeletedReactivate" | "internal";
+export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "notFound" | "nationalIdTaken" | "clientDeletedReactivate" | "overlap" | "crossesMidnight" | "invalidTransition" | "resourceInactive" | "resourceHasFutureAppointments" | "internal";
+
+export type AppointmentInput = {
+	clientId: number,
+	serviceId: number,
+	resourceId: number,
+	startsAt: string,
+	notes: string | null,
+};
+
+export type AppointmentMove = {
+	id: number,
+	startsAt: string,
+	resourceId: number,
+};
+
+export type AppointmentRange = {
+	from: string,
+	to: string,
+	resourceId: number | null,
+};
+
+export type AppointmentStatus = "scheduled" | "inProgress" | "completed" | "cancelled" | "noShow";
+
+export type AppointmentSummary = {
+	id: number,
+	clientId: number,
+	serviceId: number,
+	resourceId: number,
+	startsAt: string,
+	endsAt: string,
+	status: AppointmentStatus,
+	priceCentsSnapshot: number,
+	durationMinSnapshot: number,
+	notes: string | null,
+};
+
+export type AppointmentTransition = "start" | "complete" | "markNoShow" | "cancel" | "reopen";
+
+export type AppointmentTransitionRequest = {
+	id: number,
+	transition: AppointmentTransition,
+};
 
 export type AuditAction = "login_succeeded" | "logout" | "login_failed" | "login_locked_out" | "session_locked" | "session_unlocked" | "owner_created" | "recovery_used" | "clock_rollback" | "user_created" | "user_updated" | "password_reset" | "role_created" | "unlock_failed" | "recovery_failed" | "role_permissions_changed" | "create" | "update" | "deactivate" | "soft_delete" | "reactivate" | "void" | "backup_created" | "backup_restored";
 
@@ -120,6 +168,11 @@ export type ClockRollback = {
 export type ExchangeRate = {
 	date: string,
 	rateBsPerUsdE4: number,
+};
+
+export type FutureAppointment = {
+	id: number,
+	startsAt: string,
 };
 
 export type LoginCredentials = {

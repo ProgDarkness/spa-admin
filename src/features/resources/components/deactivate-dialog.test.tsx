@@ -4,6 +4,7 @@ import { resetStore } from '@/lib/mock/store'
 import type { AppError, Resource } from '@/lib/model'
 import { freezeDate } from '@/test/clock'
 import { deferred } from '@/test/deferred'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import { DeactivateDialog } from './deactivate-dialog'
 
@@ -12,6 +13,7 @@ const CABIN: Resource = { id: 1, name: 'Cabina 1', kind: 'cabin', active: true }
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
   resetStore()
+  installDevIpc()
 })
 
 function appError(overrides: Partial<AppError>): AppError {

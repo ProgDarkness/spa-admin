@@ -2,12 +2,14 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { commit, getState, resetStore } from '@/lib/mock/store'
 import { freezeDate } from '@/test/clock'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import AppointmentsPage from './page'
 
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
   resetStore()
+  installDevIpc()
 })
 
 function cabinColumn(name: string) {
@@ -23,9 +25,11 @@ async function failCancellationOfLuis(user: ReturnType<typeof renderWithProvider
   const cancelButton = await screen.findByRole('button', { name: 'Cancelar cita de Luis Martínez' })
   const original = getState()
   commit({ ...original, appointments: original.appointments.filter((row) => row.id !== 5) })
+  installDevIpc()
   await user.click(cancelButton)
   expect(await screen.findByRole('alert')).toBeInTheDocument()
   commit(original)
+  installDevIpc()
 }
 
 async function expectAlertCleared() {
@@ -172,7 +176,7 @@ describe('AppointmentsPage', () => {
   it('muestra un error de carga cuando la lectura falla', async () => {
     renderWithProviders(<AppointmentsPage />)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Debes iniciar sesión')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Inicia sesión para continuar')
   })
 
   it('el diálogo de nueva cita tiene descripción accesible y no emite avisos de Radix', async () => {

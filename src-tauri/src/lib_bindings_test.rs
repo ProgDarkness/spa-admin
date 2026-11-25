@@ -212,6 +212,11 @@ fn bindings_expose_the_session_status_and_error_code_variants() {
             "notFound",
             "nationalIdTaken",
             "clientDeletedReactivate",
+            "overlap",
+            "crossesMidnight",
+            "invalidTransition",
+            "resourceInactive",
+            "resourceHasFutureAppointments",
             "internal"
         ]
     );

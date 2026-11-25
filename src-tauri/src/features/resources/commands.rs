@@ -2,8 +2,8 @@ use rusqlite::{Connection, Transaction};
 use tauri::State;
 
 use super::model::{
-    ResourceActivation, ResourceFilter, ResourceInput, ResourceSummary, ResourceUpdate,
-    ResourcesError,
+    FutureAppointment, ResourceActivation, ResourceFilter, ResourceInput, ResourceSummary,
+    ResourceUpdate, ResourcesError,
 };
 use super::{repository, service};
 use crate::db::Database;
@@ -97,6 +97,21 @@ pub fn list_resources(
 
 #[tauri::command]
 #[specta::specta]
+pub fn list_future_appointments_of_resource(
+    id: i64,
+    db: State<'_, Database>,
+    session: State<'_, SessionState>,
+) -> Result<Vec<FutureAppointment>, AppError> {
+    Ok(
+        db.with_conn_mapped(|conn| -> Result<Vec<FutureAppointment>, ResourcesError> {
+            authorize_write(conn, &session, Beat::now())?;
+            service::list_future_appointments(conn, id)
+        })?,
+    )
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn create_resource(
     input: ResourceInput,
     db: State<'_, Database>,
@@ -132,3 +147,7 @@ pub fn set_resource_active(
 #[cfg(test)]
 #[path = "commands_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "commands_future_test.rs"]
+mod future_tests;

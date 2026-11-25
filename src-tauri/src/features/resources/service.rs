@@ -2,9 +2,12 @@ use rusqlite::Connection;
 use serde_json::{json, Value};
 
 use super::model::{
-    ResourceActivation, ResourceInput, ResourceSummary, ResourceUpdate, ResourcesError,
+    FutureAppointment, ResourceActivation, ResourceInput, ResourceSummary, ResourceUpdate,
+    ResourcesError,
 };
 use super::repository;
+use crate::db::require_valid_local_minute;
+use crate::features::appointments::repository as appointments;
 use crate::features::audit::{AuditAction, AuditEntity, Diff};
 use crate::features::named_records::{record_change, valid_name as valid_record_name};
 
@@ -104,14 +107,68 @@ pub fn update_resource(
     Ok(after)
 }
 
+fn ensure_no_future_appointments(
+    conn: &Connection,
+    resource_id: i64,
+    now: &str,
+) -> Result<(), ResourcesError> {
+    let blocking = appointments::future_scheduled_of_resource(conn, resource_id, now)?;
+    if blocking.is_empty() {
+        Ok(())
+    } else {
+        Err(ResourcesError::HasFutureAppointments {
+            appointment_ids: blocking.iter().map(|appointment| appointment.id).collect(),
+        })
+    }
+}
+
+pub fn list_future_appointments_at(
+    conn: &Connection,
+    resource_id: i64,
+    now: &str,
+) -> Result<Vec<FutureAppointment>, ResourcesError> {
+    require_valid_local_minute(conn, now)?;
+    require_resource(conn, resource_id)?;
+    let upcoming = appointments::future_scheduled_of_resource(conn, resource_id, now)?;
+    Ok(upcoming
+        .into_iter()
+        .map(|appointment| FutureAppointment {
+            id: appointment.id,
+            starts_at: appointment.starts_at,
+        })
+        .collect())
+}
+
+pub fn list_future_appointments(
+    conn: &Connection,
+    resource_id: i64,
+) -> Result<Vec<FutureAppointment>, ResourcesError> {
+    let now = appointments::local_minute_now(conn)?;
+    list_future_appointments_at(conn, resource_id, &now)
+}
+
 pub fn set_resource_active(
     conn: &Connection,
     actor_id: i64,
     activation: &ResourceActivation,
 ) -> Result<ResourceSummary, ResourcesError> {
+    let now = appointments::local_minute_now(conn)?;
+    set_resource_active_at(conn, actor_id, activation, &now)
+}
+
+pub fn set_resource_active_at(
+    conn: &Connection,
+    actor_id: i64,
+    activation: &ResourceActivation,
+    now: &str,
+) -> Result<ResourceSummary, ResourcesError> {
+    require_valid_local_minute(conn, now)?;
     let before = require_resource(conn, activation.id)?;
     if before.active == activation.active {
         return Ok(before);
+    }
+    if !activation.active {
+        ensure_no_future_appointments(conn, activation.id, now)?;
     }
     repository::set_resource_active(conn, activation.id, activation.active, actor_id)?;
     let after = require_resource(conn, activation.id)?;
@@ -128,3 +185,7 @@ pub fn set_resource_active(
 #[cfg(test)]
 #[path = "service_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "service_guard_test.rs"]
+mod guard_tests;

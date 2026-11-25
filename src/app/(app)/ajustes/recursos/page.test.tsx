@@ -5,6 +5,7 @@ import { commit, getState, resetStore } from '@/lib/mock/store'
 import type { Resource, Result } from '@/lib/model'
 import { freezeDate } from '@/test/clock'
 import { deferred } from '@/test/deferred'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import ResourcesPage from './page'
 
@@ -16,6 +17,7 @@ vi.mock('@/features/resources/api', async (importOriginal) => {
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
   resetStore()
+  installDevIpc()
 })
 
 const DENIED_MESSAGE = 'No tienes permiso para esta acción'
@@ -155,6 +157,7 @@ describe('ResourcesPage', () => {
     await screen.findByRole('row', { name: /Cabina 1/ })
     const withoutFuture = getState().appointments.filter((appointment) => appointment.resourceId !== 1)
     commit({ ...getState(), appointments: withoutFuture })
+    installDevIpc()
 
     await user.click(screen.getByRole('button', { name: 'Desactivar Cabina 1' }))
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Desactivar' }))
