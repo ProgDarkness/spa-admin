@@ -1,6 +1,8 @@
 import { mockIPC } from '@tauri-apps/api/mocks'
+import { todayLocal } from '@/lib/datetime'
 import { currentUser } from '@/lib/mock/authorize'
-import { commit, getState } from '@/lib/mock/store'
+import { createSeed } from '@/lib/mock/seed'
+import { commit, EMPTY_STATE, getState } from '@/lib/mock/store'
 import { createAuthIpcBackend } from './auth-backend'
 import { createDevBackends } from './dev-backends'
 
@@ -12,6 +14,7 @@ function isRunningInTauri(): boolean {
 
 export function installDevBrowserIpc(): boolean {
   if (process.env.NODE_ENV !== 'development' || typeof window === 'undefined' || isRunningInTauri()) return false
+  if (getState() === EMPTY_STATE) commit(createSeed(todayLocal()))
   const authBackend = createAuthIpcBackend(
     () => getState().users,
     {

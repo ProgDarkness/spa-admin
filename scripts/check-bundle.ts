@@ -30,9 +30,9 @@ export const FORBIDDEN_BUNDLE_MARKERS: readonly string[] = [
   ...IDENTIFIER_MARKERS,
 ]
 
-export const SEED_SENTINEL_MARKERS: readonly string[] = ['Manicure (Rosa)', '(ejemplo)', 'Cabina 1', 'createSeed', 'V-26789012']
+export const SEED_SENTINEL_MARKERS: readonly string[] = ['Manicure (Rosa)', '(ejemplo)', 'Cabina 1', 'createSeed', 'V-26789012', 'Cita seed inexistente', '0414-1234567', 'E-81234567', 'V-14567890']
 
-export const SEED_SENTINELS_BLOCK_BUNDLE = false
+export const SEED_SENTINELS_BLOCK_BUNDLE = true
 
 export const MAX_BUNDLE_FILE_BYTES = 50 * 1024 * 1024
 

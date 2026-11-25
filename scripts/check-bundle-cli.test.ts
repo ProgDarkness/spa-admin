@@ -47,17 +47,16 @@ describe('check-bundle-cli', () => {
     expect(outcome.stderr).toContain('leak.js')
   })
 
-  it('avisa por stdout de los centinelas del seed pero sale con 0', () => {
+  it('sale con 1 y nombra por stderr los centinelas del seed', () => {
     const directory = createBundle({ ...CLEAN_BUNDLE, '_next/static/chunks/seed.js': 'a="Cabina 1";b="Manicure (Rosa)"' })
 
     const outcome = runCli([directory])
 
-    expect(outcome.status).toBe(0)
-    expect(outcome.stdout).toContain('aviso')
-    expect(outcome.stdout).toContain('Cabina 1')
-    expect(outcome.stdout).toContain('Manicure (Rosa)')
-    expect(outcome.stdout).toContain('seed.js')
-    expect(outcome.stderr).toBe('')
+    expect(outcome.status).toBe(1)
+    expect(outcome.stderr).toContain('Cabina 1')
+    expect(outcome.stderr).toContain('Manicure (Rosa)')
+    expect(outcome.stderr).toContain('seed.js')
+    expect(outcome.stdout).toBe('')
   })
 
   it('no emite aviso en un bundle limpio', () => {

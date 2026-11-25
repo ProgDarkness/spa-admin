@@ -1,11 +1,42 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { freezeDate } from '@/test/clock'
+import { findRuntimeSeedImports } from '@/test/seed-import-guard'
 import { createSeed } from './seed'
 import { appendRow, commit, findById, getState, nextId, replaceById, resetStore, upsertById } from './store'
 
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
   resetStore()
+})
+
+describe('estado inicial sin siembra inyectada', () => {
+  it('arranca vacío, sin sesión y sin importar el seed', async () => {
+    vi.resetModules()
+    const fresh = await import('./store')
+
+    expect(fresh.getState()).toEqual({
+      users: [],
+      sessionUserId: null,
+      clients: [],
+      services: [],
+      resources: [],
+      paymentMethods: [],
+      rates: [],
+      appointments: [],
+      payments: [],
+    })
+    fresh.resetStore()
+    expect(fresh.getState().clients).toEqual([])
+  })
+
+  it('el módulo del store no referencia el seed', () => {
+    const source = readFileSync(join(process.cwd(), 'src/lib/mock/store.ts'), 'utf8')
+
+    expect(findRuntimeSeedImports(source)).toEqual([])
+    expect(source).not.toContain('createSeed')
+  })
 })
 
 describe('getState / resetStore', () => {
