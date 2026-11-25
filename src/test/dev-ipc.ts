@@ -1,10 +1,13 @@
 import { mockIPC } from '@tauri-apps/api/mocks'
 import { currentUser } from '@/lib/mock/authorize'
-import { commit, getState, type StoreState } from '@/lib/mock/store'
+import { todayLocal } from '@/lib/datetime'
+import { createSeed, type SeedData } from '@/lib/mock/seed'
+import { commit, getState } from '@/lib/mock/store'
 import { createAuthIpcBackend } from './ipc/auth-backend'
 import { createDevBackends } from './ipc/dev-backends'
 
-export function installDevIpc(seed: StoreState = getState()): void {
+export function installDevIpc(overrides: Partial<SeedData> = {}): void {
+  const rows = createSeed(todayLocal())
   const authBackend = createAuthIpcBackend(() => getState().users, {
     read: () => getState().sessionUserId,
     write: (id) => commit({ ...getState(), sessionUserId: id }),
@@ -13,7 +16,7 @@ export function installDevIpc(seed: StoreState = getState()): void {
     createDevBackends({
       auth: authBackend,
       session: () => currentUser(getState()),
-      seed,
+      seed: { ...getState(), appointments: rows.appointments, payments: rows.payments, ...overrides },
     }),
   )
 }

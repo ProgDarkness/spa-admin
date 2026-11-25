@@ -1,10 +1,10 @@
 import { screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { commit, getState } from '@/lib/mock/store'
 import type { Payment } from '@/lib/model'
 import { formatCents as formatCentsRaw } from '@/lib/money'
-import { appointmentTemplate, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { appointmentTemplate, resetWithEmptyAgenda } from '@/test/appointment-fixtures'
 import { installDevIpc } from '@/test/dev-ipc'
+import { paymentsOfAppointment } from '@/test/payment-fixtures'
 import { renderWithProviders } from '@/test/render'
 import { PaymentList } from './payment-list'
 
@@ -51,9 +51,7 @@ const USD_VOIDED = payment({
 
 beforeEach(() => {
   resetWithEmptyAgenda()
-  seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID }))
-  commit({ ...getState(), payments: [USD_ACTIVE, VES_ACTIVE, USD_VOIDED] })
-  installDevIpc()
+  installDevIpc({ appointments: [appointmentTemplate({ id: APPOINTMENT_ID })], payments: [USD_ACTIVE, VES_ACTIVE, USD_VOIDED] })
 })
 
 describe('PaymentList', () => {
@@ -71,8 +69,7 @@ describe('PaymentList', () => {
   })
 
   it('muestra Método eliminado cuando el método ya cargó y no existe', async () => {
-    commit({ ...getState(), payments: [payment({ id: 9, methodId: 999 })] })
-    installDevIpc()
+    installDevIpc({ appointments: [appointmentTemplate({ id: APPOINTMENT_ID })], payments: [payment({ id: 9, methodId: 999 })] })
     renderWithProviders(<PaymentList appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
 
     expect(await screen.findByText(/Método eliminado/)).toBeInTheDocument()
@@ -100,8 +97,7 @@ describe('PaymentList', () => {
   })
 
   it('informa cuando la cita no tiene pagos', async () => {
-    commit({ ...getState(), payments: [] })
-    installDevIpc()
+    installDevIpc({ appointments: [appointmentTemplate({ id: APPOINTMENT_ID })], payments: [] })
     renderWithProviders(<PaymentList appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
 
     const message = await screen.findByText('Esta cita aún no tiene pagos.')
@@ -125,14 +121,14 @@ describe('PaymentList', () => {
     await user.click((await screen.findAllByRole('button', { name: /Anular pago/ }))[0]!)
     await user.click(screen.getByRole('button', { name: 'Confirmar anulación' }))
     expect(await screen.findByText('Indica el motivo de la anulación')).toBeInTheDocument()
-    expect(getState().payments[0]?.voidedAt).toBeNull()
+    expect((await paymentsOfAppointment(APPOINTMENT_ID))[0]?.voidedAt).toBeNull()
 
     await user.type(screen.getByLabelText('Motivo de la anulación'), 'Cobro duplicado')
     await user.click(screen.getByRole('button', { name: 'Confirmar anulación' }))
 
     const first = (await screen.findAllByRole('listitem'))[0]!
     expect(await within(first).findByText(/Anulado: Cobro duplicado/)).toBeInTheDocument()
-    expect(getState().payments[0]).toMatchObject({ voidedBy: 2, voidReason: 'Cobro duplicado' })
+    expect((await paymentsOfAppointment(APPOINTMENT_ID))[0]).toMatchObject({ voidedBy: 2, voidReason: 'Cobro duplicado' })
     const totals = screen.getByRole('group', { name: 'Totales cobrados' })
     expect(within(totals).getByText(`Total USD: ${formatCents(0, 'USD')}`)).toBeInTheDocument()
   })
@@ -144,6 +140,6 @@ describe('PaymentList', () => {
     await user.click(screen.getByRole('button', { name: 'Cancelar' }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(getState().payments[0]?.voidedAt).toBeNull()
+    expect((await paymentsOfAppointment(APPOINTMENT_ID))[0]?.voidedAt).toBeNull()
   })
 })

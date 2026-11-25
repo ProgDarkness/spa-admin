@@ -512,37 +512,6 @@ describe('transitionAppointment', () => {
   })
 })
 
-describe('listAllAppointments', () => {
-  it('devuelve toda la colección sin importar la fecha, ordenada por inicio e id', async () => {
-    install([
-      row({ id: 3, startsAt: '2027-08-01T09:00', endsAt: '2027-08-01T10:00' }),
-      row({ id: 2, startsAt: `${DAY}T10:00` }),
-      row({ id: 1, startsAt: '2024-01-02T09:00', endsAt: '2024-01-02T10:00', status: 'cancelled' }),
-    ])
-
-    const everything = dataOf(await commands.listAllAppointments())
-
-    expect(everything.map((appointment) => appointment.id)).toEqual([1, 2, 3])
-  })
-
-  it('permite leer con solo read o solo write y rechaza sin sesión o sin permisos', async () => {
-    session = userWith('appointments.read')
-    expect(await commands.listAllAppointments()).toMatchObject({ status: 'ok' })
-    session = userWith('appointments.write')
-    expect(await commands.listAllAppointments()).toMatchObject({ status: 'ok' })
-    session = userWith('clients.read')
-    expect(await commands.listAllAppointments()).toMatchObject({ error: { code: 'forbidden' } })
-    session = null
-    expect(await commands.listAllAppointments()).toMatchObject({ error: { code: 'unauthenticated' } })
-  })
-
-  it('refleja las citas creadas durante la sesión', async () => {
-    await commands.createAppointment(input())
-
-    expect(dataOf(await commands.listAllAppointments())).toHaveLength(1)
-  })
-})
-
 describe('validación de entradas', () => {
   it('acepta inicios 00:00, 23:55 con cruce de medianoche reportado aparte y el 29 de febrero bisiesto', async () => {
     const midnight = await commands.createAppointment(input({ startsAt: `${DAY}T00:00` }))

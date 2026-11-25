@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { freezeDate } from '@/test/clock'
 import { findRuntimeSeedImports } from '@/test/seed-import-guard'
-import { createSeed } from './seed'
+import { createSeed, stateOf } from './seed'
 import { appendRow, commit, findById, getState, nextId, replaceById, resetStore, upsertById } from './store'
 
 beforeEach(() => {
@@ -24,8 +24,6 @@ describe('estado inicial sin siembra inyectada', () => {
       resources: [],
       paymentMethods: [],
       rates: [],
-      appointments: [],
-      payments: [],
     })
     fresh.resetStore()
     expect(fresh.getState().clients).toEqual([])
@@ -41,7 +39,7 @@ describe('estado inicial sin siembra inyectada', () => {
 
 describe('getState / resetStore', () => {
   it('arranca con el seed de la fecha local actual y sin sesión', () => {
-    expect(getState()).toEqual(createSeed('2026-11-12'))
+    expect(getState()).toEqual(stateOf(createSeed('2026-11-12')))
     expect(getState().sessionUserId).toBeNull()
   })
 
@@ -51,13 +49,13 @@ describe('getState / resetStore', () => {
     expect(getState().clients).toHaveLength(0)
     resetStore()
     expect(getState().clients.length).toBeGreaterThan(0)
-    expect(getState()).toEqual(createSeed('2026-11-12'))
+    expect(getState()).toEqual(stateOf(createSeed('2026-11-12')))
   })
 
   it('resetStore usa la fecha congelada vigente', () => {
     freezeDate('2026-12-20T09:00')
     resetStore()
-    expect(getState()).toEqual(createSeed('2026-12-20'))
+    expect(getState()).toEqual(stateOf(createSeed('2026-12-20')))
   })
 })
 

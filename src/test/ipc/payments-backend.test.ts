@@ -110,7 +110,6 @@ describe('autorización', () => {
     session = null
     const outcomes = [
       await commands.listPayments(COMPLETED),
-      await commands.listAllPayments(),
       await commands.createPayment(usd(1000)),
       await commands.voidPayment({ id: 1, reason: 'error' }),
     ]
@@ -121,7 +120,6 @@ describe('autorización', () => {
   it('con solo payments.read lista y no escribe', async () => {
     session = userWith(OWNER_ID, 'payments.read')
 
-    expect(await commands.listAllPayments()).toMatchObject({ status: 'ok' })
     expect(await commands.listPayments(COMPLETED)).toMatchObject({ status: 'ok' })
     expect(await commands.createPayment(usd(1000))).toMatchObject({ status: 'error', error: { code: 'forbidden' } })
     expect(await commands.voidPayment({ id: 1, reason: 'x' })).toMatchObject({ status: 'error', error: { code: 'forbidden' } })
@@ -132,7 +130,7 @@ describe('autorización', () => {
 
     const created = await pay(usd(1000))
 
-    expect(await commands.listAllPayments()).toMatchObject({ status: 'ok', data: [created] })
+    expect(published.read()).toEqual([created])
     expect(await commands.voidPayment({ id: created.id, reason: 'error' })).toMatchObject({ status: 'ok' })
   })
 
@@ -140,7 +138,6 @@ describe('autorización', () => {
     session = userWith(OWNER_ID, 'clients.read')
     const outcomes = [
       await commands.listPayments(COMPLETED),
-      await commands.listAllPayments(),
       await commands.createPayment(usd(1000)),
       await commands.voidPayment({ id: 1, reason: 'error' }),
     ]
@@ -209,7 +206,7 @@ describe('createPayment', () => {
         return
       }
       expect(outcome).toMatchObject({ status: 'error', error: { code: 'validation', field: 'amountCents' } })
-      expect(dataOf(await commands.listAllPayments())).toEqual([])
+      expect(published.read()).toEqual([])
     },
   )
 
@@ -229,7 +226,7 @@ describe('createPayment', () => {
     expect(await failureOf(() => commands.createPayment(ves(1, DAY_RATE)))).toBe('validation:amountCents')
     expect(await failureOf(() => commands.createPayment(ves(18, DAY_RATE)))).toBe('validation:amountCents')
     expect((await pay(ves(19, DAY_RATE))).usdEquivalentCents).toBe(1)
-    expect(dataOf(await commands.listAllPayments())).toHaveLength(1)
+    expect(published.read()).toHaveLength(1)
   })
 
   it('sin ninguna tasa un pago VES es rateMissing y no se guarda nada', async () => {
@@ -238,7 +235,7 @@ describe('createPayment', () => {
     const outcome = await commands.createPayment(ves(182_500, null))
 
     expect(outcome).toMatchObject({ status: 'error', error: { code: 'rateMissing', field: 'rateBsPerUsdE4' } })
-    expect(dataOf(await commands.listAllPayments())).toEqual([])
+    expect(published.read()).toEqual([])
   })
 
   it('solo la tasa del día del pago cuenta como valor por defecto', async () => {
@@ -254,7 +251,7 @@ describe('createPayment', () => {
     const created = await pay(ves(182_500, null))
     rates.write([{ date: TODAY, rateBsPerUsdE4: 500_000 }])
 
-    const listed = dataOf(await commands.listAllPayments())
+    const listed = published.read()
 
     expect(listed[0]).toEqual(created)
     expect(listed[0]?.usdEquivalentCents).toBe(5_000)
@@ -299,7 +296,7 @@ describe('createPayment', () => {
     [ves(1_000, MAX_RATE + 1), 'validation:rateBsPerUsdE4'],
   ])('rechaza la entrada mal formada %#', async (input, expected) => {
     expect(await failureOf(() => commands.createPayment(input))).toBe(expected)
-    expect(dataOf(await commands.listAllPayments())).toEqual([])
+    expect(published.read()).toEqual([])
   })
 
   it('acepta el monto máximo con la tasa máxima', async () => {
@@ -411,7 +408,7 @@ describe('listados', () => {
     expect(listed.map((payment) => payment.id)).toEqual([1, 3])
   })
 
-  it('list_all_payments ordena por paid_at e id y no filtra anulados', async () => {
+  it('list_payments ordena por paid_at e id y no filtra anulados', async () => {
     const seeded: PaymentSummary[] = [
       { ...paymentRow(5), paidAt: '2026-11-12T10:00' },
       { ...paymentRow(2), paidAt: '2026-11-12T10:00' },
@@ -419,7 +416,7 @@ describe('listados', () => {
     ]
     install(seeded)
 
-    const listed = dataOf(await commands.listAllPayments())
+    const listed = dataOf(await commands.listPayments(COMPLETED))
 
     expect(listed.map((payment) => payment.id)).toEqual([9, 2, 5])
   })

@@ -145,7 +145,7 @@ describe('getClientHistory', () => {
   })
 
   it('no lee ni modifica el store: el historial sale de Rust', async () => {
-    commit({ ...getState(), appointments: [], payments: [], clients: [] })
+    commit({ ...getState(), clients: [] })
     const before = getState()
 
     const history = historyOf(await getClientHistory(MARIA_ID))

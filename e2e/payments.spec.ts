@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { invokeCommand } from './support/appointments'
+import { allAppointments, invokeCommand } from './support/appointments'
 import {
   closePaymentsDialog,
   historyEntry,
@@ -34,12 +34,9 @@ async function paymentsOf(page: Page, appointmentId: number): Promise<PaymentRec
 }
 
 async function allPayments(page: Page): Promise<PaymentRecord[]> {
-  const outcome = (await invokeCommand(page, 'list_all_payments', undefined)) as {
-    resolved: boolean
-    value: PaymentRecord[]
-  }
-  expect(outcome.resolved).toBe(true)
-  return outcome.value
+  const appointments = await allAppointments(page)
+  const perAppointment = await Promise.all(appointments.map((appointment) => paymentsOf(page, appointment.id)))
+  return perAppointment.flat().toSorted((first, second) => first.id - second.id)
 }
 
 test.describe('propietaria: registro de pagos', () => {

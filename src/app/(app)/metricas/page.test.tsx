@@ -1,6 +1,6 @@
 import type { Currency } from '@/lib/model'
 import { formatCents } from '@/lib/money'
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { resetStore } from '@/lib/mock/store'
 import { freezeDate } from '@/test/clock'
@@ -32,6 +32,8 @@ describe('MetricsPage', () => {
     expect(valueOf('En curso')).toBe('1')
     const revenue = screen.getByRole('region', { name: 'Ingreso del mes' })
     expect(within(revenue).getByText(amountMatcher(8000, 'USD'))).toBeInTheDocument()
+    const advance = screen.getByRole('region', { name: 'Cobrado por adelantado (citas pendientes)' })
+    expect(within(advance).getByText(amountMatcher(0, 'USD'))).toBeInTheDocument()
   })
 
   it('recalcula al cambiar de mes con el botón anterior', async () => {
@@ -46,6 +48,30 @@ describe('MetricsPage', () => {
     expect(valueOf('Clientes nuevos')).toBe('4')
     expect(valueOf('Completadas')).toBe('6')
     expect(valueOf('En curso')).toBe('0')
+  })
+
+  it('en el último mes soportado deshabilita siguiente y muestra métricas válidas', async () => {
+    renderWithProviders(<MetricsPage />, { as: 'propietaria' })
+    await screen.findByText('Clientes nuevos')
+
+    fireEvent.change(screen.getByLabelText('Mes'), { target: { value: '9998-12' } })
+
+    expect(await screen.findByLabelText('Mes')).toHaveValue('9998-12')
+    expect(screen.getByRole('button', { name: 'Mes siguiente' })).toBeDisabled()
+    await waitFor(() => expect(valueOf('Completadas')).toBe('0'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('en el primer mes soportado deshabilita anterior y muestra métricas válidas', async () => {
+    renderWithProviders(<MetricsPage />, { as: 'propietaria' })
+    await screen.findByText('Clientes nuevos')
+
+    fireEvent.change(screen.getByLabelText('Mes'), { target: { value: '0001-01' } })
+
+    expect(await screen.findByLabelText('Mes')).toHaveValue('0001-01')
+    expect(screen.getByRole('button', { name: 'Mes anterior' })).toBeDisabled()
+    await waitFor(() => expect(valueOf('Completadas')).toBe('0'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it.each(['recepcion', 'lectura'] as const)('%s ve un mensaje claro sin metrics.read', async (username) => {

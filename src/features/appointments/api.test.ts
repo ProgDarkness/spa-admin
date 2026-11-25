@@ -96,13 +96,15 @@ describe('listAppointments', () => {
     expect(dataOf(await listAppointments(range(DAY, DAY, null)))).toHaveLength(2)
   })
 
-  it('devuelve una lista nueva que no es el arreglo del store', async () => {
+  it('devuelve una lista nueva en cada llamada', async () => {
     signInAs('recepcion')
     seedAppointments(appointmentTemplate())
 
-    const rows = dataOf(await listAppointments(range(DAY, DAY)))
+    const first = dataOf(await listAppointments(range(DAY, DAY)))
+    const second = dataOf(await listAppointments(range(DAY, DAY)))
 
-    expect(rows).not.toBe(getState().appointments)
+    expect(first).toEqual(second)
+    expect(first).not.toBe(second)
   })
 })
 
@@ -117,7 +119,7 @@ describe('transitionAppointment', () => {
     seedAppointments(appointmentTemplate({ id: 1 }))
 
     expect(errorOf(await transitionAppointment(1, 'cancel')).code).toBe('forbidden')
-    expect(appointmentById(1).status).toBe('scheduled')
+    expect((await appointmentById(1)).status).toBe('scheduled')
   })
 
   it('cita inexistente: notFound', async () => {
@@ -138,16 +140,16 @@ describe('transitionAppointment', () => {
     ['scheduled', 'cancel', 'cancelled'],
     ['inProgress', 'complete', 'completed'],
     ['inProgress', 'cancel', 'cancelled'],
-  ] as const)('%s con %s deja la cita en %s sin mutar la anterior', async (status, transition, target) => {
+  ] as const)('%s con %s deja la cita en %s y la persiste', async (status, transition, target) => {
     signInAs('recepcion')
     seedAppointments(appointmentTemplate({ id: 1, status }))
-    const previous = appointmentById(1)
+    const previous = await appointmentById(1)
 
     const updated = dataOf(await transitionAppointment(1, transition))
 
     expect(updated).toEqual({ ...previous, status: target })
     expect(previous.status).toBe(status)
-    expect(appointmentById(1)).toBe(updated)
+    expect(await appointmentById(1)).toEqual(updated)
   })
 
   it('completa desde scheduled cuando now == startsAt', async () => {
@@ -232,12 +234,13 @@ describe('transitionAppointment reopen', () => {
   it.each<AppointmentStatus>(['completed', 'cancelled', 'noShow'])('con franja libre reabre una cita %s a scheduled', async (status) => {
     signInAs('propietaria')
     seedAppointments(appointmentTemplate({ id: 1, status, ...slot }))
-    const previous = appointmentById(1)
+    const previous = await appointmentById(1)
 
     const reopened = dataOf(await transitionAppointment(1, 'reopen'))
 
     expect(reopened).toEqual({ ...previous, status: 'scheduled' })
     expect(previous.status).toBe(status)
+    expect(await appointmentById(1)).toEqual(reopened)
   })
 
   it.each<AppointmentStatus>(['cancelled', 'noShow'])('con la franja ocupada reabrir %s: overlap con entityIds', async (status) => {

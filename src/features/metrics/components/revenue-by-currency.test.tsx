@@ -10,6 +10,7 @@ describe('RevenueByCurrency', () => {
       <RevenueByCurrency
         revenue={{ USD: 8000, VES: 73000 }}
         collectedOnNonCompleted={{ USD: 1500, VES: 0 }}
+        pending={{ USD: 0, VES: 0 }}
       />,
     )
 
@@ -23,6 +24,7 @@ describe('RevenueByCurrency', () => {
       <RevenueByCurrency
         revenue={{ USD: 8000, VES: 73000 }}
         collectedOnNonCompleted={{ USD: 1500, VES: 4000 }}
+        pending={{ USD: 0, VES: 0 }}
       />,
     )
 
@@ -32,8 +34,23 @@ describe('RevenueByCurrency', () => {
     expect(within(block).getByText(/no cuentan como ingreso/i)).toBeInTheDocument()
   })
 
+  it('muestra aparte lo cobrado por adelantado en citas pendientes', () => {
+    render(
+      <RevenueByCurrency
+        revenue={{ USD: 8000, VES: 73000 }}
+        collectedOnNonCompleted={{ USD: 1500, VES: 0 }}
+        pending={{ USD: 2500, VES: 54750 }}
+      />,
+    )
+
+    const block = screen.getByRole('region', { name: 'Cobrado por adelantado (citas pendientes)' })
+    expect(within(block).getByText(amountMatcher(2500, 'USD'))).toBeInTheDocument()
+    expect(within(block).getByText(amountMatcher(54750, 'VES'))).toBeInTheDocument()
+    expect(within(block).getByText(/programadas o en curso; no cuentan como ingreso/i)).toBeInTheDocument()
+  })
+
   it('renderiza los títulos de tarjeta en font-serif', () => {
-    render(<RevenueByCurrency revenue={{ USD: 0, VES: 0 }} collectedOnNonCompleted={{ USD: 0, VES: 0 }} />)
+    render(<RevenueByCurrency revenue={{ USD: 0, VES: 0 }} collectedOnNonCompleted={{ USD: 0, VES: 0 }} pending={{ USD: 0, VES: 0 }} />)
 
     for (const heading of screen.getAllByRole('heading')) expect(heading.closest('.font-serif')).not.toBeNull()
   })

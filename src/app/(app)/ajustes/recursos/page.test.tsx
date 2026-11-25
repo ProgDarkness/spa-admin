@@ -1,6 +1,8 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as resourcesApi from '@/features/resources/api'
+import { todayLocal } from '@/lib/datetime'
+import { createSeed } from '@/lib/mock/seed'
 import { commit, getState, resetStore } from '@/lib/mock/store'
 import type { Resource, Result } from '@/lib/model'
 import { freezeDate } from '@/test/clock'
@@ -155,9 +157,7 @@ describe('ResourcesPage', () => {
   it('desactiva un recurso sin citas futuras y cierra el diálogo', async () => {
     const { user } = renderWithProviders(<ResourcesPage />, { as: 'propietaria' })
     await screen.findByRole('row', { name: /Cabina 1/ })
-    const withoutFuture = getState().appointments.filter((appointment) => appointment.resourceId !== 1)
-    commit({ ...getState(), appointments: withoutFuture })
-    installDevIpc()
+    installDevIpc({ appointments: createSeed(todayLocal()).appointments.filter((appointment) => appointment.resourceId !== 1) })
 
     await user.click(screen.getByRole('button', { name: 'Desactivar Cabina 1' }))
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Desactivar' }))

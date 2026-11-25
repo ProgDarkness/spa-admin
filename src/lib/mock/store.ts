@@ -1,11 +1,9 @@
 import { todayLocal } from '@/lib/datetime'
 import type {
-  Appointment,
   Client,
   ExchangeRate,
   Id,
   LocalDate,
-  Payment,
   PaymentMethod,
   Resource,
   Service,
@@ -20,8 +18,6 @@ export type StoreState = Readonly<{
   resources: readonly Resource[]
   paymentMethods: readonly PaymentMethod[]
   rates: readonly ExchangeRate[]
-  appointments: readonly Appointment[]
-  payments: readonly Payment[]
 }>
 
 export type StoreSeeder = (today: LocalDate) => StoreState
@@ -34,8 +30,6 @@ export const EMPTY_STATE: StoreState = {
   resources: [],
   paymentMethods: [],
   rates: [],
-  appointments: [],
-  payments: [],
 }
 
 let seeder: StoreSeeder = () => EMPTY_STATE

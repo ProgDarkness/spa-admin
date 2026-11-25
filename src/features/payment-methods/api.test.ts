@@ -266,13 +266,4 @@ describe('setPaymentMethodActive', () => {
     expect(getState().paymentMethods.find((method) => method.id === 1)?.active).toBe(true)
     expect(getState().paymentMethods).toHaveLength(SEED_METHOD_COUNT)
   })
-
-  it('no toca los pagos existentes', async () => {
-    signInAs(MANAGER)
-    const before = getState().payments
-
-    await setPaymentMethodActive(1, false)
-
-    expect(getState().payments).toBe(before)
-  })
 })

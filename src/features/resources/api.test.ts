@@ -213,7 +213,6 @@ describe('createResource', () => {
     expect(before.resources).toHaveLength(SEED_RESOURCE_COUNT)
     expect(getState().resources).toHaveLength(SEED_RESOURCE_COUNT + 1)
     expect(getState().resources.at(-1)).toEqual(resourceOf(result))
-    expect(getState().appointments).toBe(before.appointments)
   })
 
   it('convierte un fallo del canal en internal y no toca el mock', async () => {
@@ -307,7 +306,6 @@ describe('updateResource', () => {
     expect(previousRow?.name).toBe('Cabina 1')
     expect(getState().resources[0]).toEqual(resourceOf(result))
     expect(getState().resources[1]).toBe(previousOther)
-    expect(getState().appointments).toBe(before.appointments)
   })
 
   it('convierte un fallo del canal en internal y no toca el mock', async () => {

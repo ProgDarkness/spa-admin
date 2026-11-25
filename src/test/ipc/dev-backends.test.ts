@@ -136,7 +136,10 @@ describe('createDevBackends', () => {
   })
 
   it('atiende los pagos con los once del seed, incluido el anulado', () => {
-    const listed = devBackends()('list_all_payments', undefined) as { id: number; voidedAt: string | null }[]
+    const backend = devBackends()
+    const listed = SEED.appointments.flatMap(
+      (appointment) => backend('list_payments', { appointmentId: appointment.id }) as { id: number; voidedAt: string | null }[],
+    )
 
     expect(listed).toHaveLength(11)
     expect(listed.filter((payment) => payment.voidedAt !== null).map((payment) => payment.id)).toEqual([7])
@@ -225,8 +228,9 @@ describe('createDevBackends', () => {
       input: { appointmentId: 5, methodId: 1, currency: 'USD', amountCents: 1_000, rateBsPerUsdE4: null },
     })
 
-    expect(second('list_all_payments', undefined)).toHaveLength(SEED.payments.length)
-    expect(first('list_all_payments', undefined)).toHaveLength(SEED.payments.length + 1)
+    const paymentsOfFive = SEED.payments.filter((payment) => payment.appointmentId === 5).length
+    expect(second('list_payments', { appointmentId: 5 })).toHaveLength(paymentsOfFive)
+    expect(first('list_payments', { appointmentId: 5 })).toHaveLength(paymentsOfFive + 1)
     expect(second('list_resources', LIST_ALL)).toHaveLength(SEED.resources.length)
     expect(second('list_services', LIST_ALL)).toHaveLength(SEED.services.length)
     expect(second('list_payment_methods', LIST_ALL)).toHaveLength(SEED.paymentMethods.length)

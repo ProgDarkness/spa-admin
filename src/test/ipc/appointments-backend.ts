@@ -153,11 +153,6 @@ export function createAppointmentsIpcBackend(next: IpcBackend, options: Appointm
       .toSorted(chronologically)
   }
 
-  function listAllAppointments(): AppointmentSummary[] {
-    requirePermission(options.session, APPOINTMENTS_READ, APPOINTMENTS_WRITE)
-    return rows.toSorted(chronologically)
-  }
-
   function createAppointment(args: unknown): AppointmentSummary {
     requirePermission(options.session, APPOINTMENTS_WRITE)
     const fields = payloadOf(args, 'input')
@@ -232,7 +227,6 @@ export function createAppointmentsIpcBackend(next: IpcBackend, options: Appointm
 
   const handlers: Readonly<Record<string, (args: unknown) => unknown>> = {
     list_appointments: listAppointments,
-    list_all_appointments: listAllAppointments,
     create_appointment: createAppointment,
     move_appointment: moveAppointment,
     transition_appointment: transitionAppointment,

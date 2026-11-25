@@ -2,7 +2,6 @@ import type { LocalDate, LocalDateTime, YearMonth } from './model'
 
 export const LOCAL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 export const LOCAL_DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
-export const YEAR_MONTH_PATTERN = /^\d{4}-\d{2}$/
 
 export type TimeRange = { startsAt: LocalDateTime; endsAt: LocalDateTime }
 

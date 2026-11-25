@@ -22,6 +22,7 @@ import type { StoreState } from './store'
 
 export type SeedUsername = 'propietaria' | 'recepcion' | 'lectura'
 export type MockUser = SessionUser
+export type SeedData = StoreState & Readonly<{ appointments: readonly Appointment[]; payments: readonly Payment[] }>
 
 const SEED_RATE_E4 = 365_000
 const RATE_STEP_E4 = 500
@@ -236,7 +237,7 @@ function buildPayments(appointments: readonly Appointment[]): Payment[] {
   })
 }
 
-export function createSeed(today: LocalDate): StoreState {
+export function createSeed(today: LocalDate): SeedData {
   const services = buildServices()
   const appointments = buildAppointments(today, services)
   return {
@@ -249,5 +250,17 @@ export function createSeed(today: LocalDate): StoreState {
     rates: buildRates(today),
     appointments,
     payments: buildPayments(appointments),
+  }
+}
+
+export function stateOf(seed: SeedData): StoreState {
+  return {
+    users: seed.users,
+    sessionUserId: seed.sessionUserId,
+    clients: seed.clients,
+    services: seed.services,
+    resources: seed.resources,
+    paymentMethods: seed.paymentMethods,
+    rates: seed.rates,
   }
 }

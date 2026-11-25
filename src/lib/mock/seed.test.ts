@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, dateOf, monthOf, overlaps } from '@/lib/datetime'
 import { PERMISSION_KEYS, type Appointment, type AppointmentStatus } from '@/lib/model'
-import { createSeed } from './seed'
+import { createSeed, stateOf } from './seed'
 
 const TODAY = '2026-11-12'
 const TODAYS_TO_CHECK = [TODAY, '2026-11-01', '2026-03-31', '2028-02-29', '2026-12-31']
@@ -239,5 +239,18 @@ describe('createSeed pureza', () => {
   it('devuelve instancias independientes', () => {
     expect(createSeed(TODAY)).not.toBe(createSeed(TODAY))
     expect(createSeed(TODAY).clients).not.toBe(createSeed(TODAY).clients)
+  })
+})
+
+describe('stateOf', () => {
+  it('conserva el estado del store y descarta las citas y los pagos del seed', () => {
+    const seed = createSeed(TODAY)
+
+    const state = stateOf(seed)
+
+    expect(Object.keys(state).sort()).toEqual(['clients', 'paymentMethods', 'rates', 'resources', 'services', 'sessionUserId', 'users'])
+    expect(state.clients).toBe(seed.clients)
+    expect(seed.appointments.length).toBeGreaterThan(0)
+    expect(seed.payments.length).toBeGreaterThan(0)
   })
 })

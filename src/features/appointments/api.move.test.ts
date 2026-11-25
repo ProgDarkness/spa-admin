@@ -119,7 +119,7 @@ describe('moveAppointment', () => {
     const moved = dataOf(await moveAppointment(1, target))
 
     expect(moved).toMatchObject({ resourceId: CABIN_TWO, startsAt: `${DAY}T14:00`, endsAt: `${DAY}T15:00`, status: 'scheduled' })
-    expect(appointmentById(1)).toEqual(moved)
+    expect(await appointmentById(1)).toEqual(moved)
   })
 
   it('conserva los snapshots aunque el servicio haya cambiado de precio y duración', async () => {
@@ -139,19 +139,17 @@ describe('moveAppointment', () => {
     expect(moved.endsAt).toBe(`${DAY}T15:00`)
   })
 
-  it('no muta la referencia previa de la cita ni de la colección', async () => {
+  it('solo cambia la cita movida y deja intacta a la vecina', async () => {
     signInAs('recepcion')
     seedAppointments(appointmentTemplate({ id: 1 }), appointmentTemplate({ id: 2, resourceId: CABIN_TWO, startsAt: `${DAY}T09:00`, endsAt: `${DAY}T10:00` }))
-    const previousRows = getState().appointments
-    const previousAppointment = appointmentById(1)
-    const untouchedSibling = appointmentById(2)
+    const previousAppointment = await appointmentById(1)
+    const untouchedSibling = await appointmentById(2)
 
-    dataOf(await moveAppointment(1, target))
+    const moved = dataOf(await moveAppointment(1, target))
 
     expect(previousAppointment.startsAt).toBe(`${DAY}T10:00`)
-    expect(previousRows[0]).toBe(previousAppointment)
-    expect(getState().appointments).not.toBe(previousRows)
-    expect(appointmentById(2)).toBe(untouchedSibling)
+    expect(moved.startsAt).toBe(`${DAY}T14:00`)
+    expect(await appointmentById(2)).toEqual(untouchedSibling)
   })
 })
 

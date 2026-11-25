@@ -131,11 +131,6 @@ export function createPaymentsIpcBackend(next: IpcBackend, options: PaymentsBack
     return rows.filter((row) => row.appointmentId === appointmentId).toSorted(chronologically)
   }
 
-  function listAllPayments(): PaymentSummary[] {
-    requirePermission(options.session, PAYMENTS_READ, PAYMENTS_WRITE)
-    return rows.toSorted(chronologically)
-  }
-
   function createPayment(args: unknown): PaymentSummary {
     requirePermission(options.session, PAYMENTS_WRITE)
     const input = decodedInput(payloadOf(args, 'input'))
@@ -184,7 +179,6 @@ export function createPaymentsIpcBackend(next: IpcBackend, options: PaymentsBack
 
   const handlers: Readonly<Record<string, (args: unknown) => unknown>> = {
     list_payments: listPayments,
-    list_all_payments: listAllPayments,
     create_payment: createPayment,
     void_payment: voidPayment,
   }
