@@ -4,12 +4,14 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getState, resetStore } from '@/lib/mock/store'
 import { freezeDate } from '@/test/clock'
+import { installDevIpc } from '@/test/dev-ipc'
 import { signInAs } from '@/test/session'
 import { useRates, useTodayRate, useUpsertRate } from './hooks'
 
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
   resetStore()
+  installDevIpc()
 })
 
 function setup() {
@@ -38,7 +40,7 @@ describe('useRates', () => {
     const { result } = renderHook(() => useRates(), { wrapper })
 
     await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(result.current.error?.message).toBe('Debes iniciar sesión')
+    expect(result.current.error?.message).toBe('Inicia sesión para continuar')
   })
 })
 

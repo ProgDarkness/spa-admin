@@ -6,6 +6,7 @@ import {
   appErrorOf,
   err,
   failureOf,
+  mapOk,
   ok,
   unwrap,
   validationError,
@@ -133,5 +134,24 @@ describe('appErrorOf', () => {
     expect(appErrorOf(new Error('boom'))).toBeNull()
     expect(appErrorOf(undefined)).toBeNull()
     expect(appErrorOf('texto')).toBeNull()
+  })
+})
+
+describe('mapOk', () => {
+  it('transforma el dato de un resultado ok', () => {
+    expect(mapOk(ok(2), (value) => value * 10)).toEqual({ status: 'ok', data: 20 })
+  })
+
+  it('devuelve el mismo error sin invocar la transformación', () => {
+    const failure = err<number>('validation', 'mal', { field: 'name' })
+    let invocations = 0
+
+    const mapped = mapOk(failure, (value) => {
+      invocations += 1
+      return value
+    })
+
+    expect(mapped).toBe(failure)
+    expect(invocations).toBe(0)
   })
 })

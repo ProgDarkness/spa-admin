@@ -1,9 +1,7 @@
 import { commands, type OwnerSetup, type OwnerSetupResult, type RecoveryRequest, type RecoveryResult, type SetupStatus } from '@/lib/bindings'
+import { callBackend } from '@/lib/ipc'
 import { commit, getState, nextId, replaceById } from '@/lib/mock/store'
 import type { Result, SessionUser, SessionView } from '@/lib/model'
-import { err } from '@/lib/result'
-
-const INTERNAL_MESSAGE = 'No se pudo completar la operación'
 
 function pointMockSessionTo(sessionUserId: number | null): void {
   const state = getState()
@@ -51,50 +49,40 @@ function syncMockOrDisconnect<T>(onOk: (data: T) => void, data: T): void {
   }
 }
 
-async function settle<T>(operation: () => Promise<Result<T>>): Promise<Result<T>> {
-  try {
-    return await operation()
-  } catch {
-    return err('internal', INTERNAL_MESSAGE)
-  }
-}
-
-async function callBackend<T>(operation: () => Promise<Result<T>>, onOk: (data: T) => void): Promise<Result<T>> {
-  const result = await settle(operation)
-  if (result.status === 'ok') syncMockOrDisconnect(onOk, result.data)
-  return result
+function callAuthBackend<T>(operation: () => Promise<Result<T>>, onOk: (data: T) => void): Promise<Result<T>> {
+  return callBackend(operation, (data) => syncMockOrDisconnect(onOk, data))
 }
 
 function ignoreData(): void {}
 
 export function login(username: string, password: string): Promise<Result<SessionUser>> {
-  return callBackend(() => commands.login({ username, password }), syncMockSession)
+  return callAuthBackend(() => commands.login({ username, password }), syncMockSession)
 }
 
 export function logout(): Promise<Result<null>> {
-  return callBackend(() => commands.logout(), () => syncMockSession(null))
+  return callAuthBackend(() => commands.logout(), () => syncMockSession(null))
 }
 
 export function currentSession(): Promise<Result<SessionView | null>> {
-  return callBackend(() => commands.currentSession(), syncMockSessionView)
+  return callAuthBackend(() => commands.currentSession(), syncMockSessionView)
 }
 
 export function recordActivity(): Promise<Result<SessionView | null>> {
-  return callBackend(() => commands.recordActivity(), syncMockSessionView)
+  return callAuthBackend(() => commands.recordActivity(), syncMockSessionView)
 }
 
 export function unlock(password: string): Promise<Result<SessionUser>> {
-  return callBackend(() => commands.unlock({ password }), syncMockSession)
+  return callAuthBackend(() => commands.unlock({ password }), syncMockSession)
 }
 
 export function setupStatus(): Promise<Result<SetupStatus>> {
-  return callBackend(() => commands.setupStatus(), ignoreData)
+  return callAuthBackend(() => commands.setupStatus(), ignoreData)
 }
 
 export function setupOwner(input: OwnerSetup): Promise<Result<OwnerSetupResult>> {
-  return callBackend(() => commands.setupOwner(input), ignoreData)
+  return callAuthBackend(() => commands.setupOwner(input), ignoreData)
 }
 
 export function recoverPassword(input: RecoveryRequest): Promise<Result<RecoveryResult>> {
-  return callBackend(() => commands.recoverPassword(input), ignoreData)
+  return callAuthBackend(() => commands.recoverPassword(input), ignoreData)
 }

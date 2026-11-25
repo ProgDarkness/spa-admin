@@ -2,12 +2,14 @@ import { screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getState, resetStore } from '@/lib/mock/store'
 import { freezeDate } from '@/test/clock'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import RatesPage from './page'
 
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
   resetStore()
+  installDevIpc()
 })
 
 describe('RatesPage', () => {
@@ -46,6 +48,6 @@ describe('RatesPage', () => {
   it('muestra el error cuando no hay permiso de lectura', async () => {
     renderWithProviders(<RatesPage />)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Debes iniciar sesión')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Inicia sesión para continuar')
   })
 })

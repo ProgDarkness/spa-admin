@@ -42,7 +42,7 @@ describe('AppShell', () => {
     const labels = within(navigation)
       .getAllByRole('link')
       .map((link) => link.textContent)
-    expect(labels).toEqual(['Citas', 'Clientes', 'Catálogo', 'Tasas'])
+    expect(labels).toEqual(['Citas', 'Clientes', 'Catálogo', 'Tasas', 'Métodos de pago'])
   })
 
   it('lista solo los destinos permitidos para lectura', async () => {
@@ -51,13 +51,13 @@ describe('AppShell', () => {
     const labels = within(navigation)
       .getAllByRole('link')
       .map((link) => link.textContent)
-    expect(labels).toEqual(['Citas', 'Clientes', 'Catálogo'])
+    expect(labels).toEqual(['Citas', 'Clientes', 'Catálogo', 'Métodos de pago'])
   })
 
   it('lista todos los destinos para propietaria', async () => {
     const { navigation } = await renderShell('propietaria')
 
-    expect(within(navigation).getAllByRole('link')).toHaveLength(6)
+    expect(within(navigation).getAllByRole('link')).toHaveLength(7)
   })
 
   it('muestra el nombre de usuario y el rol', async () => {

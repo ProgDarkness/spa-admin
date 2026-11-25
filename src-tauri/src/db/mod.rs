@@ -23,6 +23,8 @@ pub enum DbError {
     UnknownPermission,
     #[error("invalid instant")]
     InvalidInstant,
+    #[error("audit action does not apply to this entity")]
+    InvalidAuditPair,
 }
 
 pub(crate) fn require_valid_instant(

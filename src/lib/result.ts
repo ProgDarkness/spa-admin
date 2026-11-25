@@ -21,6 +21,10 @@ export function err<T = never>(code: AppErrorCode, message: string, details?: Er
   }
 }
 
+export function mapOk<T, U>(result: Result<T>, transform: (data: T) => U): Result<U> {
+  return result.status === 'ok' ? ok(transform(result.data)) : result
+}
+
 export function validationError<T = never>(issues: readonly z.core.$ZodIssue[]): Result<T> {
   const firstIssue = issues[0]
   const pathSegments = firstIssue?.path.map(String) ?? []

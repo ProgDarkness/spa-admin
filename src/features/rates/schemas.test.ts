@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_RATE_E4 } from '@/lib/money'
-import { rateFormFieldsSchema, rateFormSchema, rateInputSchema } from './schemas'
+import { rateFormFieldsSchema, rateFormSchema } from './schemas'
 
 describe('rateFormFieldsSchema', () => {
   it('conserva el texto y rechaza más de 4 decimales', () => {
@@ -46,40 +45,42 @@ describe('rateFormSchema', () => {
   })
 })
 
+const INVALID_DATE_MESSAGE = 'Ingresa una fecha válida'
+
 describe('fechas inexistentes', () => {
-  it.each(['2026-02-31', '2026-13-45'])('rateInputSchema rechaza %s con mensaje en español', (date) => {
-    const result = rateInputSchema.safeParse({ date, rateBsPerUsdE4: 365000 })
-
-    expect(result.success).toBe(false)
-    expect(result.error?.issues[0]?.message).toBe('Ingresa una fecha válida')
-  })
-
-  it.each(['2026-02-31', '2026-13-45'])('rateFormFieldsSchema rechaza %s en el campo date', (date) => {
+  it.each(['2026-02-31', '2026-13-45'])('rateFormFieldsSchema rechaza %s en el campo date con mensaje en español', (date) => {
     const result = rateFormFieldsSchema.safeParse({ date, rateText: '36,50' })
 
     expect(result.success).toBe(false)
     expect(result.error?.issues[0]?.path).toEqual(['date'])
+    expect(result.error?.issues[0]?.message).toBe(INVALID_DATE_MESSAGE)
   })
 
-  it.each(['2026-02-31', '2026-13-45'])('rateFormSchema rechaza %s en el campo date', (date) => {
+  it.each(['2026-02-31', '2026-13-45'])('rateFormSchema rechaza %s en el campo date con mensaje en español', (date) => {
     const result = rateFormSchema.safeParse({ date, rateText: '36,50' })
 
     expect(result.success).toBe(false)
     expect(result.error?.issues[0]?.path).toEqual(['date'])
+    expect(result.error?.issues[0]?.message).toBe(INVALID_DATE_MESSAGE)
   })
 })
 
-describe('rateInputSchema', () => {
-  it('acepta una tasa entera dentro del rango', () => {
-    expect(rateInputSchema.safeParse({ date: '2026-11-12', rateBsPerUsdE4: 1 }).success).toBe(true)
-    expect(rateInputSchema.safeParse({ date: '2026-11-12', rateBsPerUsdE4: MAX_RATE_E4 }).success).toBe(true)
-  })
+describe('años soportados de la tasa', () => {
+  it.each(['0000-01-01', '0001-01-01', '1999-12-31', '2100-01-01', '9999-12-31'])(
+    'rechaza %s en los dos esquemas con mensaje en español',
+    (date) => {
+      const fields = rateFormFieldsSchema.safeParse({ date, rateText: '36,50' })
+      const form = rateFormSchema.safeParse({ date, rateText: '36,50' })
 
-  it.each([0, -5, 1.5, Number.NaN, MAX_RATE_E4 + 1, Infinity])('rechaza la tasa %s', (rateBsPerUsdE4) => {
-    expect(rateInputSchema.safeParse({ date: '2026-11-12', rateBsPerUsdE4 }).success).toBe(false)
-  })
+      expect(fields.error?.issues[0]?.path).toEqual(['date'])
+      expect(fields.error?.issues[0]?.message).toBe(INVALID_DATE_MESSAGE)
+      expect(form.error?.issues[0]?.path).toEqual(['date'])
+      expect(form.error?.issues[0]?.message).toBe(INVALID_DATE_MESSAGE)
+    },
+  )
 
-  it('rechaza una fecha con formato inválido', () => {
-    expect(rateInputSchema.safeParse({ date: '12-11-2026', rateBsPerUsdE4: 365000 }).success).toBe(false)
+  it.each(['2000-01-01', '2099-12-31'])('acepta %s en los dos esquemas', (date) => {
+    expect(rateFormFieldsSchema.safeParse({ date, rateText: '36,50' }).success).toBe(true)
+    expect(rateFormSchema.safeParse({ date, rateText: '36,50' }).success).toBe(true)
   })
 })

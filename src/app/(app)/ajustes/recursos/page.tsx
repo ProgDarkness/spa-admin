@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DeactivateDialog } from '@/features/resources/components/deactivate-dialog'
@@ -83,6 +83,17 @@ function AlertMessage({ message }: { message: string | null }) {
   )
 }
 
+type ListingStateProps = {
+  query: Pick<ReturnType<typeof useResources>, 'isPending' | 'error'>
+  children: ReactNode
+}
+
+function ListingState({ query, children }: ListingStateProps) {
+  if (query.isPending) return <p role="status">Cargando recursos…</p>
+  if (query.error) return <AlertMessage message={query.error.message} />
+  return <>{children}</>
+}
+
 export default function ResourcesPage() {
   const canManage = useCan('resources.manage')
   const [includeInactive, setIncludeInactive] = useState(true)
@@ -113,16 +124,14 @@ export default function ResourcesPage() {
         Mostrar inactivos
       </label>
       <AlertMessage message={actions.actionFailure?.message ?? null} />
-      {resources.isError ? (
-        <AlertMessage message={resources.error.message} />
-      ) : (
+      <ListingState query={resources}>
         <ResourceTable
           resources={resources.data ?? []}
           canManage={canManage}
           onEdit={(resource) => openEditor({ mode: 'edit', resource })}
           onToggleActive={toggleActive}
         />
-      )}
+      </ListingState>
       {editor ? <EditorDialog editor={editor} onSubmit={actions.submitEditor} onClose={closeEditor} /> : null}
       {deactivating ? (
         <DeactivateDialog

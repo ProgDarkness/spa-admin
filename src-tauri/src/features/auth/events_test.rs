@@ -10,8 +10,9 @@ use crate::features::auth::model::{LoginCredentials, PermissionKey, SessionStatu
 use crate::features::auth::password::PasswordPolicy;
 use crate::features::auth::repository::{insert_user, NewUser};
 use crate::features::auth::service::{
-    active_user, current_view, locked_user_for_unlock, login, record_activity_view,
-    require_permission, AuthError, Beat, SessionState, IDLE_TIMEOUT,
+    current_view, locked_user_for_unlock, login, record_activity_view,
+    require_active_user_or_roll_back, require_permission, AuthError, Beat, SessionState,
+    IDLE_TIMEOUT,
 };
 
 const OWNER_ROLE_ID: i64 = 1;
@@ -167,7 +168,7 @@ fn audit_failure_on_idle_lock_is_an_error_not_a_silent_pass() {
     conn.execute_batch(FAIL_AUDIT_INSERTS).unwrap();
     let at = idle_beat(&state);
 
-    let result = active_user(&conn, &state, at);
+    let result = require_active_user_or_roll_back(&conn, &state, at);
 
     assert!(matches!(result, Err(AuthError::Db(_))));
 }
@@ -181,16 +182,16 @@ fn failed_lock_audit_is_reemitted_until_confirmed_and_written_once() {
     conn.execute_batch(FAIL_AUDIT_INSERTS).unwrap();
     let at = idle_beat(&state);
 
-    let first = active_user(&conn, &state, at);
-    let second = active_user(&conn, &state, at);
+    let first = require_active_user_or_roll_back(&conn, &state, at);
+    let second = require_active_user_or_roll_back(&conn, &state, at);
 
     assert!(matches!(first, Err(AuthError::Db(_))));
     assert!(matches!(second, Err(AuthError::Db(_))));
     assert!(list_all(&conn).unwrap().is_empty());
 
     conn.execute_batch(DROP_FAIL_AUDIT).unwrap();
-    let recovered = active_user(&conn, &state, at);
-    let after = active_user(&conn, &state, at);
+    let recovered = require_active_user_or_roll_back(&conn, &state, at);
+    let after = require_active_user_or_roll_back(&conn, &state, at);
 
     assert!(matches!(recovered, Err(AuthError::Locked)));
     assert!(matches!(after, Err(AuthError::Locked)));

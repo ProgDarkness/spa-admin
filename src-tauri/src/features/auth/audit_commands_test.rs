@@ -62,7 +62,7 @@ fn record(fixture: &Fixture, actor: Option<i64>, action: AuditAction) -> i64 {
     let entry = NewAuditEntry {
         actor_user_id: actor,
         action,
-        entity: AuditEntity::System,
+        entity: action.allowed_entities()[0],
         entity_id: None,
         diff: Some(Diff::note("seed")),
     };
@@ -291,7 +291,7 @@ fn list_audit_includes_actor_username_and_null_for_system() {
     assert_eq!(actor.actor_username.as_deref(), Some("propietaria"));
     assert_eq!(actor.actor_user_id, Some(owner));
     assert_eq!(actor.action, AuditAction::UserUpdated);
-    assert_eq!(actor.entity, AuditEntity::System);
+    assert_eq!(actor.entity, AuditEntity::User);
     assert_eq!(actor.diff.as_deref(), Some(r#"{"note":"seed"}"#));
 }
 

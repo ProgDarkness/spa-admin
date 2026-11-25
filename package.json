@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "check:bundle": "bun scripts/check-bundle-cli.ts out",
     "test": "vitest run",
     "test:cov": "vitest run --coverage",
     "e2e": "playwright test",

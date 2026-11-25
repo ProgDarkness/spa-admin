@@ -20,6 +20,21 @@
     "allow-list-roles",
     "allow-create-role",
     "allow-set-role-permissions",
-    "allow-list-audit"
+    "allow-list-audit",
+    "allow-list-services",
+    "allow-create-service",
+    "allow-update-service",
+    "allow-set-service-active",
+    "allow-list-resources",
+    "allow-create-resource",
+    "allow-update-resource",
+    "allow-set-resource-active",
+    "allow-list-payment-methods",
+    "allow-create-payment-method",
+    "allow-update-payment-method",
+    "allow-set-payment-method-active",
+    "allow-list-rates",
+    "allow-get-rate",
+    "allow-upsert-rate"
   ]
 }

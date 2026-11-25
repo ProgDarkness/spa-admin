@@ -1,53 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_AMOUNT_CENTS } from '@/lib/money'
-import { serviceFormSchema, serviceInputSchema } from './schemas'
-
-const validInput = { name: 'Limpieza', priceCents: 3_500, durationMin: 60 }
+import { serviceFormSchema } from './schemas'
 
 function issueFields(result: { success: false; error: { issues: readonly { path: PropertyKey[] }[] } }): string[] {
   return result.error.issues.map((issue) => issue.path.map(String).join('.'))
 }
-
-describe('serviceInputSchema', () => {
-  it('acepta un servicio válido y recorta el nombre', () => {
-    const parsed = serviceInputSchema.safeParse({ ...validInput, name: '  Limpieza  ' })
-
-    expect(parsed).toMatchObject({ success: true, data: validInput })
-  })
-
-  it.each([
-    ['nombre vacío', { ...validInput, name: '' }, 'name'],
-    ['nombre solo espacios', { ...validInput, name: '   ' }, 'name'],
-    ['precio cero', { ...validInput, priceCents: 0 }, 'priceCents'],
-    ['precio negativo', { ...validInput, priceCents: -1 }, 'priceCents'],
-    ['precio decimal', { ...validInput, priceCents: 10.5 }, 'priceCents'],
-    ['precio sobre el máximo', { ...validInput, priceCents: MAX_AMOUNT_CENTS + 1 }, 'priceCents'],
-    ['duración cero', { ...validInput, durationMin: 0 }, 'durationMin'],
-    ['duración negativa', { ...validInput, durationMin: -5 }, 'durationMin'],
-    ['duración no múltiplo de 5', { ...validInput, durationMin: 12 }, 'durationMin'],
-    ['duración decimal', { ...validInput, durationMin: 7.5 }, 'durationMin'],
-    ['duración NaN', { ...validInput, durationMin: Number.NaN }, 'durationMin'],
-  ])('rechaza %s señalando el campo', (_label, input, field) => {
-    const parsed = serviceInputSchema.safeParse(input)
-
-    expect(parsed.success).toBe(false)
-    if (!parsed.success) expect(issueFields(parsed)).toContain(field)
-  })
-
-  it('acepta los límites: precio 1 y máximo, duración 5', () => {
-    expect(serviceInputSchema.safeParse({ ...validInput, priceCents: 1, durationMin: 5 }).success).toBe(true)
-    expect(serviceInputSchema.safeParse({ ...validInput, priceCents: MAX_AMOUNT_CENTS }).success).toBe(true)
-  })
-
-  it('rechaza tipos inválidos y nulos', () => {
-    expect(serviceInputSchema.safeParse(null).success).toBe(false)
-    expect(serviceInputSchema.safeParse({ ...validInput, priceCents: '10' }).success).toBe(false)
-  })
-
-  it('acepta nombres con Unicode y emojis', () => {
-    expect(serviceInputSchema.safeParse({ ...validInput, name: 'Masaje relajante ✨ ñ' }).success).toBe(true)
-  })
-})
 
 describe('serviceFormSchema', () => {
   const validForm = { name: ' Limpieza ', price: '35,50', durationMin: '60' }
@@ -101,25 +57,73 @@ describe('serviceFormSchema', () => {
   })
 })
 
-describe('límite del nombre del servicio', () => {
+describe('nombre del servicio', () => {
   const MAX_NAME_LENGTH = 80
-  const MESSAGE = 'El nombre no puede superar 80 caracteres'
-  const validForm = { name: 'Limpieza', price: '35,00', durationMin: '60' }
+  const TOO_LONG = 'El nombre no puede superar 80 caracteres'
+  const INVALID_CHARACTERS = 'El nombre contiene caracteres no permitidos'
+  const form = { price: '35,00', durationMin: '60' }
 
-  it('acepta 80 caracteres en la entrada y el formulario', () => {
-    const name = 'a'.repeat(MAX_NAME_LENGTH)
+  function nameOutcome(name: string) {
+    return serviceFormSchema.safeParse({ ...form, name })
+  }
 
-    expect(serviceInputSchema.safeParse({ ...validInput, name }).success).toBe(true)
-    expect(serviceFormSchema.safeParse({ ...validForm, name }).success).toBe(true)
+  function nameIssue(name: string) {
+    const parsed = nameOutcome(name)
+    return parsed.success ? null : parsed.error.issues.find((issue) => issue.path.join('.') === 'name')
+  }
+
+  it('acepta nombres con Unicode, acentos y emojis', () => {
+    expect(nameOutcome('Masaje relajante ✨ ñ').success).toBe(true)
+    expect(nameOutcome('Limpieza facial con café').success).toBe(true)
   })
 
-  it('rechaza 81 caracteres con mensaje en español en la entrada y el formulario', () => {
-    const name = 'a'.repeat(MAX_NAME_LENGTH + 1)
+  it('compone a NFC y colapsa los espacios ASCII', () => {
+    expect(nameOutcome('Café  con   leche')).toMatchObject({ success: true, data: { name: 'Café con leche' } })
+  })
 
-    const input = serviceInputSchema.safeParse({ ...validInput, name })
-    const form = serviceFormSchema.safeParse({ ...validForm, name })
+  it.each([
+    ['cero de ancho U+200B', 'Sa​la'],
+    ['inversión bidi U+202E', 'Sa‮la'],
+    ['BOM interno U+FEFF', 'Sa﻿la'],
+    ['salto de línea', 'Sa\nla'],
+    ['tabulación', 'Sa\tla'],
+    ['separador de línea U+2028', 'Sa la'],
+    ['espacio de no separación U+00A0', 'Sa la'],
+    ['etiqueta astral U+E0020', 'Sa\u{E0020}la'],
+  ])('rechaza %s con mensaje en español', (_label, name) => {
+    expect(nameIssue(name)?.message).toBe(INVALID_CHARACTERS)
+  })
 
-    expect(!input.success && input.error.issues[0]).toMatchObject({ path: ['name'], message: MESSAGE })
-    expect(!form.success && form.error.issues[0]).toMatchObject({ path: ['name'], message: MESSAGE })
+  it('rechaza un U+FEFF en el borde porque no es White_Space', () => {
+    expect(nameIssue('﻿Sala')?.message).toBe(INVALID_CHARACTERS)
+  })
+
+  it('recorta U+0085 en el borde como Rust', () => {
+    expect(nameOutcome('\u0085Sala\u0085')).toMatchObject({ success: true, data: { name: 'Sala' } })
+  })
+
+  it('rechaza un nombre vacío tras recortar con el mensaje existente', () => {
+    expect(nameIssue(' \u0085 ')?.message).toBe('Ingresa el nombre del servicio')
+  })
+
+  it('acepta 80 code points y rechaza 81 aunque sean emojis de dos unidades UTF-16', () => {
+    expect(nameOutcome('😀'.repeat(MAX_NAME_LENGTH)).success).toBe(true)
+    expect(nameIssue('😀'.repeat(MAX_NAME_LENGTH + 1))?.message).toBe(TOO_LONG)
+  })
+
+  it('acepta 80 caracteres ASCII y rechaza 81 con mensaje en español', () => {
+    expect(nameOutcome('a'.repeat(MAX_NAME_LENGTH)).success).toBe(true)
+    expect(nameIssue('a'.repeat(MAX_NAME_LENGTH + 1))).toMatchObject({ path: ['name'], message: TOO_LONG })
+  })
+
+  it('cuenta tras NFC: 80 code points compuestos pero más de 80 descompuestos se aceptan', () => {
+    const decomposed = 'Café'.repeat(MAX_NAME_LENGTH / 4)
+
+    expect([...decomposed].length).toBeGreaterThan(MAX_NAME_LENGTH)
+    expect(nameOutcome(decomposed).success).toBe(true)
+  })
+
+  it('cuenta tras recortar y colapsar espacios', () => {
+    expect(nameOutcome(`  ${'a'.repeat(39)}   ${'b'.repeat(40)}  `).success).toBe(true)
   })
 })

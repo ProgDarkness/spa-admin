@@ -40,7 +40,7 @@ const READ_ONLY_PERMISSIONS: [&str; 4] = [
     "payments.read",
 ];
 
-fn migrated() -> Connection {
+pub(super) fn migrated() -> Connection {
     let mut conn = Connection::open_in_memory().unwrap();
     conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
     migrate(&mut conn).unwrap();
@@ -68,7 +68,7 @@ fn permissions_of(conn: &Connection, role_id: i64) -> BTreeSet<String> {
     )
 }
 
-fn count(conn: &Connection, table: &str) -> i64 {
+pub(super) fn count(conn: &Connection, table: &str) -> i64 {
     conn.query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
         row.get(0)
     })
@@ -183,7 +183,11 @@ fn migration_is_idempotent() {
     );
 }
 
-fn insert_user(conn: &Connection, username: &str, role_id: i64) -> rusqlite::Result<usize> {
+pub(super) fn insert_user(
+    conn: &Connection,
+    username: &str,
+    role_id: i64,
+) -> rusqlite::Result<usize> {
     conn.execute(
         "INSERT INTO users (username, password_hash, role_id) VALUES (?1, 'h', ?2)",
         rusqlite::params![username, role_id],
@@ -206,7 +210,7 @@ fn users_table_enforces_unique_username_and_fk() {
     );
 }
 
-fn is_minute_precision_local_timestamp(value: &str) -> bool {
+pub(super) fn is_minute_precision_local_timestamp(value: &str) -> bool {
     const SHAPE: &str = "dddd-dd-ddTdd:dd";
     value.len() == SHAPE.len()
         && value.chars().zip(SHAPE.chars()).all(|(actual, expected)| {
@@ -258,7 +262,7 @@ fn user_version(conn: &Connection) -> i64 {
         .unwrap()
 }
 
-fn table_exists(conn: &Connection, name: &str) -> bool {
+pub(super) fn table_exists(conn: &Connection, name: &str) -> bool {
     conn.query_row(
         "SELECT count(*) FROM sqlite_master WHERE name = ?1",
         [name],
@@ -271,7 +275,7 @@ fn table_exists(conn: &Connection, name: &str) -> bool {
 #[test]
 fn user_version_equals_number_of_applied_migrations() {
     let conn = migrated();
-    assert_eq!(user_version(&conn), 4);
+    assert_eq!(user_version(&conn), 9);
 }
 
 #[test]
@@ -291,7 +295,7 @@ fn reopening_a_persisted_database_does_not_reapply_migrations() {
     }
     let mut reopened = Connection::open(&path).unwrap();
     migrate(&mut reopened).unwrap();
-    assert_eq!((user_version(&reopened), count(&reopened, "users")), (4, 1));
+    assert_eq!((user_version(&reopened), count(&reopened, "users")), (9, 1));
 }
 
 #[test]
@@ -304,7 +308,7 @@ fn upgrades_a_database_left_at_version_one() {
     let duplicate = insert_user(&conn, "ANA", 1).unwrap_err();
     assert_eq!(
         (user_version(&conn), duplicate.sqlite_error_code()),
-        (4, Some(ErrorCode::ConstraintViolation))
+        (9, Some(ErrorCode::ConstraintViolation))
     );
 }
 
@@ -355,7 +359,7 @@ fn newer_schema_is_reported_with_found_and_supported_versions() {
         failure,
         DbError::SchemaNewerThanApp {
             found: 99,
-            supported: 4
+            supported: 9
         }
     ));
 }
@@ -370,4 +374,8 @@ fn audit_log_table_exists_after_migrating() {
 fn login_throttle_table_exists_after_migrating() {
     let conn = migrated();
     assert!(table_exists(&conn, "login_throttle"));
+}
+
+pub(super) fn is_constraint_violation(outcome: rusqlite::Result<usize>) -> bool {
+    outcome.is_err_and(|error| error.sqlite_error_code() == Some(ErrorCode::ConstraintViolation))
 }

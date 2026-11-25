@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { freezeDate } from '@/test/clock'
 import { createSeed } from './seed'
-import { appendRow, commit, findById, getState, nextId, replaceById, resetStore } from './store'
+import { appendRow, commit, findById, getState, nextId, replaceById, resetStore, upsertById } from './store'
 
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
@@ -94,6 +94,31 @@ describe('appendRow', () => {
     const next = appendRow(rows, 3)
     expect(next).toEqual([1, 2, 3])
     expect(rows).toEqual([1, 2])
+    expect(next).not.toBe(rows)
+  })
+})
+
+describe('upsertById', () => {
+  const rows = [
+    { id: 1, name: 'a' },
+    { id: 2, name: 'b' },
+  ]
+
+  it('reemplaza en su posición la fila con el mismo id sin mutar el original', () => {
+    const next = upsertById(rows, { id: 1, name: 'z' })
+
+    expect(next).toEqual([
+      { id: 1, name: 'z' },
+      { id: 2, name: 'b' },
+    ])
+    expect(rows[0]?.name).toBe('a')
+    expect(next[1]).toBe(rows[1])
+  })
+
+  it('agrega al final la fila con id nuevo', () => {
+    const next = upsertById(rows, { id: 7, name: 'n' })
+
+    expect(next).toEqual([...rows, { id: 7, name: 'n' }])
     expect(next).not.toBe(rows)
   })
 })

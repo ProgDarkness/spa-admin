@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { commit, getState } from '@/lib/mock/store'
 import type { Payment, PaymentInput } from '@/lib/model'
+import { installDevIpc } from '@/test/dev-ipc'
 import { signInAs } from '@/test/session'
 import {
   appointmentTemplate,
@@ -35,6 +36,7 @@ function input(overrides: Partial<PaymentInput> = {}): PaymentInput {
 
 function withoutTodayRate(): void {
   commit({ ...getState(), rates: getState().rates.filter((rate) => rate.date !== TODAY) })
+  installDevIpc()
 }
 
 beforeEach(() => {
@@ -174,6 +176,7 @@ describe('createPayment reglas de cita y método', () => {
         method.id === CASH_METHOD ? { ...method, active: false } : method,
       ),
     })
+    installDevIpc()
 
     const result = await createPayment(input())
 

@@ -1,3 +1,5 @@
+import { listPaymentMethods } from '@/features/payment-methods/api'
+import { listRates } from '@/features/rates/api'
 import { todayLocal, nowLocal } from '@/lib/datetime'
 import { authorize } from '@/lib/mock/authorize'
 import { appendRow, commit, findById, getState, nextId, replaceById, type StoreState } from '@/lib/mock/store'
@@ -25,6 +27,20 @@ function conversionOf(input: PaymentInput, state: StoreState): Result<{ rate: Ra
   return ok({ rate, usd: usdEquivalentCents(input.amountCents, rate) })
 }
 
+const INCLUDE_INACTIVE = { includeInactive: true }
+
+function needsDayRate(input: PaymentInput): boolean {
+  return input.currency === 'VES' && input.rateBsPerUsdE4 === null
+}
+
+async function refreshFromRust(input: PaymentInput): Promise<Result<never> | null> {
+  const methods = await listPaymentMethods(INCLUDE_INACTIVE)
+  if (methods.status === 'error') return methods
+  if (!needsDayRate(input)) return null
+  const rates = await listRates()
+  return rates.status === 'error' ? rates : null
+}
+
 export async function listPayments(appointmentId: Id): Promise<Result<Payment[]>> {
   const state = getState()
   const access = authorize(state, PAYMENTS_READ)
@@ -33,12 +49,14 @@ export async function listPayments(appointmentId: Id): Promise<Result<Payment[]>
 }
 
 export async function createPayment(input: PaymentInput): Promise<Result<Payment>> {
-  const state = getState()
-  const access = authorize(state, PAYMENTS_WRITE)
+  const access = authorize(getState(), PAYMENTS_WRITE)
   if (access.status === 'error') return access
   const parsed = paymentInputSchema.safeParse(input)
   if (!parsed.success) return validationError(parsed.error.issues)
   const valid = parsed.data
+  const refreshFailure = await refreshFromRust(valid)
+  if (refreshFailure) return refreshFailure
+  const state = getState()
   if (!findById(state.appointments, valid.appointmentId)) {
     return err('notFound', 'La cita no existe', { field: 'appointmentId' })
   }

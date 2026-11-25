@@ -5,8 +5,8 @@ import { appointmentTemplate, resetWithEmptyAgenda, seedAppointments } from '@/t
 import { renderWithProviders } from '@/test/render'
 import { PaymentList } from './payment-list'
 
-vi.mock('@/features/catalog/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/catalog/api')>()),
+vi.mock('@/features/payment-methods/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/payment-methods/api')>()),
   listPaymentMethods: () => new Promise(() => {}),
 }))
 

@@ -9,6 +9,7 @@ use crate::features::auth::repository::{insert_user, NewUser};
 
 pub(super) const OWNER_ROLE_ID: i64 = 1;
 pub(super) const RECEPTION_ROLE_ID: i64 = 2;
+pub(super) const READ_ONLY_ROLE_ID: i64 = 3;
 pub(super) const PASSWORD: &str = "clave-segura-1";
 
 pub(super) fn migrated() -> Connection {

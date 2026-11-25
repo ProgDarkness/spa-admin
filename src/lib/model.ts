@@ -1,3 +1,12 @@
+import type {
+  PaymentMethodFilter,
+  PaymentMethodSummary,
+  ResourceFilter,
+  ResourceSummary,
+  ServiceFilter,
+  ServiceSummary,
+} from './bindings'
+
 export type Id = number
 export type Cents = number
 export type RateE4 = number
@@ -51,24 +60,18 @@ export type Client = {
 export type ClientInput = { firstName: string; lastName: string; nationalId: string; phone: string }
 export type ClientListFilter = { query: string | null; includeDeleted: boolean }
 
-export type Service = {
-  id: Id
-  name: string
-  priceCents: Cents
-  currency: 'USD'
-  durationMin: number
-  active: boolean
-}
-export type ServiceInput = { name: string; priceCents: Cents; durationMin: number }
-export type ServiceListFilter = { includeInactive: boolean }
+export type Service = Omit<ServiceSummary, 'currency' | 'createdAt' | 'updatedAt'> & { currency: 'USD' }
+export type { ServiceInput } from './bindings'
+export type ServiceListFilter = ServiceFilter
 
-export type ResourceKind = 'cabin' | 'manicure'
-export type Resource = { id: Id; name: string; kind: ResourceKind; active: boolean }
-export type ResourceInput = { name: string; kind: ResourceKind }
-export type ResourceListFilter = { includeInactive: boolean }
+export type Resource = Omit<ResourceSummary, 'createdAt' | 'updatedAt'>
+export type { ResourceInput, ResourceKind } from './bindings'
+export type ResourceListFilter = ResourceFilter
 
-export type PaymentMethod = { id: Id; name: string; active: boolean }
-export type ExchangeRate = { date: LocalDate; rateBsPerUsdE4: RateE4 }
+export type PaymentMethod = Omit<PaymentMethodSummary, 'createdAt' | 'updatedAt'>
+export type { PaymentMethodInput } from './bindings'
+export type PaymentMethodListFilter = PaymentMethodFilter
+export type { ExchangeRate } from './bindings'
 
 export type AppointmentStatus = 'scheduled' | 'inProgress' | 'completed' | 'cancelled' | 'noShow'
 export type Appointment = {

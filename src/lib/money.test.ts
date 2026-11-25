@@ -7,6 +7,7 @@ import {
   emptyAmounts,
   formatCents,
   formatRateE4,
+  formatRateE4Fixed,
   parseCents,
   parseRateE4,
   usdEquivalentCents,
@@ -74,13 +75,23 @@ describe('parseRateE4', () => {
     expect(parseRateE4(text)).toBe(expected)
   })
 
-  it.each(['36.12345', '-1', '0', '0,0000', '', '  ', 'abc', '36,', ',5', '1e3', '36,5,1', '36 5'])('%j => null', (text) => {
+  it.each(['36.12345', '-1', '0', '0,0000', '', '  ', 'abc', '36,', ',5', '1e3', '36,5,1', '36 5', 'NaN', 'Infinity', '-0,0001', '1,5e0'])('%j => null', (text) => {
     expect(parseRateE4(text)).toBeNull()
   })
 
   it('rechaza valores sobre el tope', () => {
     expect(parseRateE4('10000001')).toBeNull()
     expect(parseRateE4('10000000')).toBe(MAX_RATE_E4)
+  })
+
+  it('acepta la tasa mínima 1 y rechaza la tasa 0', () => {
+    expect(parseRateE4('0,0001')).toBe(1)
+    expect(parseRateE4('0,0000')).toBeNull()
+  })
+
+  it('rechaza exactamente MAX_RATE_E4 + 1 y acepta exactamente MAX_RATE_E4', () => {
+    expect(parseRateE4('10000000,0000')).toBe(MAX_RATE_E4)
+    expect(parseRateE4('10000000,0001')).toBeNull()
   })
 })
 
@@ -96,6 +107,18 @@ describe('formatRateE4', () => {
 
   it('es inverso de parseRateE4', () => {
     expect(parseRateE4(formatRateE4(361_234))).toBe(361_234)
+  })
+})
+
+describe('formatRateE4Fixed', () => {
+  it.each([
+    [36_500, '3,6500'],
+    [365_000, '36,5000'],
+    [1, '0,0001'],
+    [361_234, '36,1234'],
+    [MAX_RATE_E4, '10.000.000,0000'],
+  ])('%s => %s', (rate, expected) => {
+    expect(formatRateE4Fixed(rate)).toBe(expected)
   })
 })
 

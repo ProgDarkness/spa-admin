@@ -41,10 +41,23 @@ fn within(ranges: &[(u32, u32)], character: char) -> bool {
         .any(|&(first, last)| (first..=last).contains(&code_point))
 }
 
-pub fn is_allowed_username_character(character: char) -> bool {
+pub fn is_allowed_text_character(character: char) -> bool {
     !character.is_control()
         && !within(&FORMAT_CHARACTER_RANGES, character)
         && !within(&SEPARATOR_RANGES, character)
+}
+
+pub fn collapse_ascii_spaces(text: &str) -> String {
+    let mut collapsed = String::with_capacity(text.len());
+    let mut previous_was_space = false;
+    for character in text.chars() {
+        let is_space = character == ' ';
+        if !(is_space && previous_was_space) {
+            collapsed.push(character);
+        }
+        previous_was_space = is_space;
+    }
+    collapsed
 }
 
 pub fn unicode_casefold(text: &str) -> String {

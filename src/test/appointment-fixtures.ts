@@ -1,6 +1,7 @@
 import { commit, getState, resetStore } from '@/lib/mock/store'
 import type { Appointment, AppointmentInput, Id, Result } from '@/lib/model'
 import { freezeDate } from './clock'
+import { installDevIpc } from './dev-ipc'
 
 export const NOW = '2026-11-12T09:00'
 export const DAY = '2026-11-13'
@@ -21,6 +22,7 @@ export function resetWithEmptyAgenda(): void {
   freezeDate(NOW)
   resetStore()
   commit({ ...getState(), appointments: [] })
+  installDevIpc()
 }
 
 export function appointmentTemplate(overrides: Partial<Appointment> = {}): Appointment {

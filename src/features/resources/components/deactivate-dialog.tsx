@@ -71,7 +71,7 @@ export function DeactivateDialog({ resource, onConfirm, onClose }: DeactivateDia
           <BlockingAppointments resource={resource} entityIds={failure.entityIds} />
         ) : null}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={isConfirming}>
             Cancelar
           </Button>
           <Button variant="destructive" onClick={confirm} disabled={isConfirming}>

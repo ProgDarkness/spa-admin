@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom/vitest'
-import { clearMocks, mockIPC } from '@tauri-apps/api/mocks'
+import { clearMocks } from '@tauri-apps/api/mocks'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
-import { commit, getState } from '@/lib/mock/store'
+import { createSeed } from '@/lib/mock/seed'
+import { todayLocal } from '@/lib/datetime'
 import { resetNavigationMock } from '@/test/navigation'
-import { createAuthIpcBackend } from '@/test/ipc/auth-backend'
+import { installDevIpc } from '@/test/dev-ipc'
 
 vi.mock('next/navigation', () => import('@/test/navigation'))
 
@@ -35,12 +36,7 @@ Object.defineProperty(window, 'matchMedia', {
 })
 
 beforeEach(() => {
-  mockIPC(
-    createAuthIpcBackend(() => getState().users, {
-      read: () => getState().sessionUserId,
-      write: (id) => commit({ ...getState(), sessionUserId: id }),
-    }),
-  )
+  installDevIpc(createSeed(todayLocal()))
 })
 
 afterEach(() => {

@@ -52,7 +52,7 @@ describe('useResources', () => {
   it('convierte un error de dominio en error de la consulta', async () => {
     renderWithProviders(<ResourceNames filter={{ includeInactive: true }} />)
 
-    expect(await screen.findByText('error:Debes iniciar sesión')).toBeInTheDocument()
+    expect(await screen.findByText('error:Inicia sesión para continuar')).toBeInTheDocument()
   })
 })
 

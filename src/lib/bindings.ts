@@ -21,6 +21,21 @@ export const commands = {
 	createRole: (role: NewRole, options?: InvokeOptions) => typedError<RoleSummary, AppError>(__TAURI_INVOKE("create_role", { role }, options)),
 	setRolePermissions: (update: RolePermissionsUpdate, options?: InvokeOptions) => typedError<RoleSummary, AppError>(__TAURI_INVOKE("set_role_permissions", { update }, options)),
 	listAudit: (query: AuditQuery, options?: InvokeOptions) => typedError<AuditPage, AppError>(__TAURI_INVOKE("list_audit", { query }, options)),
+	listServices: (filter: ServiceFilter, options?: InvokeOptions) => typedError<ServiceSummary[], AppError>(__TAURI_INVOKE("list_services", { filter }, options)),
+	createService: (input: ServiceInput, options?: InvokeOptions) => typedError<ServiceSummary, AppError>(__TAURI_INVOKE("create_service", { input }, options)),
+	updateService: (update: ServiceUpdate, options?: InvokeOptions) => typedError<ServiceSummary, AppError>(__TAURI_INVOKE("update_service", { update }, options)),
+	setServiceActive: (activation: ServiceActivation, options?: InvokeOptions) => typedError<ServiceSummary, AppError>(__TAURI_INVOKE("set_service_active", { activation }, options)),
+	listResources: (filter: ResourceFilter, options?: InvokeOptions) => typedError<ResourceSummary[], AppError>(__TAURI_INVOKE("list_resources", { filter }, options)),
+	createResource: (input: ResourceInput, options?: InvokeOptions) => typedError<ResourceSummary, AppError>(__TAURI_INVOKE("create_resource", { input }, options)),
+	updateResource: (update: ResourceUpdate, options?: InvokeOptions) => typedError<ResourceSummary, AppError>(__TAURI_INVOKE("update_resource", { update }, options)),
+	setResourceActive: (activation: ResourceActivation, options?: InvokeOptions) => typedError<ResourceSummary, AppError>(__TAURI_INVOKE("set_resource_active", { activation }, options)),
+	listPaymentMethods: (filter: PaymentMethodFilter, options?: InvokeOptions) => typedError<PaymentMethodSummary[], AppError>(__TAURI_INVOKE("list_payment_methods", { filter }, options)),
+	createPaymentMethod: (input: PaymentMethodInput, options?: InvokeOptions) => typedError<PaymentMethodSummary, AppError>(__TAURI_INVOKE("create_payment_method", { input }, options)),
+	updatePaymentMethod: (update: PaymentMethodUpdate, options?: InvokeOptions) => typedError<PaymentMethodSummary, AppError>(__TAURI_INVOKE("update_payment_method", { update }, options)),
+	setPaymentMethodActive: (activation: PaymentMethodActivation, options?: InvokeOptions) => typedError<PaymentMethodSummary, AppError>(__TAURI_INVOKE("set_payment_method_active", { activation }, options)),
+	listRates: (options?: InvokeOptions) => typedError<ExchangeRate[], AppError>(__TAURI_INVOKE("list_rates", undefined, options)),
+	getRate: (date: string, options?: InvokeOptions) => typedError<ExchangeRate | null, AppError>(__TAURI_INVOKE("get_rate", { date }, options)),
+	upsertRate: (date: string, rateBsPerUsdE4: number, options?: InvokeOptions) => typedError<ExchangeRate, AppError>(__TAURI_INVOKE("upsert_rate", { date, rateBsPerUsdE4 }, options)),
 };
 
 /* Types */
@@ -33,9 +48,9 @@ export type AppError = {
 
 export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "internal";
 
-export type AuditAction = "login_succeeded" | "logout" | "login_failed" | "login_locked_out" | "session_locked" | "session_unlocked" | "owner_created" | "recovery_used" | "clock_rollback" | "user_created" | "user_updated" | "password_reset" | "role_created" | "unlock_failed" | "recovery_failed" | "role_permissions_changed";
+export type AuditAction = "login_succeeded" | "logout" | "login_failed" | "login_locked_out" | "session_locked" | "session_unlocked" | "owner_created" | "recovery_used" | "clock_rollback" | "user_created" | "user_updated" | "password_reset" | "role_created" | "unlock_failed" | "recovery_failed" | "role_permissions_changed" | "create" | "update" | "deactivate" | "soft_delete" | "reactivate" | "void" | "backup_created" | "backup_restored";
 
-export type AuditEntity = "user" | "role" | "system";
+export type AuditEntity = "user" | "role" | "system" | "client" | "service" | "resource" | "appointment" | "payment" | "payment_method" | "exchange_rate";
 
 export type AuditEntry = {
 	id: number,
@@ -61,6 +76,11 @@ export type AuditQuery = {
 export type ClockRollback = {
 	lastRecordedAt: string,
 	detectedAt: string,
+};
+
+export type ExchangeRate = {
+	date: string,
+	rateBsPerUsdE4: number,
 };
 
 export type LoginCredentials = {
@@ -94,6 +114,32 @@ export type PasswordReset = {
 	newPassword: string,
 };
 
+export type PaymentMethodActivation = {
+	id: number,
+	active: boolean,
+};
+
+export type PaymentMethodFilter = {
+	includeInactive: boolean,
+};
+
+export type PaymentMethodInput = {
+	name: string,
+};
+
+export type PaymentMethodSummary = {
+	id: number,
+	name: string,
+	active: boolean,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type PaymentMethodUpdate = {
+	id: number,
+	name: string,
+};
+
 export type PermissionKey = "clients.read" | "clients.write" | "catalog.read" | "catalog.write" | "resources.manage" | "appointments.read" | "appointments.write" | "appointments.reopen" | "payments.read" | "payments.write" | "rates.manage" | "metrics.read" | "audit.read" | "users.manage" | "backup.manage";
 
 export type RecoveryRequest = {
@@ -106,6 +152,37 @@ export type RecoveryResult = {
 	recoveryCode: string,
 };
 
+export type ResourceActivation = {
+	id: number,
+	active: boolean,
+};
+
+export type ResourceFilter = {
+	includeInactive: boolean,
+};
+
+export type ResourceInput = {
+	name: string,
+	kind: ResourceKind,
+};
+
+export type ResourceKind = "cabin" | "manicure";
+
+export type ResourceSummary = {
+	id: number,
+	name: string,
+	kind: ResourceKind,
+	active: boolean,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type ResourceUpdate = {
+	id: number,
+	name: string,
+	kind: ResourceKind,
+};
+
 export type RolePermissionsUpdate = {
 	roleId: number,
 	permissions: PermissionKey[],
@@ -116,6 +193,39 @@ export type RoleSummary = {
 	name: string,
 	permissions: PermissionKey[],
 	userCount: number,
+};
+
+export type ServiceActivation = {
+	id: number,
+	active: boolean,
+};
+
+export type ServiceFilter = {
+	includeInactive: boolean,
+};
+
+export type ServiceInput = {
+	name: string,
+	priceCents: number,
+	durationMin: number,
+};
+
+export type ServiceSummary = {
+	id: number,
+	name: string,
+	priceCents: number,
+	currency: string,
+	durationMin: number,
+	active: boolean,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type ServiceUpdate = {
+	id: number,
+	name: string,
+	priceCents: number,
+	durationMin: number,
 };
 
 export type SessionStatus = "active" | "locked";

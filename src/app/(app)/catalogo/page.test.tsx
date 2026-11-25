@@ -1,9 +1,10 @@
+import { mockIPC } from '@tauri-apps/api/mocks'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getState, resetStore } from '@/lib/mock/store'
 import { freezeDate } from '@/test/clock'
 import { renderWithProviders } from '@/test/render'
-import { dropMockSessionKeepingRustActive } from '@/test/session'
+import { unauthenticatedError } from '@/test/ipc/ipc-errors'
 import CatalogPage from './page'
 
 beforeEach(() => {
@@ -28,7 +29,7 @@ describe('CatalogPage lectura', () => {
 
     const section = await screen.findByRole('region', { name: 'Métodos de pago' })
     const items = await within(section).findAllByRole('listitem')
-    expect(items.map((item) => item.textContent)).toEqual(['Efectivo', 'Pago móvil', 'Zelle', 'Transferencia', 'Punto de venta'])
+    expect(items.map((item) => item.textContent)).toEqual(['Efectivo', 'Pago móvil', 'Punto de venta', 'Transferencia', 'Zelle'])
     expect(within(section).queryByRole('button')).not.toBeInTheDocument()
   })
 
@@ -119,10 +120,12 @@ describe('CatalogPage propietaria', () => {
   it('muestra como alerta el error del api al desactivar sin sesión', async () => {
     renderWithProviders(<CatalogPage />, { as: 'propietaria' })
     const button = await screen.findByRole('button', { name: 'Desactivar Limpieza facial (ejemplo)' })
-    dropMockSessionKeepingRustActive()
+    mockIPC(() => {
+      throw unauthenticatedError()
+    })
 
     fireEvent.click(button)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Debes iniciar sesión')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Inicia sesión para continuar')
   })
 })

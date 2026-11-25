@@ -19,6 +19,21 @@ const APP_COMMANDS: &[&str] = &[
     "create_role",
     "set_role_permissions",
     "list_audit",
+    "list_services",
+    "create_service",
+    "update_service",
+    "set_service_active",
+    "list_resources",
+    "create_resource",
+    "update_resource",
+    "set_resource_active",
+    "list_payment_methods",
+    "create_payment_method",
+    "update_payment_method",
+    "set_payment_method_active",
+    "list_rates",
+    "get_rate",
+    "upsert_rate",
 ];
 const WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
 

@@ -1,8 +1,11 @@
 import { screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setPaymentMethodActive } from '@/features/payment-methods/api'
 import { commit, getState } from '@/lib/mock/store'
 import { appointmentTemplate, NOW, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
+import { signInAs } from '@/test/session'
 import { PaymentForm } from './payment-form'
 
 const APPOINTMENT_ID = 100
@@ -12,6 +15,7 @@ beforeEach(() => {
   resetWithEmptyAgenda()
   seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID }))
   commit({ ...getState(), payments: [] })
+  installDevIpc()
 })
 
 async function fillAmount(user: ReturnType<typeof renderWithProviders>['user'], text: string) {
@@ -20,10 +24,8 @@ async function fillAmount(user: ReturnType<typeof renderWithProviders>['user'], 
 
 describe('PaymentForm', () => {
   it('ofrece solo los métodos activos y empieza en USD sin campo de tasa', async () => {
-    commit({
-      ...getState(),
-      paymentMethods: getState().paymentMethods.map((method) => (method.id === 5 ? { ...method, active: false } : method)),
-    })
+    signInAs('propietaria')
+    await setPaymentMethodActive(5, false)
     renderWithProviders(<PaymentForm appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
 
     expect(await screen.findByRole('option', { name: 'Efectivo' })).toBeInTheDocument()
@@ -47,6 +49,7 @@ describe('PaymentForm', () => {
 
   it('avisa que falta la tasa de hoy y deja la tasa vacía', async () => {
     commit({ ...getState(), rates: getState().rates.filter((rate) => rate.date !== TODAY) })
+    installDevIpc()
     const { user } = renderWithProviders(<PaymentForm appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
 
     await user.selectOptions(screen.getByLabelText('Moneda'), 'VES')
@@ -104,6 +107,7 @@ describe('PaymentForm', () => {
 
   it('muestra el error de dominio rateMissing al enviar VES sin ninguna tasa', async () => {
     commit({ ...getState(), rates: getState().rates.filter((rate) => rate.date !== TODAY) })
+    installDevIpc()
     const { user } = renderWithProviders(<PaymentForm appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
     await screen.findByRole('option', { name: 'Zelle' })
 

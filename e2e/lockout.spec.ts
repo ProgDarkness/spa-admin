@@ -74,6 +74,9 @@ test.describe('mock IPC con respuestas inyectadas: no simula el contador de inte
   test('unlock exitoso tras el rechazo reanuda la sesión y muestra la agenda', async ({ page }) => {
     let attempts = 0
     await openLockedSession(page, {
+      list_services: respondWith([]),
+      list_resources: respondWith([]),
+      get_rate: respondWith(null),
       unlock: () => {
         attempts += 1
         if (attempts === 1) throw SESSION_LOCKED_ERROR
