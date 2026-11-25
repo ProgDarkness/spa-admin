@@ -94,3 +94,82 @@ fn client_deleted_reactivate_carries_the_entity_ids() {
     assert_eq!(value["field"], "nationalId");
     assert_eq!(value["entityIds"], json!([7]));
 }
+
+fn serialized(error: AppError) -> serde_json::Value {
+    serde_json::to_value(error).unwrap()
+}
+
+#[test]
+fn overlap_lists_the_conflicting_appointments_on_the_start_field() {
+    let value = serialized(AppError::overlap(vec![4, 9]));
+    assert_eq!(value["code"], "overlap");
+    assert_eq!(
+        value["message"],
+        "El recurso ya tiene una cita en ese horario"
+    );
+    assert_eq!(value["field"], "startsAt");
+    assert_eq!(value["entityIds"], json!([4, 9]));
+}
+
+#[test]
+fn crosses_midnight_points_at_the_start_field() {
+    let value = serialized(AppError::crosses_midnight());
+    assert_eq!(value["code"], "crossesMidnight");
+    assert_eq!(
+        value["message"],
+        "La cita no puede terminar después de la medianoche"
+    );
+    assert_eq!(value["field"], "startsAt");
+    assert_eq!(value["entityIds"], json!(null));
+}
+
+#[test]
+fn invalid_transition_has_no_field() {
+    let value = serialized(AppError::invalid_transition());
+    assert_eq!(value["code"], "invalidTransition");
+    assert_eq!(
+        value["message"],
+        "La cita no admite esa operación en su estado actual"
+    );
+    assert_eq!(value["field"], json!(null));
+}
+
+#[test]
+fn resource_inactive_points_at_the_resource_field() {
+    let value = serialized(AppError::resource_inactive());
+    assert_eq!(value["code"], "resourceInactive");
+    assert_eq!(value["message"], "El recurso está inactivo");
+    assert_eq!(value["field"], "resourceId");
+}
+
+#[test]
+fn resource_has_future_appointments_carries_the_blocking_ids() {
+    let value = serialized(AppError::resource_has_future_appointments(vec![5, 12]));
+    assert_eq!(value["code"], "resourceHasFutureAppointments");
+    assert_eq!(
+        value["message"],
+        "El recurso tiene citas futuras que deben reubicarse antes de desactivarlo"
+    );
+    assert_eq!(value["field"], json!(null));
+    assert_eq!(value["entityIds"], json!([5, 12]));
+}
+
+#[test]
+fn missing_references_name_the_field_with_their_own_message() {
+    let client = serialized(AppError::missing_reference("clientId"));
+    let service = serialized(AppError::missing_reference("serviceId"));
+    let resource = serialized(AppError::missing_reference("resourceId"));
+    assert_eq!(client["code"], "notFound");
+    assert_eq!(client["field"], "clientId");
+    assert_eq!(client["message"], "El cliente no existe");
+    assert_eq!(service["message"], "El servicio no existe");
+    assert_eq!(resource["message"], "El recurso no existe");
+}
+
+#[test]
+fn a_missing_appointment_is_not_found_without_a_field() {
+    let value = serialized(AppError::appointment_not_found());
+    assert_eq!(value["code"], "notFound");
+    assert_eq!(value["message"], "La cita no existe");
+    assert_eq!(value["field"], json!(null));
+}

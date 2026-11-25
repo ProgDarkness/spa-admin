@@ -2,7 +2,7 @@ use tauri::Manager;
 
 use super::*;
 
-pub(super) const REGISTERED_COMMANDS: [&str; 36] = [
+pub(super) const REGISTERED_COMMANDS: [&str; 41] = [
     "login",
     "logout",
     "current_session",
@@ -39,6 +39,11 @@ pub(super) const REGISTERED_COMMANDS: [&str; 36] = [
     "create_client",
     "update_client",
     "set_client_deleted",
+    "list_appointments",
+    "create_appointment",
+    "move_appointment",
+    "transition_appointment",
+    "list_future_appointments_of_resource",
 ];
 
 pub(super) fn camel_case(command: &str) -> String {

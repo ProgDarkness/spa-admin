@@ -40,6 +40,11 @@
     "allow-get-client",
     "allow-create-client",
     "allow-update-client",
-    "allow-set-client-deleted"
+    "allow-set-client-deleted",
+    "allow-list-appointments",
+    "allow-create-appointment",
+    "allow-move-appointment",
+    "allow-transition-appointment",
+    "allow-list-future-appointments-of-resource"
   ]
 }

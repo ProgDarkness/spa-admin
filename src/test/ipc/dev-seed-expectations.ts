@@ -5,6 +5,18 @@ const RESOURCE_IDENTITY_KEYS = ['id', 'name', 'kind', 'active']
 const SERVICE_IDENTITY_KEYS = ['id', 'name']
 const PAYMENT_METHOD_IDENTITY_KEYS = ['id', 'name', 'active']
 const RATE_IDENTITY_KEYS = ['date', 'rateBsPerUsdE4']
+const APPOINTMENT_IDENTITY_KEYS = [
+  'id',
+  'clientId',
+  'serviceId',
+  'resourceId',
+  'startsAt',
+  'endsAt',
+  'status',
+  'priceCentsSnapshot',
+  'durationMinSnapshot',
+  'notes',
+]
 const CLIENT_IDENTITY_KEYS = ['id', 'firstName', 'lastName', 'nationalId', 'phone']
 
 export const EXPECTED_DEV_RESOURCES = [
@@ -34,6 +46,8 @@ export const EXPECTED_DEV_CLIENTS = createSeed(SEED_REFERENCE_DATE).clients.map(
   }),
 )
 
+export const EXPECTED_DEV_APPOINTMENTS = createSeed(SEED_REFERENCE_DATE).appointments
+
 export const EXPECTED_DEV_SERVICES = createSeed(SEED_REFERENCE_DATE).services.map(({ id, name }) => ({ id, name }))
 
 function project(rows: unknown, keys: readonly string[]): unknown[] {
@@ -51,6 +65,10 @@ export function clientIdentitiesOf(rows: unknown): unknown[] {
     ...Object.fromEntries(CLIENT_IDENTITY_KEYS.map((key) => [key, Reflect.get(row, key)])),
     deleted: Reflect.get(row, 'deletedAt') !== null,
   }))
+}
+
+export function appointmentIdentitiesOf(rows: unknown): unknown[] {
+  return project(rows, APPOINTMENT_IDENTITY_KEYS)
 }
 
 export function serviceIdentitiesOf(rows: unknown): unknown[] {

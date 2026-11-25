@@ -1,3 +1,4 @@
+pub mod appointments;
 pub mod audit;
 pub mod auth;
 pub mod catalog;

@@ -2,6 +2,8 @@ pub mod db;
 #[cfg(debug_assertions)]
 pub mod dev_seed;
 #[cfg(debug_assertions)]
+pub mod dev_seed_appointments;
+#[cfg(debug_assertions)]
 pub mod dev_seed_catalog;
 #[cfg(debug_assertions)]
 pub mod dev_seed_clients;
@@ -12,6 +14,9 @@ pub mod setup;
 #[cfg(test)]
 mod test_support;
 
+use features::appointments::commands::{
+    create_appointment, list_appointments, move_appointment, transition_appointment,
+};
 use features::auth::audit_commands::list_audit;
 use features::auth::commands::{
     current_session, login, logout, record_activity, setup_owner, setup_status, unlock,
@@ -28,7 +33,8 @@ use features::payment_methods::commands::{
 };
 use features::rates::commands::{get_rate, list_rates, upsert_rate};
 use features::resources::commands::{
-    create_resource, list_resources, set_resource_active, update_resource,
+    create_resource, list_future_appointments_of_resource, list_resources, set_resource_active,
+    update_resource,
 };
 use features::users::commands::{
     create_role, create_user, list_roles, list_users, reset_user_password, set_role_permissions,
@@ -77,7 +83,12 @@ fn command_catalog<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
             get_client,
             create_client,
             update_client,
-            set_client_deleted
+            set_client_deleted,
+            list_appointments,
+            create_appointment,
+            move_appointment,
+            transition_appointment,
+            list_future_appointments_of_resource
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .disable_serde_phases()

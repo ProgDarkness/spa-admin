@@ -361,7 +361,7 @@ fn row_count(bootstrap: &Bootstrap, table: &'static str) -> i64 {
 
 #[cfg(debug_assertions)]
 #[test]
-fn bootstrap_with_the_seed_variable_seeds_users_services_rates_and_clients() {
+fn bootstrap_with_the_seed_variable_seeds_users_services_rates_clients_and_appointments() {
     let dir = tempfile::tempdir().unwrap();
     let store = isolated_store();
     let read_env = |name: &str| {
@@ -374,6 +374,7 @@ fn bootstrap_with_the_seed_variable_seeds_users_services_rates_and_clients() {
     assert_eq!(row_count(&bootstrap, "services"), 8);
     assert_eq!(row_count(&bootstrap, "exchange_rates"), 7);
     assert_eq!(row_count(&bootstrap, "clients"), 9);
+    assert_eq!(row_count(&bootstrap, "appointments"), 16);
 }
 
 #[cfg(debug_assertions)]
@@ -389,4 +390,5 @@ fn bootstrap_without_the_seed_variable_seeds_nothing() {
     assert_eq!(row_count(&bootstrap, "services"), 0);
     assert_eq!(row_count(&bootstrap, "exchange_rates"), 0);
     assert_eq!(row_count(&bootstrap, "clients"), 0);
+    assert_eq!(row_count(&bootstrap, "appointments"), 0);
 }

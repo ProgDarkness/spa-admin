@@ -69,6 +69,13 @@ pub struct ResourceActivation {
     pub active: bool,
 }
 
+#[derive(Serialize, specta::Type, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FutureAppointment {
+    pub id: i64,
+    pub starts_at: String,
+}
+
 pub(crate) const LOG_SCOPE: &str = "resources";
 
 #[derive(Debug, Error)]
@@ -79,6 +86,8 @@ pub enum ResourcesError {
     Db(#[from] DbError),
     #[error("validation failed")]
     Validation { field: &'static str },
+    #[error("resource has future appointments")]
+    HasFutureAppointments { appointment_ids: Vec<i64> },
 }
 
 impl From<ResourcesError> for AppError {
@@ -89,6 +98,9 @@ impl From<ResourcesError> for AppError {
                 RecordFailure::Validation { field }.into_app_error(LOG_SCOPE)
             }
             ResourcesError::Db(inner) => RecordFailure::Db(inner).into_app_error(LOG_SCOPE),
+            ResourcesError::HasFutureAppointments { appointment_ids } => {
+                AppError::resource_has_future_appointments(appointment_ids)
+            }
         }
     }
 }

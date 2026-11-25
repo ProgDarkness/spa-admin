@@ -275,7 +275,7 @@ pub(super) fn table_exists(conn: &Connection, name: &str) -> bool {
 #[test]
 fn user_version_equals_number_of_applied_migrations() {
     let conn = migrated();
-    assert_eq!(user_version(&conn), 10);
+    assert_eq!(user_version(&conn), 11);
 }
 
 #[test]
@@ -297,7 +297,7 @@ fn reopening_a_persisted_database_does_not_reapply_migrations() {
     migrate(&mut reopened).unwrap();
     assert_eq!(
         (user_version(&reopened), count(&reopened, "users")),
-        (10, 1)
+        (11, 1)
     );
 }
 
@@ -311,7 +311,7 @@ fn upgrades_a_database_left_at_version_one() {
     let duplicate = insert_user(&conn, "ANA", 1).unwrap_err();
     assert_eq!(
         (user_version(&conn), duplicate.sqlite_error_code()),
-        (10, Some(ErrorCode::ConstraintViolation))
+        (11, Some(ErrorCode::ConstraintViolation))
     );
 }
 
@@ -362,7 +362,7 @@ fn newer_schema_is_reported_with_found_and_supported_versions() {
         failure,
         DbError::SchemaNewerThanApp {
             found: 99,
-            supported: 10
+            supported: 11
         }
     ));
 }
