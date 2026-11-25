@@ -1,8 +1,9 @@
-import { clearMocks } from '@tauri-apps/api/mocks'
+import { clearMocks, mockIPC } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { listServices } from '@/features/catalog/api'
 import { listResources } from '@/features/resources/api'
-import { getState, resetStore } from '@/lib/mock/store'
+import { commit, getState, resetStore } from '@/lib/mock/store'
+import type { Client } from '@/lib/model'
 import { freezeDate } from '@/test/clock'
 import { stubRustCatalog } from '@/test/rust-backend-stub'
 import { signInAs } from '@/test/session'
@@ -37,5 +38,90 @@ describe('getClientHistory tras listar solo activos', () => {
     await listResources({ includeInactive: false })
 
     expect((await entriesOfJose()).map((entry) => entry.resourceName)).toContain(INACTIVE_RESOURCE_NAME)
+  })
+})
+
+function rustClient(overrides: Partial<Client> = {}): Client {
+  return {
+    id: JOSE_ID,
+    firstName: 'José',
+    lastName: 'Actualizado en Rust',
+    nationalId: 'V-14567890',
+    phone: '0424-2345678',
+    deletedAt: null,
+    ...overrides,
+  }
+}
+
+describe('getClientHistory refresca el cliente desde Rust', () => {
+  it('usa los datos del cliente que devuelve Rust y no los del espejo', async () => {
+    stubRustCatalog({
+      services: getState().services,
+      resources: getState().resources,
+      clients: [rustClient()],
+    })
+
+    const history = await getClientHistory(JOSE_ID)
+
+    expect(history).toMatchObject({ status: 'ok', data: { client: { lastName: 'Actualizado en Rust' } } })
+    expect(getState().clients.find((client) => client.id === JOSE_ID)?.lastName).not.toBe('Actualizado en Rust')
+  })
+
+  it('arma el historial de un cliente que solo existe en Rust', async () => {
+    commit({ ...getState(), clients: [] })
+    stubRustCatalog({ services: getState().services, resources: getState().resources, clients: [rustClient()] })
+
+    const history = await getClientHistory(JOSE_ID)
+
+    expect(history.status).toBe('ok')
+    expect((await entriesOfJose()).length).toBeGreaterThan(0)
+  })
+
+  it('consulta get_client con el id pedido', async () => {
+    const calls = stubRustCatalog({ clients: [rustClient()] })
+
+    await getClientHistory(JOSE_ID)
+
+    expect(calls).toEqual(['get_client'])
+  })
+
+  it('responde notFound si Rust no tiene al cliente aunque el espejo sí', async () => {
+    stubRustCatalog({ clients: [] })
+
+    expect(await getClientHistory(JOSE_ID)).toMatchObject({ status: 'error', error: { code: 'notFound' } })
+  })
+
+  it('devuelve el error y no arma historial si falla get_client', async () => {
+    stubRustCatalog({ clients: [rustClient()], failing: ['get_client'] })
+
+    expect(await getClientHistory(JOSE_ID)).toMatchObject({ status: 'error', error: { code: 'internal' } })
+  })
+
+  it('re-autoriza tras el refresco: si la sesión se cierra durante get_client responde unauthenticated', async () => {
+    mockIPC((cmd) => {
+      if (cmd !== 'get_client') return null
+      commit({ ...getState(), sessionUserId: null })
+      return rustClient()
+    })
+
+    expect(await getClientHistory(JOSE_ID)).toMatchObject({ status: 'error', error: { code: 'unauthenticated' } })
+  })
+
+  it('no consulta a Rust sin los permisos requeridos', async () => {
+    signInAs('lectura')
+    commit({
+      ...getState(),
+      users: getState().users.map((user) =>
+        user.username === 'lectura' ? { ...user, permissions: ['clients.read'] } : user,
+      ),
+    })
+    const calls: string[] = []
+    mockIPC((cmd) => {
+      calls.push(cmd)
+      return null
+    })
+
+    expect(await getClientHistory(JOSE_ID)).toMatchObject({ status: 'error', error: { code: 'forbidden' } })
+    expect(calls).toEqual([])
   })
 })

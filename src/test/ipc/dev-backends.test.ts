@@ -12,6 +12,8 @@ const ALL_PERMISSIONS: PermissionKey[] = [
   'appointments.read',
   'payments.read',
   'rates.manage',
+  'clients.read',
+  'clients.write',
 ]
 const LIST_ALL = { filter: { includeInactive: true } }
 
@@ -85,6 +87,15 @@ describe('createDevBackends', () => {
     expect(devBackends()('list_rates', undefined)).toHaveLength(SEED.rates.length)
   })
 
+  it('atiende los comandos de clientes con el seed recibido, incluido el eliminado', () => {
+    const listed = devBackends()('list_clients', { filter: { query: '', includeDeleted: true } })
+
+    expect(listed).toHaveLength(SEED.clients.length)
+    expect(devBackends()('list_clients', { filter: { query: '', includeDeleted: false } })).toHaveLength(
+      SEED.clients.length - 1,
+    )
+  })
+
   it('delega en el backend de autenticación todo lo demás', () => {
     expect(devBackends()('current_session', undefined)).toEqual({ cmd: 'current_session', reply: 'auth' })
   })
@@ -112,6 +123,7 @@ describe('createDevBackends', () => {
       resources: SEED.resources.slice(0, 1),
       paymentMethods: SEED.paymentMethods.slice(0, 3),
       rates: SEED.rates.slice(0, 2),
+      clients: SEED.clients.slice(0, 4),
     }
     const backend = createDevBackends({ auth: authReplying('auth'), session: () => userWith(...ALL_PERMISSIONS), seed })
 
@@ -119,6 +131,7 @@ describe('createDevBackends', () => {
     expect(backend('list_resources', LIST_ALL)).toHaveLength(1)
     expect(backend('list_payment_methods', LIST_ALL)).toHaveLength(3)
     expect(backend('list_rates', undefined)).toHaveLength(2)
+    expect(backend('list_clients', { filter: { query: '', includeDeleted: true } })).toHaveLength(4)
   })
 
   it('el estado es propio de cada composición', () => {
@@ -129,11 +142,16 @@ describe('createDevBackends', () => {
     first('create_service', { input: { name: 'Servicio nuevo', priceCents: 100, durationMin: 5 } })
     first('create_payment_method', { input: { name: 'Cripto' } })
     first('upsert_rate', { date: '2030-01-01', rateBsPerUsdE4: 1 })
+    first('create_client', {
+      input: { firstName: 'Nueva', lastName: 'Persona', nationalId: 'V-30111222', phone: '0414-5550000' },
+    })
 
     expect(second('list_resources', LIST_ALL)).toHaveLength(SEED.resources.length)
     expect(second('list_services', LIST_ALL)).toHaveLength(SEED.services.length)
     expect(second('list_payment_methods', LIST_ALL)).toHaveLength(SEED.paymentMethods.length)
     expect(second('list_rates', undefined)).toHaveLength(SEED.rates.length)
+    expect(second('list_clients', { filter: { query: '', includeDeleted: true } })).toHaveLength(SEED.clients.length)
+    expect(first('list_clients', { filter: { query: '', includeDeleted: true } })).toHaveLength(SEED.clients.length + 1)
     expect(first('list_rates', undefined)).toHaveLength(SEED.rates.length + 1)
     expect(first('list_resources', LIST_ALL)).toHaveLength(SEED.resources.length + 1)
     expect(first('list_payment_methods', LIST_ALL)).toHaveLength(SEED.paymentMethods.length + 1)

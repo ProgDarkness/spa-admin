@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { forbiddenError, invalidCredentialsError, unauthenticatedError, validationError } from './ipc-errors'
+import {
+  clientDeletedReactivateError,
+  forbiddenError,
+  invalidCredentialsError,
+  nationalIdTakenError,
+  notFoundError,
+  unauthenticatedError,
+  validationError,
+} from './ipc-errors'
 
 describe('ipc-errors', () => {
   it('invalidCredentials usa el mensaje fijo de Rust', () => {
@@ -23,6 +31,28 @@ describe('ipc-errors', () => {
   it('unauthenticated y forbidden no llevan campo', () => {
     expect(unauthenticatedError()).toMatchObject({ code: 'unauthenticated', field: null })
     expect(forbiddenError()).toMatchObject({ code: 'forbidden', field: null })
+  })
+
+  it('notFound usa el mensaje fijo de Rust y no lleva campo', () => {
+    expect(notFoundError()).toEqual({ code: 'notFound', message: 'Cliente no encontrado', field: null, entityIds: null })
+  })
+
+  it('nationalIdTaken señala el campo nationalId', () => {
+    expect(nationalIdTakenError()).toEqual({
+      code: 'nationalIdTaken',
+      message: 'Ya existe un cliente con esa cédula',
+      field: 'nationalId',
+      entityIds: null,
+    })
+  })
+
+  it('clientDeletedReactivate lleva el id del cliente eliminado', () => {
+    expect(clientDeletedReactivateError(9)).toEqual({
+      code: 'clientDeletedReactivate',
+      message: 'Ya existió un cliente eliminado con esa cédula. ¿Reactivarlo?',
+      field: 'nationalId',
+      entityIds: [9],
+    })
   })
 
   it('devuelve objetos nuevos en cada llamada', () => {

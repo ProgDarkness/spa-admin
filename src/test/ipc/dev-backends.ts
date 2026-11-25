@@ -1,6 +1,7 @@
-import type { ExchangeRate, PaymentMethod, Resource, Service, SessionUser } from '@/lib/model'
+import type { Client, ExchangeRate, PaymentMethod, Resource, Service, SessionUser } from '@/lib/model'
 import type { IpcBackend } from './auth-backend'
 import { createCatalogIpcBackend } from './catalog-backend'
+import { createClientsIpcBackend } from './clients-backend'
 import { createPaymentMethodsIpcBackend } from './payment-methods-backend'
 import { createRatesIpcBackend } from './rates-backend'
 import { createResourcesIpcBackend } from './resources-backend'
@@ -15,6 +16,7 @@ export type DevBackendsOptions = {
     resources: readonly Resource[]
     paymentMethods: readonly PaymentMethod[]
     rates: readonly ExchangeRate[]
+    clients: readonly Client[]
   }
 }
 
@@ -29,5 +31,6 @@ export function createDevBackends({ auth, session, seed }: DevBackendsOptions): 
     (next) => createResourcesIpcBackend(next, { session, resources: seed.resources }),
     (next) => createPaymentMethodsIpcBackend(next, { session, paymentMethods: seed.paymentMethods }),
     (next) => createRatesIpcBackend(next, { session, rates: seed.rates }),
+    (next) => createClientsIpcBackend(next, { session, clients: seed.clients }),
   )
 }

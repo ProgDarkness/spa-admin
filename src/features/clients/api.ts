@@ -1,98 +1,88 @@
-import { authorize } from '@/lib/mock/authorize'
-import { appendRow, commit, findById, getState, nextId, replaceById } from '@/lib/mock/store'
-import type { Client, ClientInput, ClientListFilter, Id, PermissionKey, Result } from '@/lib/model'
-import { nowLocal } from '@/lib/datetime'
-import { err, ok, validationError } from '@/lib/result'
-import { clientInputSchema } from './schemas'
-import { matchesClientQuery, normalizeSearchText } from './search'
+import { commands, type ClientSummary } from '@/lib/bindings'
+import { callBackend, settle } from '@/lib/ipc'
+import { createMirrorSync, visibleRows } from '@/lib/mirror-sync'
+import { commit, getState, upsertById } from '@/lib/mock/store'
+import type { Client, ClientInput, ClientListFilter, Id, Result } from '@/lib/model'
+import { mapOk } from '@/lib/result'
+import { trimUnicodeWhitespace } from '@/lib/text'
 
-const CLIENT_NOT_FOUND_MESSAGE = 'Cliente no encontrado'
-const NATIONAL_ID_TAKEN_MESSAGE = 'Ya existe un cliente con esa cédula'
-const CLIENT_DELETED_MESSAGE = 'Ya existió un cliente eliminado con esa cédula. ¿Reactivarlo?'
+const mirrorSync = createMirrorSync()
 
-function clientNotFound(): Result<never> {
-  return err('notFound', CLIENT_NOT_FOUND_MESSAGE)
-}
-
-function guard(permission: PermissionKey): Result<null> {
-  const access = authorize(getState(), permission)
-  return access.status === 'ok' ? ok(null) : access
-}
-
-function parseInput(input: unknown): Result<ClientInput> {
-  const parsed = clientInputSchema.safeParse(input)
-  return parsed.success ? ok(parsed.data) : validationError(parsed.error.issues)
-}
-
-function nationalIdConflict(nationalId: string, ownId: Id | null): Result<never> | null {
-  const holder = getState().clients.find((client) => client.nationalId === nationalId && client.id !== ownId)
-  if (!holder) return null
-  if (ownId === null && holder.deletedAt !== null) {
-    return err('clientDeletedReactivate', CLIENT_DELETED_MESSAGE, { field: 'nationalId', entityIds: [holder.id] })
+function toClient(summary: ClientSummary): Client {
+  return {
+    id: summary.id,
+    firstName: summary.firstName,
+    lastName: summary.lastName,
+    nationalId: summary.nationalId,
+    phone: summary.phone,
+    deletedAt: summary.deletedAt,
   }
-  return err('nationalIdTaken', NATIONAL_ID_TAKEN_MESSAGE, { field: 'nationalId' })
 }
 
-function storeClient(updated: Client): Client {
+function replaceClients(clients: readonly Client[]): void {
+  commit({ ...getState(), clients })
+}
+
+function mirrorClient(client: Client): void {
   const state = getState()
-  commit({ ...state, clients: replaceById(state.clients, updated) })
-  return updated
+  commit({ ...state, clients: upsertById(state.clients, client) })
+}
+
+function callClientBackend(operation: () => Promise<Result<ClientSummary>>): Promise<Result<Client>> {
+  return callBackend(async () => mapOk(await operation(), toClient), mirrorSync.reflectMutation(mirrorClient))
+}
+
+function visibleClients(clients: readonly Client[], filter: ClientListFilter): Client[] {
+  const rows = clients.map((client) => ({ client, active: client.deletedAt === null }))
+  return visibleRows(rows, { includeInactive: filter.includeDeleted }).map(({ client }) => client)
+}
+
+type ClientsSnapshot = Readonly<{ all: readonly Client[]; matchedIds: readonly Id[] | null }>
+
+function fetchClients(query: string): Promise<Result<Client[]>> {
+  return settle(async () =>
+    mapOk(await commands.listClients({ query, includeDeleted: true }), (rows) => rows.map(toClient)),
+  )
+}
+
+async function fetchSnapshot(query: string): Promise<Result<ClientsSnapshot>> {
+  const all = await fetchClients('')
+  if (all.status === 'error' || query === '') return mapOk(all, (rows) => ({ all: rows, matchedIds: null }))
+  const matches = await fetchClients(query)
+  return mapOk(matches, (found) => ({ all: all.data, matchedIds: found.map((client) => client.id) }))
+}
+
+function rowsOf({ all, matchedIds }: ClientsSnapshot): Client[] {
+  if (matchedIds === null) return [...all]
+  const byId = new Map(all.map((client) => [client.id, client]))
+  return matchedIds.flatMap((id) => byId.get(id) ?? [])
 }
 
 export async function listClients(filter: ClientListFilter): Promise<Result<Client[]>> {
-  const access = guard('clients.read')
-  if (access.status === 'error') return access
-  const normalizedQuery = normalizeSearchText((filter.query ?? '').trim())
-  const visible = getState().clients.filter((client) => filter.includeDeleted || client.deletedAt === null)
-  return ok(visible.filter((client) => matchesClientQuery(client, normalizedQuery)))
+  const query = trimUnicodeWhitespace(filter.query ?? '')
+  const snapshot = await mirrorSync.list(
+    () => fetchSnapshot(query),
+    ({ all }) => replaceClients(all),
+  )
+  return mapOk(snapshot, (data) => visibleClients(rowsOf(data), filter))
 }
 
-export async function getClient(id: Id): Promise<Result<Client>> {
-  const access = guard('clients.read')
-  if (access.status === 'error') return access
-  const client = findById(getState().clients, id)
-  return client ? ok(client) : clientNotFound()
+export function getClient(id: Id): Promise<Result<Client>> {
+  return settle(async () => mapOk(await commands.getClient(id), toClient))
 }
 
-export async function createClient(input: ClientInput): Promise<Result<Client>> {
-  const access = guard('clients.write')
-  if (access.status === 'error') return access
-  const parsed = parseInput(input)
-  if (parsed.status === 'error') return parsed
-  const conflict = nationalIdConflict(parsed.data.nationalId, null)
-  if (conflict) return conflict
-  const state = getState()
-  const created: Client = { ...parsed.data, id: nextId(state.clients), deletedAt: null }
-  commit({ ...state, clients: appendRow(state.clients, created) })
-  return ok(created)
+export function createClient(input: ClientInput): Promise<Result<Client>> {
+  return callClientBackend(() => commands.createClient(input))
 }
 
-export async function updateClient(id: Id, input: ClientInput): Promise<Result<Client>> {
-  const access = guard('clients.write')
-  if (access.status === 'error') return access
-  const parsed = parseInput(input)
-  if (parsed.status === 'error') return parsed
-  const existing = findById(getState().clients, id)
-  if (!existing) return clientNotFound()
-  const conflict = nationalIdConflict(parsed.data.nationalId, id)
-  if (conflict) return conflict
-  return ok(storeClient({ ...existing, ...parsed.data }))
+export function updateClient(id: Id, input: ClientInput): Promise<Result<Client>> {
+  return callClientBackend(() => commands.updateClient({ id, ...input }))
 }
 
-async function changeDeletion(id: Id, deletedAt: Client['deletedAt']): Promise<Result<Client>> {
-  const access = guard('clients.write')
-  if (access.status === 'error') return access
-  const existing = findById(getState().clients, id)
-  if (!existing) return clientNotFound()
-  const isAlreadyInTargetState = (existing.deletedAt === null) === (deletedAt === null)
-  if (isAlreadyInTargetState) return ok(existing)
-  return ok(storeClient({ ...existing, deletedAt }))
+export function softDeleteClient(id: Id): Promise<Result<Client>> {
+  return callClientBackend(() => commands.setClientDeleted({ id, deleted: true }))
 }
 
-export async function softDeleteClient(id: Id): Promise<Result<Client>> {
-  return changeDeletion(id, nowLocal())
-}
-
-export async function reactivateClient(id: Id): Promise<Result<Client>> {
-  return changeDeletion(id, null)
+export function reactivateClient(id: Id): Promise<Result<Client>> {
+  return callClientBackend(() => commands.setClientDeleted({ id, deleted: false }))
 }

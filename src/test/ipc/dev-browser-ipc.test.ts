@@ -5,6 +5,8 @@ import { DEV_PASSWORD } from '@/test/ipc/auth-backend'
 import { freezeDate } from '@/test/clock'
 import { commit, getState, resetStore } from '@/lib/mock/store'
 import {
+  clientIdentitiesOf,
+  EXPECTED_DEV_CLIENTS,
   EXPECTED_DEV_PAYMENT_METHODS,
   EXPECTED_DEV_RATES,
   EXPECTED_DEV_RESOURCES,
@@ -127,6 +129,22 @@ describe('installDevBrowserIpc', () => {
     const rates = await invoke('list_rates')
 
     expect(rateIdentitiesOf(rates)).toEqual(EXPECTED_DEV_RATES)
+  })
+
+  it('atiende los comandos de clientes con los nueve del seed, el noveno eliminado, y rechaza sin sesión', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    freezeDate(`${SEED_REFERENCE_DATE}T09:00`)
+    resetStore()
+    installDevBrowserIpc()
+    const listAll = { filter: { query: '', includeDeleted: true } }
+
+    await expect(invoke('list_clients', listAll)).rejects.toMatchObject({ code: 'unauthenticated' })
+    await invoke('login', OWNER_CREDENTIALS)
+    const clients = await invoke('list_clients', listAll)
+
+    expect(clientIdentitiesOf(clients)).toEqual(EXPECTED_DEV_CLIENTS)
+    expect(EXPECTED_DEV_CLIENTS.map((client) => client.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    expect(EXPECTED_DEV_CLIENTS.filter((client) => client.deleted).map((client) => client.id)).toEqual([9])
   })
 
   it('marca window con el centinela al instalarse', () => {

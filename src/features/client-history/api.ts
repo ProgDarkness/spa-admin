@@ -1,23 +1,31 @@
+import { getClient } from '@/features/clients/api'
 import { authorize } from '@/lib/mock/authorize'
-import { findById, getState } from '@/lib/mock/store'
+import { getState, type StoreState } from '@/lib/mock/store'
 import type { ClientHistory, Id, PermissionKey, Result } from '@/lib/model'
-import { err, ok } from '@/lib/result'
+import { ok } from '@/lib/result'
 import { buildClientHistory } from './compute'
 
 const REQUIRED_PERMISSIONS: readonly PermissionKey[] = ['clients.read', 'appointments.read', 'payments.read']
-const CLIENT_NOT_FOUND_MESSAGE = 'El cliente no existe'
 
-export async function getClientHistory(clientId: Id): Promise<Result<ClientHistory>> {
-  const state = getState()
+function firstDenial(state: StoreState): Result<never> | null {
   for (const permission of REQUIRED_PERMISSIONS) {
     const access = authorize(state, permission)
     if (access.status === 'error') return access
   }
-  const client = findById(state.clients, clientId)
-  if (!client) return err('notFound', CLIENT_NOT_FOUND_MESSAGE)
+  return null
+}
+
+export async function getClientHistory(clientId: Id): Promise<Result<ClientHistory>> {
+  const state = getState()
+  const denied = firstDenial(state)
+  if (denied) return denied
+  const refreshed = await getClient(clientId)
+  if (refreshed.status === 'error') return refreshed
+  const deniedAfterRefresh = firstDenial(getState())
+  if (deniedAfterRefresh) return deniedAfterRefresh
   return ok(
     buildClientHistory({
-      client,
+      client: refreshed.data,
       appointments: state.appointments,
       payments: state.payments,
       services: state.services,

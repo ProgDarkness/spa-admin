@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { commit, getState } from '@/lib/mock/store'
-import type { Resource, Service } from '@/lib/model'
+import type { Client, Resource, Service } from '@/lib/model'
 import {
+  ACTIVE_CLIENT,
   appointmentTemplate,
   CABIN_ONE,
   dataOf,
@@ -26,6 +27,18 @@ function rustService(overrides: Partial<Service> = {}): Service {
     currency: 'USD',
     durationMin: RUST_DURATION_MIN,
     active: true,
+    ...overrides,
+  }
+}
+
+function rustClient(overrides: Partial<Client> = {}): Client {
+  return {
+    id: ACTIVE_CLIENT,
+    firstName: 'Cliente',
+    lastName: 'De Rust',
+    nationalId: 'V-10000001',
+    phone: '0414-0000001',
+    deletedAt: null,
     ...overrides,
   }
 }
@@ -82,7 +95,7 @@ describe('createAppointment refresca el espejo desde Rust antes de validar', () 
 
     await createAppointment(inputTemplate())
 
-    expect(calls.toSorted()).toEqual(['list_resources', 'list_services'])
+    expect(calls.toSorted()).toEqual(['list_clients', 'list_resources', 'list_services'])
   })
 
   it('no consulta a Rust si la entrada no pasa el esquema', async () => {
@@ -93,12 +106,60 @@ describe('createAppointment refresca el espejo desde Rust antes de validar', () 
     expect(calls).toEqual([])
   })
 
-  it.each(['list_services', 'list_resources'])('devuelve el error y no crea la cita si falla %s', async (failing) => {
-    stubRustCatalog({ services: [rustService()], resources: [rustResource()], failing: [failing] })
+  it.each(['list_services', 'list_resources', 'list_clients'])('devuelve el error y no crea la cita si falla %s', async (failing) => {
+    stubRustCatalog({
+      services: [rustService()],
+      resources: [rustResource()],
+      clients: [rustClient()],
+      failing: [failing],
+    })
     const before = getState().appointments
 
     expect(errorOf(await createAppointment(inputTemplate())).code).toBe('internal')
     expect(getState().appointments).toBe(before)
+  })
+
+  it('con fallo parcial en varios espejos devuelve el primer error en orden servicios, recursos, clientes y no crea la cita', async () => {
+    stubRustCatalog({
+      services: [rustService()],
+      resources: [rustResource()],
+      clients: [rustClient()],
+      failing: ['list_resources', 'list_clients'],
+    })
+    const before = getState().appointments
+
+    expect(errorOf(await createAppointment(inputTemplate())).code).toBe('internal')
+    expect(getState().appointments).toBe(before)
+  })
+
+  it('crea la cita para un cliente que solo existe en Rust', async () => {
+    commit({ ...getState(), clients: [] })
+    stubRustCatalog({
+      services: [rustService()],
+      resources: [rustResource()],
+      clients: [rustClient({ id: RUST_ONLY_ID })],
+    })
+
+    const created = dataOf(await createAppointment(inputTemplate({ clientId: RUST_ONLY_ID })))
+
+    expect(created.clientId).toBe(RUST_ONLY_ID)
+  })
+
+  it('rechaza con notFound en clientId un cliente que Rust marca eliminado aunque el seed lo tenga activo', async () => {
+    stubRustCatalog({
+      services: [rustService()],
+      resources: [rustResource()],
+      clients: [rustClient({ deletedAt: '2026-11-01T10:00' })],
+    })
+
+    expect(errorOf(await createAppointment(inputTemplate())).code).toBe('notFound')
+    expect(errorOf(await createAppointment(inputTemplate())).field).toBe('clientId')
+  })
+
+  it('rechaza con notFound un cliente del seed que Rust no devuelve', async () => {
+    stubRustCatalog({ services: [rustService()], resources: [rustResource()], clients: [] })
+
+    expect(errorOf(await createAppointment(inputTemplate())).field).toBe('clientId')
   })
 
   it('el id de cita sigue siendo secuencial sobre las citas del store', async () => {

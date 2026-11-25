@@ -213,3 +213,15 @@ describe('computeMonthlyMetrics mes vacío e inmutabilidad', () => {
     expect(payments).toEqual(paymentsBefore)
   })
 })
+
+describe('computeMonthlyMetrics sin depender del espejo de clientes', () => {
+  it('cuenta clientes nuevos y recurrentes solo con los clientId de las citas', () => {
+    const march = appointment(500, '2026-03-10T09:00')
+    const november = appointment(500, '2026-11-10T09:00')
+    const newcomer = appointment(501, '2026-11-11T09:00')
+
+    const metrics = computeMonthlyMetrics('2026-11', [march, november, newcomer], [])
+
+    expect(metrics).toMatchObject({ newClients: 1, recurringClients: 1 })
+  })
+})
