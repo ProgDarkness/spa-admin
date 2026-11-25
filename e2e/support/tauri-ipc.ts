@@ -6,6 +6,7 @@ import { createDevBackends } from '../../src/test/ipc/dev-backends'
 
 const SEED_REFERENCE_DATE = '2026-11-12'
 const BRIDGE_NAME = '__spaInvoke'
+const PAGE_LOAD_COMMAND = '__pageLoad'
 
 export type IpcOverride = (args: unknown) => unknown
 
@@ -48,11 +49,13 @@ export async function installTauriIpc(page: Page, options: TauriIpcOptions = {})
     },
   )
 
-  const backend = createDevBackends({
-    auth: authBackend,
-    session: () => users.find((user) => user.id === sessionUserId) ?? null,
-    seed: createSeed(SEED_REFERENCE_DATE),
-  })
+  const buildBackend = () =>
+    createDevBackends({
+      auth: authBackend,
+      session: () => users.find((user) => user.id === sessionUserId) ?? null,
+      seed: createSeed(SEED_REFERENCE_DATE),
+    })
+  let backend = buildBackend()
 
   const overrides = options.overrides ?? {}
   const repliedCommands = new Set<string>()
@@ -64,7 +67,16 @@ export async function installTauriIpc(page: Page, options: TauriIpcOptions = {})
     replyWaiters = replyWaiters.filter((waiter) => waiter.cmd !== cmd)
   }
 
+  function resetForPageLoad(): void {
+    sessionUserId = null
+    backend = buildBackend()
+  }
+
   async function dispatch(cmd: string, args: unknown): Promise<BridgeReply> {
+    if (cmd === PAGE_LOAD_COMMAND) {
+      resetForPageLoad()
+      return { ok: true, value: null }
+    }
     try {
       const override = Object.hasOwn(overrides, cmd) ? overrides[cmd] : undefined
       const value = override ? await override(args) : backend(cmd, args)
@@ -81,11 +93,11 @@ export async function installTauriIpc(page: Page, options: TauriIpcOptions = {})
     return reply
   })
 
-  await page.addInitScript((bridgeName: string) => {
+  await page.addInitScript(([bridgeName, pageLoadCommand]: readonly [string, string]) => {
     const bridge = (window as unknown as Record<string, Bridge>)[bridgeName] as Bridge
     const callbacks = new Map<number, (data: unknown) => unknown>()
     let nextCallbackId = 1
-    void bridge('logout', undefined, Date.now())
+    void bridge(pageLoadCommand, undefined, Date.now())
     ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {
       invoke: async (cmd: string, args: unknown) => {
         const reply = await bridge(cmd, args, Date.now())
@@ -100,7 +112,7 @@ export async function installTauriIpc(page: Page, options: TauriIpcOptions = {})
       unregisterCallback: (id: number) => callbacks.delete(id),
       metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
     }
-  }, BRIDGE_NAME)
+  }, [BRIDGE_NAME, PAGE_LOAD_COMMAND] as const)
 
   return {
     advanceClock: (ms) => page.clock.fastForward(ms),
