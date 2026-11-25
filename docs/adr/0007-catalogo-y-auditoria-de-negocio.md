@@ -37,7 +37,7 @@
 - `src/features/resources/api.ts`, `setResourceActive`: desactivar un recurso con citas futuras programadas se bloquea en el front (`resourceHasFutureAppointments`, con los ids de las citas). La comprobación lee el espejo del mock.
 - Es transitoria: la guarda real en Rust llega en la Fase 5 (citas), cuando existan las citas en la BD. Mientras tanto, Rust no impide la desactivación.
 
-### 4. Tasas copiadas, no referenciadas (para Fase 6)
+### 4. Tasas copiadas, no referenciadas (cerrado en Fase 6, ver ADR 0010)
 
 - `payments` (Fase 6) debe copiar el valor de la tasa en el momento del pago, no guardar una referencia a `exchange_rates.id`. Motivo: una tasa puede corregirse después (`upsert_rate` actualiza la fila) y el pago debe conservar la tasa vigente al registrarlo (plan, Fase 6: pagos USD/VES con tasa congelada).
 
@@ -47,6 +47,8 @@
 - `src/lib/mock/store.ts` inicializa el estado con `createSeed` en la carga del módulo.
 - `scripts/check-bundle.ts` mantiene `SEED_SENTINEL_MARKERS` (`Manicure (Rosa)`, `(ejemplo)`, `Cabina 1`, `createSeed`) y `SEED_SENTINELS_BLOCK_BUNDLE = false`: `bun run check:bundle` informa los centinelas como aviso y sale con código 0.
 - En la Fase 6: `SEED_SENTINELS_BLOCK_BUNDLE` pasa a `true` y el seed se corta del bundle de producción (import dinámico o inyección, con condición `process.env.NODE_ENV !== 'production'`; en vitest `NODE_ENV` es `test`, así que los tests siguen usando el seed).
+
+**Cerrado en Fase 6** (ADR 0010, sección 10): el seed sale del bundle de producción y `SEED_SENTINELS_BLOCK_BUNDLE` pasa a `true`.
 
 ### 6. Espejos del store mock
 

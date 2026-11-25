@@ -29,7 +29,7 @@ fn matches_every_vector_shared_with_the_typescript_formula() {
 }
 
 #[test]
-fn the_cap_is_one_hundred_million_dollars_in_cents() {
+fn the_cap_is_one_billion_units_in_cents() {
     assert_eq!(MAX_AMOUNT_CENTS, 100_000_000_000);
 }
 
