@@ -130,6 +130,32 @@ Catálogo, recursos, métodos de pago y tasas de cambio en Rust, con auditoría 
 - Seed del mock aún presente en el bundle de producción hasta la Fase 6 (decisión del usuario, 2026-11-24). `check:bundle` avisa con centinelas del seed y no bloquea (`SEED_SENTINELS_BLOCK_BUNDLE = false`).
 - Seed de desarrollo de Rust excluido de release (`#[cfg(debug_assertions)]`).
 
+### Fase 4: Clientes
+
+Clientes en Rust con cédula V|E|J normalizada, búsqueda, auditoría de negocio (D15) y espejo del front contra el backend real. Sin publicar. Decisiones en `docs/adr/0008-clientes.md`; descripción de la PR en `docs/pr/fase4-clientes.md`.
+
+#### Added
+
+- Migración `0010_clients.sql`: tabla `clients` con cédula `UNIQUE` y CHECK de formato (`V|E|J-dígitos`, 8 a 11 caracteres), teléfono de hasta 32 caracteres y `deleted_at` para el borrado lógico.
+- 5 comandos IPC nuevos (36 en total): `list_clients`, `get_client`, `create_client`, `update_client`, `set_client_deleted`.
+- Cédula normalizada con la misma regla en Rust (`features/clients/normalization.rs`) y en la UI (`src/features/clients/national-id.ts`).
+- Búsqueda por nombre, apellido, cédula, teléfono y dígitos del teléfono, con consulta de hasta 100 caracteres y escape de comodines.
+- Auditoría de clientes: `create`, `update`, `soft_delete` y `reactivate` con diff; sin diferencia no se audita.
+- Errores `notFound`, `nationalIdTaken` y `clientDeletedReactivate` (este último con el id del cliente borrado en `entityIds`).
+- Seed de desarrollo de 9 clientes solo en compilación de depuración y con `SPA_DEV_SEED_PASSWORD`.
+- Pruebas e2e de clientes (`e2e/clients.spec.ts`) y de paridad IPC (`src/test/ipc/clients-*.ts`).
+
+#### Changed
+
+- `listClients` del front pide la colección completa a Rust y la refleja entera; `getClient` es lectura. El espejo de citas e historial refresca clientes antes de validar.
+- Acoplamiento transitorio: `appointments` y `client-history` dependen de clientes en el espejo hasta la Fase 6.
+
+#### Security
+
+- Permisos `clients.read` y `clients.write` validados en Rust en cada comando, dentro de la transacción en las escrituras.
+- El diff de auditoría guarda nombre, apellido, cédula y teléfono en claro (D15; visible para `audit.read`). Decisión consciente en ADR 0008.
+- Seed del mock aún presente en el bundle de producción hasta la Fase 6, con el centinela `V-26789012` informativo.
+
 ## [0.2.0] - 2026-11-13
 
 Rediseño visual «Piedra y bronce». Sin cambios de lógica de dominio ni de textos. Decisiones en `docs/design/piedra-y-bronce.md`.
