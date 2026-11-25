@@ -1,10 +1,20 @@
-import type { AppointmentSummary, ClientSummary, ResourceSummary, ServiceSummary } from '@/lib/bindings'
-import type { Appointment, Client, ExchangeRate, PaymentMethod, Resource, Service, SessionUser } from '@/lib/model'
+import type {
+  AppointmentSummary,
+  ClientSummary,
+  ExchangeRate as RateSummary,
+  PaymentMethodSummary,
+  PaymentSummary,
+  ResourceSummary,
+  ServiceSummary,
+} from '@/lib/bindings'
+import type { Appointment, Client, ExchangeRate, Payment, PaymentMethod, Resource, Service, SessionUser } from '@/lib/model'
 import { createAppointmentsIpcBackend } from './appointments-backend'
 import type { IpcBackend } from './auth-backend'
 import { createCatalogIpcBackend } from './catalog-backend'
+import { createClientHistoryIpcBackend } from './client-history-backend'
 import { createClientsIpcBackend } from './clients-backend'
 import { createPaymentMethodsIpcBackend } from './payment-methods-backend'
+import { createPaymentsIpcBackend } from './payments-backend'
 import { createRatesIpcBackend } from './rates-backend'
 import { createResourcesIpcBackend } from './resources-backend'
 import { createSharedRows } from './shared-rows'
@@ -21,6 +31,7 @@ export type DevBackendsOptions = {
     rates: readonly ExchangeRate[]
     clients: readonly Client[]
     appointments: readonly Appointment[]
+    payments: readonly Payment[]
   }
   now?: () => number
 }
@@ -34,13 +45,16 @@ export function createDevBackends({ auth, session, seed, now }: DevBackendsOptio
   const services = createSharedRows<ServiceSummary>()
   const resources = createSharedRows<ResourceSummary>()
   const appointments = createSharedRows<AppointmentSummary>()
+  const paymentMethods = createSharedRows<PaymentMethodSummary>()
+  const rates = createSharedRows<RateSummary>()
+  const payments = createSharedRows<PaymentSummary>()
   const clock = now ? { now } : {}
   return composeBackends(
     auth,
     (next) => createCatalogIpcBackend(next, { session, services: seed.services, shared: services }),
     (next) => createResourcesIpcBackend(next, { session, resources: seed.resources, shared: resources, appointments, ...clock }),
-    (next) => createPaymentMethodsIpcBackend(next, { session, paymentMethods: seed.paymentMethods }),
-    (next) => createRatesIpcBackend(next, { session, rates: seed.rates }),
+    (next) => createPaymentMethodsIpcBackend(next, { session, paymentMethods: seed.paymentMethods, shared: paymentMethods }),
+    (next) => createRatesIpcBackend(next, { session, rates: seed.rates, shared: rates }),
     (next) => createClientsIpcBackend(next, { session, clients: seed.clients, shared: clients }),
     (next) =>
       createAppointmentsIpcBackend(next, {
@@ -52,5 +66,16 @@ export function createDevBackends({ auth, session, seed, now }: DevBackendsOptio
         shared: appointments,
         ...clock,
       }),
+    (next) =>
+      createPaymentsIpcBackend(next, {
+        session,
+        payments: seed.payments,
+        appointments,
+        paymentMethods,
+        rates,
+        shared: payments,
+        ...clock,
+      }),
+    (next) => createClientHistoryIpcBackend(next, { session, clients, appointments, services, resources, payments }),
   )
 }

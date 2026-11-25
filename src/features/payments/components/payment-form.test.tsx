@@ -6,12 +6,15 @@ import { appointmentTemplate, NOW, resetWithEmptyAgenda, seedAppointments } from
 import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import { signInAs } from '@/test/session'
+import { err } from '@/lib/result'
+import * as paymentsApi from '../api'
 import { PaymentForm } from './payment-form'
 
 const APPOINTMENT_ID = 100
 const TODAY = NOW.slice(0, 10)
 
 beforeEach(() => {
+  vi.restoreAllMocks()
   resetWithEmptyAgenda()
   seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID }))
   commit({ ...getState(), payments: [] })
@@ -116,8 +119,56 @@ describe('PaymentForm', () => {
     await fillAmount(user, '100')
     await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Falta la tasa de hoy')
+    expect(await screen.findByText('Falta la tasa de hoy; registra la tasa o indícala manualmente')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(getState().payments).toEqual([])
+  })
+
+  it.each([
+    ['rateBsPerUsdE4', 'Tasa (Bs por USD)'],
+    ['amountCents', 'Monto'],
+    ['methodId', 'Método de pago'],
+  ])('muestra bajo su campo el error de Rust sobre %s', async (field, label) => {
+    vi.spyOn(paymentsApi, 'createPayment').mockResolvedValue(err('validation', `Rechazo de ${field}`, { field }))
+    const { user } = renderWithProviders(<PaymentForm appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
+    await screen.findByRole('option', { name: 'Zelle' })
+
+    await user.selectOptions(screen.getByLabelText('Método de pago'), 'Zelle')
+    await user.selectOptions(screen.getByLabelText('Moneda'), 'VES')
+    await fillAmount(user, '100')
+    await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    const message = await screen.findByText(`Rechazo de ${field}`)
+    expect(screen.getByLabelText(label)).toHaveAccessibleDescription(`Rechazo de ${field}`)
+    expect(message).toHaveAttribute('aria-live', 'polite')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('un error de Rust sin campo conocido se muestra como alerta del formulario', async () => {
+    vi.spyOn(paymentsApi, 'createPayment').mockResolvedValue(err('notFound', 'La cita no existe', { field: 'appointmentId' }))
+    const { user } = renderWithProviders(<PaymentForm appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
+    await screen.findByRole('option', { name: 'Zelle' })
+
+    await user.selectOptions(screen.getByLabelText('Método de pago'), 'Zelle')
+    await fillAmount(user, '10')
+    await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('La cita no existe')
+  })
+
+  it('tras un error de campo, corregir y reenviar registra el pago y limpia el error', async () => {
+    vi.spyOn(paymentsApi, 'createPayment').mockResolvedValueOnce(err('validation', 'Monto rechazado', { field: 'amountCents' }))
+    const { user } = renderWithProviders(<PaymentForm appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
+    await screen.findByRole('option', { name: 'Zelle' })
+    await user.selectOptions(screen.getByLabelText('Método de pago'), 'Zelle')
+    await fillAmount(user, '10')
+    await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
+    await screen.findByText('Monto rechazado')
+
+    await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Pago registrado')
+    expect(screen.queryByText('Monto rechazado')).not.toBeInTheDocument()
   })
 
   it('muestra el error cuando el usuario no tiene permiso de escritura', async () => {

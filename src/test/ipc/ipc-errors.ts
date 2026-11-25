@@ -37,6 +37,8 @@ const REFERENCE_MISSING_MESSAGES = {
   clientId: 'El cliente no existe',
   serviceId: 'El servicio no existe',
   resourceId: 'El recurso no existe',
+  appointmentId: 'La cita no existe',
+  methodId: 'El método de pago no existe',
 } as const
 
 export function referenceMissingError(field: keyof typeof REFERENCE_MISSING_MESSAGES): AppError {
@@ -85,4 +87,25 @@ export function resourceHasFutureAppointmentsError(appointmentIds: number[]): Ap
     field: null,
     entityIds: appointmentIds,
   }
+}
+
+export function paymentNotFoundError(): AppError {
+  return { code: 'notFound', message: 'El pago no existe', field: null, entityIds: null }
+}
+
+export function rateMissingError(): AppError {
+  return {
+    code: 'rateMissing',
+    message: 'Falta la tasa de hoy; registra la tasa o indícala manualmente',
+    field: 'rateBsPerUsdE4',
+    entityIds: null,
+  }
+}
+
+export function alreadyVoidedError(paymentId: number): AppError {
+  return { code: 'alreadyVoided', message: 'El pago ya fue anulado', field: null, entityIds: [paymentId] }
+}
+
+export function internalError(): AppError {
+  return { code: 'internal', message: 'No se pudo completar la operación', field: null, entityIds: null }
 }

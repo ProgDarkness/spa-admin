@@ -1,105 +1,36 @@
-import { syncAppointmentsMirror } from '@/features/appointments/api'
-import { listPaymentMethods } from '@/features/payment-methods/api'
-import { listRates } from '@/features/rates/api'
-import { todayLocal, nowLocal } from '@/lib/datetime'
-import { authorize } from '@/lib/mock/authorize'
-import { appendRow, commit, findById, getState, nextId, replaceById, type StoreState } from '@/lib/mock/store'
-import type { Id, Payment, PaymentInput, RateE4, Result } from '@/lib/model'
-import { usdEquivalentCents } from '@/lib/money'
-import { err, ok, validationError } from '@/lib/result'
-import { paymentInputSchema, voidFormSchema } from './schemas'
+import { commands } from '@/lib/bindings'
+import { callBackend, settle } from '@/lib/ipc'
+import { createMirrorSync } from '@/lib/mirror-sync'
+import { commit, getState, upsertById } from '@/lib/mock/store'
+import type { Id, Payment, PaymentInput, Result } from '@/lib/model'
 
-const PAYMENTS_READ = 'payments.read'
-const PAYMENTS_WRITE = 'payments.write'
+const mirrorSync = createMirrorSync()
 
-function dayRateOf(state: StoreState): RateE4 | null {
-  const today = todayLocal()
-  return state.rates.find((rate) => rate.date === today)?.rateBsPerUsdE4 ?? null
+function replacePayments(payments: readonly Payment[]): void {
+  commit({ ...getState(), payments })
 }
 
-function conversionOf(input: PaymentInput, state: StoreState): Result<{ rate: RateE4 | null; usd: number }> {
-  if (input.currency === 'USD') return ok({ rate: null, usd: input.amountCents })
-  const rate = input.rateBsPerUsdE4 ?? dayRateOf(state)
-  if (rate === null) {
-    return err('rateMissing', 'Falta la tasa de hoy; registra la tasa o indícala manualmente', {
-      field: 'rateBsPerUsdE4',
-    })
-  }
-  return ok({ rate, usd: usdEquivalentCents(input.amountCents, rate) })
-}
-
-const INCLUDE_INACTIVE = { includeInactive: true }
-
-function needsDayRate(input: PaymentInput): boolean {
-  return input.currency === 'VES' && input.rateBsPerUsdE4 === null
-}
-
-async function refreshFromRust(input: PaymentInput): Promise<Result<never> | null> {
-  const methods = await listPaymentMethods(INCLUDE_INACTIVE)
-  if (methods.status === 'error') return methods
-  const appointments = await syncAppointmentsMirror()
-  if (appointments.status === 'error') return appointments
-  if (!needsDayRate(input)) return null
-  const rates = await listRates()
-  return rates.status === 'error' ? rates : null
-}
-
-export async function listPayments(appointmentId: Id): Promise<Result<Payment[]>> {
+function mirrorPayment(payment: Payment): void {
   const state = getState()
-  const access = authorize(state, PAYMENTS_READ)
-  if (access.status === 'error') return access
-  return ok(state.payments.filter((payment) => payment.appointmentId === appointmentId))
+  commit({ ...state, payments: upsertById(state.payments, payment) })
 }
 
-export async function createPayment(input: PaymentInput): Promise<Result<Payment>> {
-  const access = authorize(getState(), PAYMENTS_WRITE)
-  if (access.status === 'error') return access
-  const parsed = paymentInputSchema.safeParse(input)
-  if (!parsed.success) return validationError(parsed.error.issues)
-  const valid = parsed.data
-  const refreshFailure = await refreshFromRust(valid)
-  if (refreshFailure) return refreshFailure
-  const state = getState()
-  if (!findById(state.appointments, valid.appointmentId)) {
-    return err('notFound', 'La cita no existe', { field: 'appointmentId' })
-  }
-  const method = findById(state.paymentMethods, valid.methodId)
-  if (!method) return err('notFound', 'El método de pago no existe', { field: 'methodId' })
-  if (!method.active) return err('validation', 'El método de pago está inactivo', { field: 'methodId' })
-  const conversion = conversionOf(valid, state)
-  if (conversion.status === 'error') return conversion
-  const created: Payment = {
-    id: nextId(state.payments),
-    appointmentId: valid.appointmentId,
-    methodId: valid.methodId,
-    currency: valid.currency,
-    amountCents: valid.amountCents,
-    rateBsPerUsdE4: conversion.data.rate,
-    usdEquivalentCents: conversion.data.usd,
-    paidAt: nowLocal(),
-    voidedAt: null,
-    voidedBy: null,
-    voidReason: null,
-  }
-  commit({ ...state, payments: appendRow(state.payments, created) })
-  return ok(created)
+function callPaymentBackend(operation: () => Promise<Result<Payment>>): Promise<Result<Payment>> {
+  return callBackend(operation, mirrorSync.reflectMutation(mirrorPayment))
 }
 
-export async function voidPayment(id: Id, reason: string): Promise<Result<Payment>> {
-  const state = getState()
-  const access = authorize(state, PAYMENTS_WRITE)
-  if (access.status === 'error') return access
-  const parsed = voidFormSchema.safeParse({ reason })
-  if (!parsed.success) return validationError(parsed.error.issues)
-  const existing = findById(state.payments, id)
-  if (!existing) return err('notFound', 'El pago no existe')
-  if (existing.voidedAt !== null) return err('alreadyVoided', 'El pago ya fue anulado', { entityIds: [id] })
-  const voided: Payment = {
-    ...existing,
-    voidedAt: nowLocal(),
-    voidedBy: access.data.id,
-    voidReason: parsed.data.reason,
-  }
-  commit({ ...state, payments: replaceById(state.payments, voided) })
-  return ok(voided)
+export function listPayments(appointmentId: Id): Promise<Result<Payment[]>> {
+  return settle(() => commands.listPayments(appointmentId))
+}
+
+export function syncPaymentsMirror(): Promise<Result<Payment[]>> {
+  return mirrorSync.listUntilApplied(() => commands.listAllPayments(), replacePayments)
+}
+
+export function createPayment(input: PaymentInput): Promise<Result<Payment>> {
+  return callPaymentBackend(() => commands.createPayment(input))
+}
+
+export function voidPayment(id: Id, reason: string): Promise<Result<Payment>> {
+  return callPaymentBackend(() => commands.voidPayment({ id, reason }))
 }

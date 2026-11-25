@@ -2,6 +2,7 @@ import { screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { commit, getState } from '@/lib/mock/store'
 import { appointmentTemplate, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import { PaymentList } from './payment-list'
 
@@ -33,6 +34,7 @@ beforeEach(() => {
       },
     ],
   })
+  installDevIpc()
 })
 
 describe('PaymentList con métodos de pago cargando', () => {

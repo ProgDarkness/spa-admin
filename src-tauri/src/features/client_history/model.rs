@@ -49,6 +49,8 @@ pub enum ClientHistoryError {
     Db(#[from] DbError),
     #[error("client not found")]
     NotFound,
+    #[error("aggregated total exceeds the safe integer range")]
+    TotalExceedsSafeRange,
 }
 
 impl From<ClientHistoryError> for AppError {
@@ -57,6 +59,10 @@ impl From<ClientHistoryError> for AppError {
             ClientHistoryError::Auth(inner) => AppError::from(inner),
             ClientHistoryError::Db(inner) => RecordFailure::Db(inner).into_app_error(LOG_SCOPE),
             ClientHistoryError::NotFound => AppError::not_found(),
+            ClientHistoryError::TotalExceedsSafeRange => {
+                eprintln!("{LOG_SCOPE}: aggregated total exceeds the safe integer range");
+                AppError::internal()
+            }
         }
     }
 }

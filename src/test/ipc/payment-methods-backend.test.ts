@@ -1,10 +1,11 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { commands } from '@/lib/bindings'
+import { commands, type PaymentMethodSummary } from '@/lib/bindings'
 import { settle } from '@/lib/ipc'
 import { createSeed } from '@/lib/mock/seed'
 import type { PermissionKey, SessionUser } from '@/lib/model'
 import { createPaymentMethodsIpcBackend } from './payment-methods-backend'
+import { createSharedRows } from './shared-rows'
 
 const SEED = createSeed('2026-11-12')
 const SEED_METHOD_COUNT = 5
@@ -370,5 +371,28 @@ describe('enrutamiento', () => {
     await commands.createPaymentMethod(validInput)
 
     expect(other('list_payment_methods', { filter: { includeInactive: true } })).toHaveLength(SEED_METHOD_COUNT)
+  })
+})
+
+describe('filas compartidas', () => {
+  it('publica los métodos iniciales y cada alta, renombre y desactivación', async () => {
+    const shared = createSharedRows<PaymentMethodSummary>()
+    mockIPC(
+      createPaymentMethodsIpcBackend(failWhenUnrouted, {
+        session: () => session,
+        paymentMethods: SEED.paymentMethods,
+        shared,
+        now: () => nowMs,
+      }),
+    )
+    expect(shared.read()).toHaveLength(SEED_METHOD_COUNT)
+
+    await commands.createPaymentMethod(validInput)
+    await commands.updatePaymentMethod({ id: 1, name: 'Efectivo USD' })
+    await commands.setPaymentMethodActive({ id: 2, active: false })
+
+    expect(shared.read()).toHaveLength(SEED_METHOD_COUNT + 1)
+    expect(shared.read().find((row) => row.id === 1)?.name).toBe('Efectivo USD')
+    expect(shared.read().find((row) => row.id === 2)?.active).toBe(false)
   })
 })

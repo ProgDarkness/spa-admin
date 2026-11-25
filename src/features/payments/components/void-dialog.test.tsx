@@ -5,6 +5,7 @@ import type { Payment } from '@/lib/model'
 import { formatCents } from '@/lib/money'
 import { AppErrorException, err } from '@/lib/result'
 import { appointmentTemplate, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import * as paymentsApi from '../api'
 import { VoidDialog } from './void-dialog'
@@ -32,6 +33,7 @@ beforeEach(() => {
   resetWithEmptyAgenda()
   seedAppointments(appointmentTemplate({ id: 100 }))
   commit({ ...getState(), payments: [PAYMENT] })
+  installDevIpc()
 })
 
 async function openDialog() {
@@ -114,6 +116,45 @@ describe('VoidDialog', () => {
     await user.click(screen.getByRole('button', { name: CONFIRM }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo anular el pago')
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('el error de Rust sobre reason se muestra bajo el campo y no como alerta', async () => {
+    vi.spyOn(paymentsApi, 'voidPayment').mockResolvedValue(err('validation', 'Motivo rechazado por Rust', { field: 'reason' }))
+    const { user, onClose } = await openDialog()
+
+    await user.type(screen.getByLabelText(REASON), 'Motivo')
+    await user.click(screen.getByRole('button', { name: CONFIRM }))
+
+    expect(await screen.findByText('Motivo rechazado por Rust')).toBeInTheDocument()
+    expect(screen.getByLabelText(REASON)).toHaveAccessibleDescription('Motivo rechazado por Rust')
+    expect(screen.getByText('Motivo rechazado por Rust')).toHaveAttribute('aria-live', 'polite')
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('un error viejo de reason no convive con la alerta alreadyVoided del siguiente envío', async () => {
+    vi.spyOn(paymentsApi, 'voidPayment')
+      .mockResolvedValueOnce(err('validation', 'Motivo rechazado por Rust', { field: 'reason' }))
+      .mockResolvedValueOnce(err('alreadyVoided', 'El pago ya fue anulado', { entityIds: [7] }))
+    const { user } = await openDialog()
+    await user.type(screen.getByLabelText(REASON), 'Motivo')
+    await user.click(screen.getByRole('button', { name: CONFIRM }))
+    await screen.findByText('Motivo rechazado por Rust')
+
+    await user.click(screen.getByRole('button', { name: CONFIRM }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('El pago ya fue anulado')
+    expect(screen.queryByText('Motivo rechazado por Rust')).not.toBeInTheDocument()
+  })
+
+  it('alreadyVoided de Rust se muestra como alerta con su mensaje y no cierra', async () => {
+    vi.spyOn(paymentsApi, 'voidPayment').mockResolvedValue(err('alreadyVoided', 'El pago ya fue anulado', { entityIds: [7] }))
+    const { user, onClose } = await openDialog()
+
+    await user.type(screen.getByLabelText(REASON), 'Motivo')
+    await user.click(screen.getByRole('button', { name: CONFIRM }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('El pago ya fue anulado')
     expect(onClose).not.toHaveBeenCalled()
   })
 

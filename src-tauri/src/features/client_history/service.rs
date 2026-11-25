@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use rusqlite::Connection;
 
 use super::model::{ClientHistory, ClientHistoryEntry, ClientHistoryError};
-use super::repository;
+use super::repository::{self, HistoryTotals};
 use crate::features::clients::repository::find_client;
 use crate::features::payments::model::PaymentSummary;
+use crate::features::payments::rules::MAX_JS_SAFE_INTEGER;
 
 fn payments_by_appointment(payments: Vec<PaymentSummary>) -> HashMap<i64, Vec<PaymentSummary>> {
     payments
@@ -17,6 +18,27 @@ fn payments_by_appointment(payments: Vec<PaymentSummary>) -> HashMap<i64, Vec<Pa
                 .push(payment);
             grouped
         })
+}
+
+fn require_safe_totals(totals: &HistoryTotals) -> Result<(), ClientHistoryError> {
+    let aggregates = [
+        totals.total_minutes,
+        totals.paid_completed.usd,
+        totals.paid_completed.ves,
+        totals.collected_on_non_completed.usd,
+        totals.collected_on_non_completed.ves,
+        totals.pending.usd,
+        totals.pending.ves,
+        totals.ves_usd_equivalent_of_completed,
+    ];
+    if aggregates
+        .iter()
+        .all(|total| (0..=MAX_JS_SAFE_INTEGER).contains(total))
+    {
+        Ok(())
+    } else {
+        Err(ClientHistoryError::TotalExceedsSafeRange)
+    }
 }
 
 pub fn client_history(
@@ -35,6 +57,7 @@ pub fn client_history(
         })
         .collect();
     let totals = repository::client_totals(conn, client_id)?;
+    require_safe_totals(&totals)?;
     Ok(ClientHistory {
         client,
         entries,

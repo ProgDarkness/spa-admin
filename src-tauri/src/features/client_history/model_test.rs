@@ -40,3 +40,11 @@ fn database_failures_do_not_leak() {
 
     assert_eq!(error, AppError::internal());
 }
+
+#[test]
+fn a_total_above_the_safe_range_maps_to_a_controlled_internal_error() {
+    let error = AppError::from(ClientHistoryError::TotalExceedsSafeRange);
+
+    assert_eq!(error, AppError::internal());
+    assert_eq!(error.code, AppErrorCode::Internal);
+}

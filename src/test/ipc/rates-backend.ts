@@ -4,11 +4,13 @@ import { MAX_RATE_E4 } from '@/lib/money'
 import { isSupportedRateDate } from '@/features/rates/schemas'
 import type { IpcBackend } from './auth-backend'
 import { validationError } from './ipc-errors'
+import type { SharedRows } from './shared-rows'
 import { isRecord, requirePermission } from './record-backend-support'
 
 export type RatesBackendOptions = {
   session: () => SessionUser | null
   rates: readonly ExchangeRate[]
+  shared?: SharedRows<ExchangeRate>
 }
 
 const RATES_MANAGE = 'rates.manage'
@@ -47,6 +49,12 @@ function requireRateInRange(rate: number): void {
 
 export function createRatesIpcBackend(next: IpcBackend, options: RatesBackendOptions): IpcBackend {
   let rows: readonly ExchangeRate[] = options.rates.map((rate) => ({ ...rate }))
+  options.shared?.write(rows)
+
+  function setRows(updated: readonly ExchangeRate[]): void {
+    rows = updated
+    options.shared?.write(updated)
+  }
 
   function listRates(): ExchangeRate[] {
     requirePermission(options.session, RATES_MANAGE, PAYMENTS_READ)
@@ -69,7 +77,7 @@ export function createRatesIpcBackend(next: IpcBackend, options: RatesBackendOpt
     const existing = rows.find((row) => row.date === date)
     if (existing?.rateBsPerUsdE4 === rateBsPerUsdE4) return existing
     const requested: ExchangeRate = { date, rateBsPerUsdE4 }
-    rows = existing ? rows.map((row) => (row.date === date ? requested : row)) : [...rows, requested]
+    setRows(existing ? rows.map((row) => (row.date === date ? requested : row)) : [...rows, requested])
     return requested
   }
 

@@ -55,7 +55,7 @@ function callAppointmentBackend(operation: () => Promise<Result<AppointmentSumma
 }
 
 export function syncAppointmentsMirror(): Promise<Result<Appointment[]>> {
-  return mirrorSync.list(fetchAllAppointments, replaceAppointments)
+  return mirrorSync.listUntilApplied(fetchAllAppointments, replaceAppointments)
 }
 
 export function createAppointment(input: AppointmentInput): Promise<Result<Appointment>> {

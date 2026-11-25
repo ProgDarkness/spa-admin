@@ -1,4 +1,5 @@
 use super::*;
+use crate::errors::AppError;
 use crate::features::appointments::fixture_test::{
     create, execute, facial, ACTIVE_CLIENT, ACTIVE_SERVICE, CABIN_ONE,
 };
@@ -110,6 +111,63 @@ fn five_thousand_payments_at_the_cap_are_summed_without_overflow() {
 
     assert_eq!(history.paid_by_currency.usd, 500_000_000_000_000);
     assert_eq!(history.entries[0].payments.len(), 5000);
+}
+
+fn insert_cap_payments(
+    fixture: &crate::features::appointments::fixture_test::Fixture,
+    appointment: i64,
+    rows: i64,
+) {
+    execute(
+        fixture,
+        &format!(
+            "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {rows}) \
+             INSERT INTO appointment_payments (appointment_id, method_id, currency, \
+             amount_cents, usd_equivalent_cents, paid_at) \
+             SELECT {appointment}, 1, 'USD', 100000000000, 100000000000, '2026-11-10T09:00' FROM n"
+        ),
+    );
+}
+
+fn completed_appointment(fixture: &crate::features::appointments::fixture_test::Fixture) -> i64 {
+    appointment_on(
+        fixture,
+        ACTIVE_CLIENT,
+        ACTIVE_SERVICE,
+        "2026-11-10T08:00",
+        Completed,
+    )
+}
+
+#[test]
+fn a_total_above_the_safe_integer_range_is_a_controlled_internal_error() {
+    let fixture = fixture();
+    let done = completed_appointment(&fixture);
+    insert_cap_payments(&fixture, done, 90_073);
+
+    let outcome = fixture
+        .database
+        .with_conn_mapped(|conn| client_history(conn, ACTIVE_CLIENT));
+
+    assert!(matches!(
+        outcome,
+        Err(ClientHistoryError::TotalExceedsSafeRange)
+    ));
+    assert_eq!(
+        AppError::from(ClientHistoryError::TotalExceedsSafeRange),
+        AppError::internal()
+    );
+}
+
+#[test]
+fn a_total_just_below_the_safe_integer_range_is_still_returned() {
+    let fixture = fixture();
+    let done = completed_appointment(&fixture);
+    insert_cap_payments(&fixture, done, 90_071);
+
+    let history = history_of(&fixture, ACTIVE_CLIENT);
+
+    assert_eq!(history.paid_by_currency.usd, 9_007_100_000_000_000);
 }
 
 fn history_of(
