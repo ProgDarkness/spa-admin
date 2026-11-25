@@ -3,6 +3,7 @@ import { createSeed } from '@/lib/mock/seed'
 import type { PermissionKey, SessionUser } from '@/lib/model'
 import type { IpcBackend } from './auth-backend'
 import { composeBackends, createDevBackends } from './dev-backends'
+import { appointmentIdentitiesOf } from './dev-seed-expectations'
 
 const SEED = createSeed('2026-11-12')
 const ALL_PERMISSIONS: PermissionKey[] = [
@@ -10,12 +11,14 @@ const ALL_PERMISSIONS: PermissionKey[] = [
   'catalog.write',
   'resources.manage',
   'appointments.read',
+  'appointments.write',
   'payments.read',
   'rates.manage',
   'clients.read',
   'clients.write',
 ]
 const LIST_ALL = { filter: { includeInactive: true } }
+const WIDE_RANGE = { from: '2026-09-01', to: '2027-01-31', resourceId: null }
 
 function userWith(...permissions: PermissionKey[]): SessionUser {
   return { id: 50, username: 'tester', roleName: 'Prueba', permissions }
@@ -93,6 +96,41 @@ describe('createDevBackends', () => {
     expect(listed).toHaveLength(SEED.clients.length)
     expect(devBackends()('list_clients', { filter: { query: '', includeDeleted: false } })).toHaveLength(
       SEED.clients.length - 1,
+    )
+  })
+
+  it('atiende los comandos de citas con las 16 citas del seed ordenadas por inicio e id', () => {
+    const listed = devBackends()('list_appointments', { range: WIDE_RANGE })
+
+    expect(appointmentIdentitiesOf(listed)).toEqual(
+      appointmentIdentitiesOf(SEED.appointments.toSorted((a, b) => a.startsAt.localeCompare(b.startsAt) || a.id - b.id)),
+    )
+    expect(listed).toHaveLength(16)
+  })
+
+  it('las citas ven los clientes, servicios y recursos del mismo backend compuesto', () => {
+    const backend = devBackends()
+    backend('create_client', {
+      input: { firstName: 'Nueva', lastName: 'Persona', nationalId: 'V-30111222', phone: '0414-5550000' },
+    })
+
+    const created = backend('create_appointment', {
+      input: { clientId: SEED.clients.length + 1, serviceId: 1, resourceId: 1, startsAt: '2027-03-01T10:00', notes: null },
+    })
+
+    expect(created).toMatchObject({ clientId: SEED.clients.length + 1, status: 'scheduled' })
+  })
+
+  it('desactivar un recurso con citas futuras scheduled se bloquea con los ids del estado de citas', () => {
+    const backend = createDevBackends({
+      auth: authReplying('auth'),
+      session: () => userWith(...ALL_PERMISSIONS),
+      seed: SEED,
+      now: () => new Date(2026, 10, 12, 9, 0).getTime(),
+    })
+
+    expect(() => backend('set_resource_active', { activation: { id: 1, active: false } })).toThrow(
+      expect.objectContaining({ code: 'resourceHasFutureAppointments', entityIds: [5] }),
     )
   })
 

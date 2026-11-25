@@ -2,9 +2,10 @@ import { clearMocks, mockIPC } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { currentUser } from '@/lib/mock/authorize'
 import { commit, getState, resetStore } from '@/lib/mock/store'
-import type { Appointment, AppError, Id, Resource, ResourceInput } from '@/lib/model'
+import type { AppError, Resource, ResourceInput } from '@/lib/model'
 import { freezeDate } from '@/test/clock'
 import { createResourcesIpcBackend } from '@/test/ipc/resources-backend'
+import { createSharedRows } from '@/test/ipc/shared-rows'
 import { signInAs } from '@/test/session'
 import {
   createResource,
@@ -18,7 +19,6 @@ const NOW = '2026-11-12T09:00'
 const MANAGER = 'propietaria'
 const NO_MANAGE = 'lectura'
 const CABIN_WITH_FUTURE = 1
-const CABIN_ALSO_WITH_FUTURE = 2
 const INACTIVE_MANICURE = 3
 const MISSING_ID = 999
 const SEED_RESOURCE_COUNT = 3
@@ -34,7 +34,7 @@ function installResourcesIpc(): void {
     (cmd) => {
       throw new Error(`IPC no simulado: ${cmd}`)
     },
-    { session: () => currentUser(getState()), resources: getState().resources },
+    { session: () => currentUser(getState()), resources: getState().resources, appointments: createSharedRows() },
   )
   mockIPC((cmd, args) => {
     calls.push({ cmd, args })
@@ -50,30 +50,6 @@ function appError(code: AppError['code'], field: string | null = null): AppError
 function resourceOf(result: Awaited<ReturnType<typeof createResource>>): Resource {
   if (result.status !== 'ok') throw new Error('se esperaba ok')
   return result.data
-}
-
-function appointmentsOf(resourceId: Id): Appointment[] {
-  return getState().appointments.filter((appointment) => appointment.resourceId === resourceId)
-}
-
-function withAppointments(rows: readonly Appointment[]): void {
-  commit({ ...getState(), appointments: rows })
-}
-
-function appointmentTemplate(overrides: Partial<Appointment>): Appointment {
-  return {
-    id: 100,
-    clientId: 1,
-    serviceId: 1,
-    resourceId: CABIN_WITH_FUTURE,
-    startsAt: '2026-11-13T10:00',
-    endsAt: '2026-11-13T11:00',
-    status: 'scheduled',
-    priceCentsSnapshot: 1000,
-    durationMinSnapshot: 60,
-    notes: null,
-    ...overrides,
-  }
 }
 
 beforeEach(() => {
@@ -361,7 +337,6 @@ describe('setResourceActive', () => {
 
   it('envía id y estado en la clave activation del comando set_resource_active', async () => {
     signInAs(MANAGER)
-    withAppointments([])
 
     await setResourceActive(1, false)
 
@@ -379,7 +354,6 @@ describe('setResourceActive', () => {
 
   it('desactiva un recurso sin citas futuras y lo refleja en el mock', async () => {
     signInAs(MANAGER)
-    withAppointments([])
     const previousRow = getState().resources[0]
 
     const result = await setResourceActive(CABIN_WITH_FUTURE, false)
@@ -410,7 +384,6 @@ describe('setResourceActive', () => {
 
   it('convierte un fallo del canal en internal y no toca el mock', async () => {
     signInAs(MANAGER)
-    withAppointments([])
     thrownByIpc = new Error('canal caído')
     const before = getState()
 
@@ -419,246 +392,97 @@ describe('setResourceActive', () => {
   })
 })
 
-describe('setResourceActive: guarda transitoria de citas futuras (D9)', () => {
-  it('bloquea con citas scheduled futuras del seed, lista sus ids y no llama a Rust', async () => {
+
+describe('setResourceActive: la guarda de citas futuras la decide Rust', () => {
+  it('con citas futuras en el espejo de citas no bloquea localmente y solo llama a set_resource_active', async () => {
     signInAs(MANAGER)
+
+    const result = await setResourceActive(CABIN_WITH_FUTURE, false)
+
+    expect(result).toMatchObject({ status: 'ok', data: { active: false } })
+    expect(calls).toEqual([{ cmd: 'set_resource_active', args: { activation: { id: CABIN_WITH_FUTURE, active: false } } }])
+  })
+
+  it('entrega resourceHasFutureAppointments con sus entityIds tal como lo devuelve Rust y no toca el espejo', async () => {
+    signInAs(MANAGER)
+    const rustError: AppError = {
+      code: 'resourceHasFutureAppointments',
+      message: 'mensaje de Rust',
+      field: null,
+      entityIds: [7, 8],
+    }
+    thrownByIpc = rustError
     const before = getState()
-    const expectedIds = appointmentsOf(CABIN_WITH_FUTURE)
-      .filter((appointment) => appointment.status === 'scheduled' && appointment.startsAt >= NOW)
-      .map((appointment) => appointment.id)
 
     const result = await setResourceActive(CABIN_WITH_FUTURE, false)
 
-    expect(expectedIds).toEqual([5])
-    expect(result).toMatchObject({
-      status: 'error',
-      error: { code: 'resourceHasFutureAppointments', entityIds: expectedIds },
-    })
-    expect(calls.map((call) => call.cmd)).toEqual(['list_resources'])
-    expect(getState().appointments).toBe(before.appointments)
-    expect(getState().resources).toEqual(before.resources)
+    expect(result).toEqual({ status: 'error', error: rustError })
+    expect(getState().resources).toBe(before.resources)
   })
 
-  it('bloquea la otra cabina con su propia cita futura', async () => {
-    signInAs(MANAGER)
-
-    const result = await setResourceActive(CABIN_ALSO_WITH_FUTURE, false)
-
-    expect(result).toMatchObject({
-      status: 'error',
-      error: { code: 'resourceHasFutureAppointments', entityIds: [12] },
-    })
-  })
-
-  it('lista todos los ids bloqueantes en orden de inicio', async () => {
-    signInAs(MANAGER)
-    withAppointments([
-      appointmentTemplate({ id: 7, startsAt: '2026-11-14T10:00' }),
-      appointmentTemplate({ id: 8, startsAt: '2026-11-15T10:00' }),
-    ])
-
-    const result = await setResourceActive(CABIN_WITH_FUTURE, false)
-
-    expect(result).toMatchObject({ status: 'error', error: { entityIds: [7, 8] } })
-  })
-
-  it.each(['completed', 'cancelled', 'noShow', 'inProgress'] as const)(
-    'una cita futura %s no bloquea y se llama a Rust',
-    async (status) => {
+  it.each(['sessionLocked', 'unauthenticated', 'forbidden', 'internal'] as const)(
+    'entrega el error %s de Rust sin consultas previas',
+    async (code) => {
       signInAs(MANAGER)
-      withAppointments([appointmentTemplate({ status })])
+      thrownByIpc = appError(code)
 
       const result = await setResourceActive(CABIN_WITH_FUTURE, false)
 
-      expect(result.status).toBe('ok')
+      expect(result).toEqual({ status: 'error', error: appError(code) })
       expect(calls.map((call) => call.cmd)).toEqual(['set_resource_active'])
     },
   )
-
-  it('una cita scheduled pasada no bloquea', async () => {
-    signInAs(MANAGER)
-    withAppointments([appointmentTemplate({ startsAt: '2026-11-12T08:59' })])
-
-    const result = await setResourceActive(CABIN_WITH_FUTURE, false)
-
-    expect(result.status).toBe('ok')
-  })
-
-  it('una cita scheduled que empieza exactamente ahora bloquea', async () => {
-    signInAs(MANAGER)
-    withAppointments([appointmentTemplate({ id: 9, startsAt: NOW })])
-
-    const result = await setResourceActive(CABIN_WITH_FUTURE, false)
-
-    expect(result).toMatchObject({ status: 'error', error: { entityIds: [9] } })
-  })
-
-  it('una cita futura de otro recurso no bloquea', async () => {
-    signInAs(MANAGER)
-    withAppointments([appointmentTemplate({ resourceId: CABIN_ALSO_WITH_FUTURE })])
-
-    const result = await setResourceActive(CABIN_WITH_FUTURE, false)
-
-    expect(result.status).toBe('ok')
-  })
-
-  it('con bloqueo solo se hace la lectura de confirmación y sin bloqueo solo se desactiva', async () => {
-    signInAs(MANAGER)
-    await setResourceActive(CABIN_WITH_FUTURE, false)
-    const commandsWhenBlocked = calls.map((call) => call.cmd)
-    calls = []
-    withAppointments([])
-
-    await setResourceActive(CABIN_WITH_FUTURE, false)
-
-    expect(commandsWhenBlocked).toEqual(['list_resources'])
-    expect(calls.map((call) => call.cmd)).toEqual(['set_resource_active'])
-  })
-
-  it('la lectura de confirmación usa el filtro por defecto', async () => {
-    signInAs(MANAGER)
-
-    await setResourceActive(CABIN_WITH_FUTURE, false)
-
-    expect(calls).toEqual([{ cmd: 'list_resources', args: { filter: { includeInactive: true } } }])
-  })
-
-  it.each(['sessionLocked', 'unauthenticated', 'forbidden', 'internal'] as const)(
-    'con citas futuras y Rust respondiendo %s entrega ese error y no la guarda ni llama a desactivar',
-    async (code) => {
-      signInAs(MANAGER)
-      thrownByIpc = appError(code)
-
-      const result = await setResourceActive(CABIN_WITH_FUTURE, false)
-
-      expect(result).toEqual({ status: 'error', error: appError(code) })
-      expect(calls.map((call) => call.cmd)).toEqual(['list_resources'])
-    },
-  )
-
-  it('con citas futuras y un fallo del canal entrega internal y no la guarda', async () => {
-    signInAs(MANAGER)
-    thrownByIpc = new Error('canal caído')
-
-    const result = await setResourceActive(CABIN_WITH_FUTURE, false)
-
-    expect(result).toMatchObject({ status: 'error', error: { code: 'internal' } })
-    expect(result).not.toMatchObject({ error: { code: 'resourceHasFutureAppointments' } })
-  })
-
-  it('con Rust confirmando la sesión y citas futuras entrega la guarda con los entityIds', async () => {
-    signInAs(MANAGER)
-    withAppointments([
-      appointmentTemplate({ id: 7, startsAt: '2026-11-14T10:00' }),
-      appointmentTemplate({ id: 8, startsAt: '2026-11-15T10:00' }),
-    ])
-
-    const result = await setResourceActive(CABIN_WITH_FUTURE, false)
-
-    expect(result).toMatchObject({
-      status: 'error',
-      error: { code: 'resourceHasFutureAppointments', entityIds: [7, 8] },
-    })
-  })
-
-  it('desactivar un recurso ya inactivo con citas futuras scheduled no bloquea y llama a Rust', async () => {
-    signInAs(MANAGER)
-    withAppointments([appointmentTemplate({ resourceId: INACTIVE_MANICURE })])
-
-    const result = await setResourceActive(INACTIVE_MANICURE, false)
-
-    expect(result).toMatchObject({ status: 'ok', data: { id: INACTIVE_MANICURE, active: false } })
-    expect(calls.map((call) => call.cmd)).toEqual(['set_resource_active'])
-  })
-
-  it('un error de Rust llega intacto cuando el chequeo transitorio no bloquea', async () => {
-    signInAs(MANAGER)
-    withAppointments([])
-    thrownByIpc = appError('sessionLocked')
-
-    expect(await setResourceActive(CABIN_WITH_FUTURE, false)).toEqual({ status: 'error', error: appError('sessionLocked') })
-  })
-
-  it('sin permiso en el mock no revela las citas: decide Rust con su propio forbidden', async () => {
-    signInAs(NO_MANAGE)
-
-    const result = await setResourceActive(CABIN_WITH_FUTURE, false)
-
-    expect(result).toMatchObject({ status: 'error', error: { code: 'forbidden' } })
-    expect(calls.map((call) => call.cmd)).toEqual(['set_resource_active'])
-  })
-
-  it('no revela las citas sin sesión: decide Rust con unauthenticated', async () => {
-    const result = await setResourceActive(CABIN_WITH_FUTURE, false)
-
-    expect(result).toMatchObject({ status: 'error', error: { code: 'unauthenticated' } })
-  })
 })
 
 describe('listFutureAppointmentsOfResource', () => {
-  it('rechaza sin sesión con unauthenticated', async () => {
-    const result = await listFutureAppointmentsOfResource(1)
+  const rustFuture = [
+    { id: 5, startsAt: '2026-11-13T16:00' },
+    { id: 9, startsAt: '2026-11-14T10:00' },
+  ]
 
-    expect(result).toMatchObject({ status: 'error', error: { code: 'unauthenticated' } })
+  it('delega en list_future_appointments_of_resource con el id y devuelve lo que responde Rust', async () => {
+    clearMocks()
+    mockIPC((cmd, args) => {
+      calls.push({ cmd, args })
+      return rustFuture
+    })
+
+    const result = await listFutureAppointmentsOfResource(CABIN_WITH_FUTURE)
+
+    expect(calls).toEqual([{ cmd: 'list_future_appointments_of_resource', args: { id: CABIN_WITH_FUTURE } }])
+    expect(result).toEqual({ status: 'ok', data: rustFuture })
   })
 
-  it('rechaza sin resources.manage con forbidden', async () => {
-    signInAs(NO_MANAGE)
-
-    const result = await listFutureAppointmentsOfResource(1)
-
-    expect(result).toMatchObject({ status: 'error', error: { code: 'forbidden' } })
-  })
-
-  it('un recurso inexistente llega como validation con field id y no como notFound', async () => {
-    signInAs(MANAGER)
-
-    const result = await listFutureAppointmentsOfResource(MISSING_ID)
-
-    expect(result).toMatchObject({ status: 'error', error: { code: 'validation', field: 'id' } })
-  })
-
-  it('confirma la sesión con una sola lectura de recursos con el filtro por defecto', async () => {
-    signInAs(MANAGER)
-
-    await listFutureAppointmentsOfResource(CABIN_WITH_FUTURE)
-
-    expect(calls).toEqual([{ cmd: 'list_resources', args: { filter: { includeInactive: true } } }])
-  })
-
-  it.each(['sessionLocked', 'unauthenticated', 'forbidden', 'internal'] as const)(
-    'con Rust respondiendo %s entrega ese error y ninguna cita',
+  it.each(['sessionLocked', 'unauthenticated', 'forbidden', 'validation', 'internal'] as const)(
+    'entrega el error %s de Rust y ninguna cita',
     async (code) => {
       signInAs(MANAGER)
       thrownByIpc = appError(code)
 
-      const result = await listFutureAppointmentsOfResource(CABIN_WITH_FUTURE)
-
-      expect(result).toEqual({ status: 'error', error: appError(code) })
+      expect(await listFutureAppointmentsOfResource(CABIN_WITH_FUTURE)).toEqual({
+        status: 'error',
+        error: appError(code),
+      })
     },
   )
 
-  it('devuelve solo id e inicio de cada cita con Rust confirmando la sesión', async () => {
+  it('un fallo del canal es internal', async () => {
     signInAs(MANAGER)
-    withAppointments([appointmentTemplate({ id: 7, startsAt: '2026-11-14T10:00', notes: 'privada' })])
+    thrownByIpc = new Error('canal caído')
 
-    const result = await listFutureAppointmentsOfResource(CABIN_WITH_FUTURE)
-
-    expect(result).toEqual({ status: 'ok', data: [{ id: 7, startsAt: '2026-11-14T10:00' }] })
+    expect(await listFutureAppointmentsOfResource(CABIN_WITH_FUTURE)).toMatchObject({
+      status: 'error',
+      error: { code: 'internal' },
+    })
   })
 
-  it('devuelve solo las scheduled futuras del recurso ordenadas por inicio', async () => {
+  it('con el backend simulado rechaza sin resources.manage con forbidden y recurso inexistente con validation id', async () => {
+    signInAs(NO_MANAGE)
+    const forbidden = await listFutureAppointmentsOfResource(CABIN_WITH_FUTURE)
     signInAs(MANAGER)
-    withAppointments([
-      appointmentTemplate({ id: 2, startsAt: '2026-11-15T10:00' }),
-      appointmentTemplate({ id: 1, startsAt: '2026-11-14T10:00' }),
-      appointmentTemplate({ id: 3, status: 'cancelled' }),
-      appointmentTemplate({ id: 4, startsAt: '2026-11-10T10:00' }),
-      appointmentTemplate({ id: 5, resourceId: CABIN_ALSO_WITH_FUTURE }),
-    ])
+    const missing = await listFutureAppointmentsOfResource(MISSING_ID)
 
-    const result = await listFutureAppointmentsOfResource(CABIN_WITH_FUTURE)
-
-    expect(result.status === 'ok' && result.data.map((appointment) => appointment.id)).toEqual([1, 2])
+    expect(forbidden).toMatchObject({ status: 'error', error: { code: 'forbidden' } })
+    expect(missing).toMatchObject({ status: 'error', error: { code: 'validation', field: 'id' } })
   })
 })

@@ -110,6 +110,14 @@ pub fn list_appointments(
     Ok(rows)
 }
 
+pub fn list_all_appointments(conn: &Connection) -> Result<Vec<AppointmentSummary>, DbError> {
+    let mut statement = conn.prepare(&format!("{APPOINTMENT_SUMMARY_SQL} {CHRONOLOGICAL}"))?;
+    let rows = statement
+        .query_map([], appointment_summary)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 pub fn find_overlaps(
     conn: &Connection,
     resource_id: i64,

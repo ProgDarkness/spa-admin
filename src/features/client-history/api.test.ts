@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { commit, getState, resetStore } from '@/lib/mock/store'
 import type { ClientHistory, Result } from '@/lib/model'
 import { freezeDate } from '@/test/clock'
+import { installDevIpc } from '@/test/dev-ipc'
 import { signInAs } from '@/test/session'
 import { getClientHistory } from './api'
 
@@ -13,6 +14,7 @@ const MISSING_ID = 9999
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
   resetStore()
+  installDevIpc()
   signInAs('recepcion')
 })
 
@@ -96,11 +98,15 @@ describe('getClientHistory', () => {
     expect(errorCodeOf(await getClientHistory(MARIA_ID))).toBe('forbidden')
   })
 
-  it('no modifica el store', async () => {
+  it('deja el store con las mismas filas tras sincronizar las citas, sin importar su orden', async () => {
     const before = getState()
 
     await getClientHistory(MARIA_ID)
 
-    expect(getState()).toBe(before)
+    const byId = (rows: typeof before.appointments) => rows.toSorted((first, second) => first.id - second.id)
+    expect({ ...getState(), appointments: byId(getState().appointments) }).toEqual({
+      ...before,
+      appointments: byId(before.appointments),
+    })
   })
 })

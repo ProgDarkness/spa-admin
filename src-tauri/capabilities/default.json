@@ -42,6 +42,7 @@
     "allow-update-client",
     "allow-set-client-deleted",
     "allow-list-appointments",
+    "allow-list-all-appointments",
     "allow-create-appointment",
     "allow-move-appointment",
     "allow-transition-appointment",

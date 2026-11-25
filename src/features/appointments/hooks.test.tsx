@@ -4,6 +4,7 @@ import { getState, resetStore } from '@/lib/mock/store'
 import type { AppointmentRange } from '@/lib/model'
 import { appErrorOf } from '@/lib/result'
 import { freezeDate } from '@/test/clock'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import { useAppointments, useCreateAppointment, useMoveAppointment, useTransitionAppointment } from './hooks'
 
@@ -13,6 +14,7 @@ const RANGE: AppointmentRange = { from: DAY, to: DAY, resourceId: null }
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
   resetStore()
+  installDevIpc()
 })
 
 function AppointmentIds({ range }: { range: AppointmentRange }) {
@@ -61,16 +63,17 @@ describe('useAppointments', () => {
   it('sin sesión expone el error de dominio', async () => {
     renderWithProviders(<AppointmentIds range={RANGE} />)
 
-    expect(await screen.findByText('error:Debes iniciar sesión')).toBeInTheDocument()
+    expect(await screen.findByText('error:Inicia sesión para continuar')).toBeInTheDocument()
   })
 })
 
 describe('mutaciones de citas', () => {
-  it('crear agrega la cita al store e invalida appointments, clientHistory y metrics', async () => {
+  it('crear agrega la cita al store e invalida appointments, clientHistory, metrics y payments', async () => {
     const { queryClient, user } = renderWithProviders(<Actions />, { as: 'recepcion' })
     await queryClient.prefetchQuery({ queryKey: ['appointments', RANGE], queryFn: () => [] })
     await queryClient.prefetchQuery({ queryKey: ['clientHistory', 1], queryFn: () => null })
     await queryClient.prefetchQuery({ queryKey: ['metrics', '2026-11'], queryFn: () => null })
+    await queryClient.prefetchQuery({ queryKey: ['payments', 5], queryFn: () => [] })
     await queryClient.prefetchQuery({ queryKey: ['clients', {}], queryFn: () => [] })
 
     await user.click(screen.getByRole('button', { name: 'crear' }))
@@ -80,6 +83,7 @@ describe('mutaciones de citas', () => {
       expect(queryClient.getQueryState(['appointments', RANGE])?.isInvalidated).toBe(true)
       expect(queryClient.getQueryState(['clientHistory', 1])?.isInvalidated).toBe(true)
       expect(queryClient.getQueryState(['metrics', '2026-11'])?.isInvalidated).toBe(true)
+      expect(queryClient.getQueryState(['payments', 5])?.isInvalidated).toBe(true)
     })
     expect(queryClient.getQueryState(['clients', {}])?.isInvalidated).toBe(false)
   })

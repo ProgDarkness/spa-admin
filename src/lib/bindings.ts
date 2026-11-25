@@ -42,6 +42,7 @@ export const commands = {
 	updateClient: (update: ClientUpdate, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("update_client", { update }, options)),
 	setClientDeleted: (deletion: ClientDeletion, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("set_client_deleted", { deletion }, options)),
 	listAppointments: (range: AppointmentRange, options?: InvokeOptions) => typedError<AppointmentSummary[], AppError>(__TAURI_INVOKE("list_appointments", { range }, options)),
+	listAllAppointments: (options?: InvokeOptions) => typedError<AppointmentSummary[], AppError>(__TAURI_INVOKE("list_all_appointments", undefined, options)),
 	createAppointment: (input: AppointmentInput, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("create_appointment", { input }, options)),
 	moveAppointment: (movement: AppointmentMove, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("move_appointment", { movement }, options)),
 	transitionAppointment: (request: AppointmentTransitionRequest, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("transition_appointment", { request }, options)),

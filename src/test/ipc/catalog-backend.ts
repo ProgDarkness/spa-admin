@@ -2,6 +2,7 @@ import type { ServiceActivation, ServiceFilter, ServiceInput, ServiceSummary, Se
 import type { Service, SessionUser } from '@/lib/model'
 import { MAX_AMOUNT_CENTS } from '@/lib/money'
 import type { IpcBackend } from './auth-backend'
+import type { SharedRows } from './shared-rows'
 import { validationError } from './ipc-errors'
 import {
   booleanField,
@@ -18,6 +19,7 @@ import {
 export type CatalogBackendOptions = {
   session: () => SessionUser | null
   services: readonly Service[]
+  shared?: SharedRows<ServiceSummary>
   now?: () => number
 }
 
@@ -48,6 +50,12 @@ function asSummary(service: Service, instant: string): ServiceSummary {
 export function createCatalogIpcBackend(next: IpcBackend, options: CatalogBackendOptions): IpcBackend {
   const now = options.now ?? Date.now
   let rows: readonly ServiceSummary[] = options.services.map((service) => asSummary(service, toInstant(now())))
+  options.shared?.write(rows)
+
+  function setRows(updated: readonly ServiceSummary[]): void {
+    rows = updated
+    options.shared?.write(updated)
+  }
 
   function validatedInput(fields: Fields): ServiceInput {
     const name = normalizedRecordName(fields.name)
@@ -87,7 +95,7 @@ export function createCatalogIpcBackend(next: IpcBackend, options: CatalogBacken
       createdAt: instant,
       updatedAt: instant,
     }
-    rows = [...rows, created]
+    setRows([...rows, created])
     return created
   }
 
@@ -101,7 +109,7 @@ export function createCatalogIpcBackend(next: IpcBackend, options: CatalogBacken
       before.name === input.name && before.priceCents === input.priceCents && before.durationMin === input.durationMin
     if (changesNothing) return before
     const after: ServiceSummary = { ...before, ...input, updatedAt: toInstant(now()) }
-    rows = replaceRecord(rows, after)
+    setRows(replaceRecord(rows, after))
     return after
   }
 
@@ -112,7 +120,7 @@ export function createCatalogIpcBackend(next: IpcBackend, options: CatalogBacken
     const before = requireService(fields.id)
     if (before.active === active) return before
     const after: ServiceSummary = { ...before, active, updatedAt: toInstant(now()) }
-    rows = replaceRecord(rows, after)
+    setRows(replaceRecord(rows, after))
     return after
   }
 

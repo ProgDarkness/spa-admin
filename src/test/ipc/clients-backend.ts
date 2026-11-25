@@ -2,6 +2,7 @@ import type { ClientInput, ClientSummary } from '@/lib/bindings'
 import { toLocalDateTime } from '@/lib/datetime'
 import type { Client, SessionUser } from '@/lib/model'
 import type { IpcBackend } from './auth-backend'
+import type { SharedRows } from './shared-rows'
 import { normalizeNationalId } from '@/features/clients/national-id'
 import { searchKeyOf, searchTermOf, validPhone } from './clients-rules'
 import { clientDeletedReactivateError, nationalIdTakenError, notFoundError, validationError } from './ipc-errors'
@@ -19,6 +20,7 @@ import {
 export type ClientsBackendOptions = {
   session: () => SessionUser | null
   clients: readonly Client[]
+  shared?: SharedRows<ClientSummary>
   now?: () => number
 }
 
@@ -64,6 +66,12 @@ function hasSameFields(client: ClientSummary, candidate: ClientInput): boolean {
 export function createClientsIpcBackend(next: IpcBackend, options: ClientsBackendOptions): IpcBackend {
   const now = options.now ?? (() => Date.now())
   let rows: readonly ClientSummary[] = options.clients.map(asSummary).toSorted(byId)
+  options.shared?.write(rows)
+
+  function setRows(updated: readonly ClientSummary[]): void {
+    rows = updated
+    options.shared?.write(updated)
+  }
 
   function requireClient(id: unknown): ClientSummary {
     if (!Number.isInteger(id)) throw validationError('id')
@@ -106,7 +114,7 @@ export function createClientsIpcBackend(next: IpcBackend, options: ClientsBacken
     const input = validatedInput(payloadOf(args, 'input'))
     ensureNationalIdAvailableForNew(input.nationalId)
     const created: ClientSummary = { id: nextRecordId(rows), ...input, deletedAt: null }
-    rows = [...rows, created]
+    setRows([...rows, created])
     return created
   }
 
@@ -118,7 +126,7 @@ export function createClientsIpcBackend(next: IpcBackend, options: ClientsBacken
     ensureNationalIdFreeOfOthers(input.nationalId, before.id)
     if (hasSameFields(before, input)) return before
     const after: ClientSummary = { ...before, ...input }
-    rows = replaceRecord(rows, after)
+    setRows(replaceRecord(rows, after))
     return after
   }
 
@@ -129,7 +137,7 @@ export function createClientsIpcBackend(next: IpcBackend, options: ClientsBacken
     const before = requireClient(fields.id)
     if ((before.deletedAt !== null) === deleted) return before
     const after: ClientSummary = { ...before, deletedAt: deleted ? toLocalDateTime(new Date(now())) : null }
-    rows = replaceRecord(rows, after)
+    setRows(replaceRecord(rows, after))
     return after
   }
 

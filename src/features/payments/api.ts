@@ -1,3 +1,4 @@
+import { syncAppointmentsMirror } from '@/features/appointments/api'
 import { listPaymentMethods } from '@/features/payment-methods/api'
 import { listRates } from '@/features/rates/api'
 import { todayLocal, nowLocal } from '@/lib/datetime'
@@ -36,6 +37,8 @@ function needsDayRate(input: PaymentInput): boolean {
 async function refreshFromRust(input: PaymentInput): Promise<Result<never> | null> {
   const methods = await listPaymentMethods(INCLUDE_INACTIVE)
   if (methods.status === 'error') return methods
+  const appointments = await syncAppointmentsMirror()
+  if (appointments.status === 'error') return appointments
   if (!needsDayRate(input)) return null
   const rates = await listRates()
   return rates.status === 'error' ? rates : null

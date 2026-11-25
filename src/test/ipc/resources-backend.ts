@@ -1,16 +1,18 @@
 import type {
-  ResourceActivation,
-  ResourceFilter,
+  AppointmentSummary,
+  FutureAppointment,
   ResourceInput,
   ResourceKind,
   ResourceSummary,
-  ResourceUpdate,
 } from '@/lib/bindings'
+import { toLocalDateTime } from '@/lib/datetime'
 import type { Resource, SessionUser } from '@/lib/model'
 import type { IpcBackend } from './auth-backend'
-import { validationError } from './ipc-errors'
+import { resourceHasFutureAppointmentsError, validationError } from './ipc-errors'
+import type { SharedRows } from './shared-rows'
 import {
   booleanField,
+  isRecord,
   nextRecordId,
   normalizedRecordName,
   payloadOf,
@@ -24,6 +26,8 @@ import {
 export type ResourcesBackendOptions = {
   session: () => SessionUser | null
   resources: readonly Resource[]
+  appointments: SharedRows<AppointmentSummary>
+  shared?: SharedRows<ResourceSummary>
   now?: () => number
 }
 
@@ -42,6 +46,12 @@ function asSummary(resource: Resource, instant: string): ResourceSummary {
 export function createResourcesIpcBackend(next: IpcBackend, options: ResourcesBackendOptions): IpcBackend {
   const now = options.now ?? Date.now
   let rows: readonly ResourceSummary[] = options.resources.map((resource) => asSummary(resource, toInstant(now())))
+  options.shared?.write(rows)
+
+  function setRows(updated: readonly ResourceSummary[]): void {
+    rows = updated
+    options.shared?.write(updated)
+  }
 
   function validatedInput(fields: Fields): ResourceInput {
     const name = normalizedRecordName(fields.name)
@@ -63,8 +73,10 @@ export function createResourcesIpcBackend(next: IpcBackend, options: ResourcesBa
 
   function listResources(args: unknown): ResourceSummary[] {
     requirePermission(options.session, APPOINTMENTS_READ, RESOURCES_MANAGE)
-    const filter = payloadOf(args, 'filter') as ResourceFilter
-    return rows.filter((row) => filter.includeInactive || row.active)
+    const filter = payloadOf(args, 'filter')
+    if (typeof filter.includeInactive !== 'boolean') throw validationError('includeInactive')
+    const includeInactive = filter.includeInactive
+    return rows.filter((row) => includeInactive || row.active)
   }
 
   function createResource(args: unknown): ResourceSummary {
@@ -79,31 +91,46 @@ export function createResourcesIpcBackend(next: IpcBackend, options: ResourcesBa
       createdAt: instant,
       updatedAt: instant,
     }
-    rows = [...rows, created]
+    setRows([...rows, created])
     return created
   }
 
   function updateResource(args: unknown): ResourceSummary {
     requirePermission(options.session, RESOURCES_MANAGE)
-    const fields = payloadOf(args, 'update') as Partial<ResourceUpdate> & Fields
+    const fields = payloadOf(args, 'update')
     const before = requireResource(fields.id)
     const input = validatedInput(fields)
     ensureNameFree(input.name, before.id)
     if (before.name === input.name && before.kind === input.kind) return before
     const after: ResourceSummary = { ...before, ...input, updatedAt: toInstant(now()) }
-    rows = replaceRecord(rows, after)
+    setRows(replaceRecord(rows, after))
     return after
+  }
+
+  function futureScheduledOf(resourceId: number): AppointmentSummary[] {
+    const currentMinute = toLocalDateTime(new Date(now()))
+    return options.appointments.read()
+      .filter((row) => row.resourceId === resourceId && row.status === 'scheduled' && row.endsAt > currentMinute)
+      .toSorted((first, second) => first.startsAt.localeCompare(second.startsAt) || first.id - second.id)
   }
 
   function setResourceActive(args: unknown): ResourceSummary {
     requirePermission(options.session, RESOURCES_MANAGE)
-    const fields = payloadOf(args, 'activation') as Partial<ResourceActivation> & Fields
+    const fields = payloadOf(args, 'activation')
     const active = booleanField(fields, 'active')
     const before = requireResource(fields.id)
     if (before.active === active) return before
+    const blocking = active ? [] : futureScheduledOf(before.id)
+    if (blocking.length > 0) throw resourceHasFutureAppointmentsError(blocking.map((row) => row.id))
     const after: ResourceSummary = { ...before, active, updatedAt: toInstant(now()) }
-    rows = replaceRecord(rows, after)
+    setRows(replaceRecord(rows, after))
     return after
+  }
+
+  function listFutureAppointmentsOfResource(args: unknown): FutureAppointment[] {
+    requirePermission(options.session, RESOURCES_MANAGE)
+    const resource = requireResource(isRecord(args) ? args.id : undefined)
+    return futureScheduledOf(resource.id).map(({ id, startsAt }) => ({ id, startsAt }))
   }
 
   const handlers: Readonly<Record<string, (args: unknown) => unknown>> = {
@@ -111,6 +138,7 @@ export function createResourcesIpcBackend(next: IpcBackend, options: ResourcesBa
     create_resource: createResource,
     update_resource: updateResource,
     set_resource_active: setResourceActive,
+    list_future_appointments_of_resource: listFutureAppointmentsOfResource,
   }
 
   return (cmd, args) => {

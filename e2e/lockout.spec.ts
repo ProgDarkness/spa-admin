@@ -77,6 +77,7 @@ test.describe('mock IPC con respuestas inyectadas: no simula el contador de inte
       list_services: respondWith([]),
       list_resources: respondWith([]),
       list_clients: respondWith([]),
+      list_appointments: respondWith([]),
       get_rate: respondWith(null),
       unlock: () => {
         attempts += 1

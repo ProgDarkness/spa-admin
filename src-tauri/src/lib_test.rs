@@ -2,7 +2,7 @@ use tauri::Manager;
 
 use super::*;
 
-pub(super) const REGISTERED_COMMANDS: [&str; 41] = [
+pub(super) const REGISTERED_COMMANDS: [&str; 42] = [
     "login",
     "logout",
     "current_session",
@@ -40,6 +40,7 @@ pub(super) const REGISTERED_COMMANDS: [&str; 41] = [
     "update_client",
     "set_client_deleted",
     "list_appointments",
+    "list_all_appointments",
     "create_appointment",
     "move_appointment",
     "transition_appointment",

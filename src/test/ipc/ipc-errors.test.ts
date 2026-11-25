@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  appointmentNotFoundError,
   clientDeletedReactivateError,
+  crossesMidnightError,
   forbiddenError,
   invalidCredentialsError,
+  invalidTransitionError,
   nationalIdTakenError,
   notFoundError,
+  overlapError,
+  referenceMissingError,
+  resourceHasFutureAppointmentsError,
+  resourceInactiveError,
   unauthenticatedError,
   validationError,
 } from './ipc-errors'
@@ -53,6 +60,51 @@ describe('ipc-errors', () => {
       field: 'nationalId',
       entityIds: [9],
     })
+  })
+
+  it('los errores de citas replican código, campo, entityIds y mensaje de Rust', () => {
+    expect(overlapError([3, 4])).toEqual({
+      code: 'overlap',
+      message: 'El recurso ya tiene una cita en ese horario',
+      field: 'startsAt',
+      entityIds: [3, 4],
+    })
+    expect(crossesMidnightError()).toEqual({
+      code: 'crossesMidnight',
+      message: 'La cita no puede terminar después de la medianoche',
+      field: 'startsAt',
+      entityIds: null,
+    })
+    expect(invalidTransitionError()).toEqual({
+      code: 'invalidTransition',
+      message: 'La cita no admite esa operación en su estado actual',
+      field: null,
+      entityIds: null,
+    })
+    expect(resourceInactiveError()).toEqual({
+      code: 'resourceInactive',
+      message: 'El recurso está inactivo',
+      field: 'resourceId',
+      entityIds: null,
+    })
+    expect(resourceHasFutureAppointmentsError([5])).toEqual({
+      code: 'resourceHasFutureAppointments',
+      message: 'El recurso tiene citas futuras que deben reubicarse antes de desactivarlo',
+      field: null,
+      entityIds: [5],
+    })
+    expect(appointmentNotFoundError()).toEqual({
+      code: 'notFound',
+      message: 'La cita no existe',
+      field: null,
+      entityIds: null,
+    })
+  })
+
+  it('referenceMissing elige el mensaje por campo', () => {
+    expect(referenceMissingError('clientId')).toMatchObject({ code: 'notFound', field: 'clientId', message: 'El cliente no existe' })
+    expect(referenceMissingError('serviceId')).toMatchObject({ field: 'serviceId', message: 'El servicio no existe' })
+    expect(referenceMissingError('resourceId')).toMatchObject({ field: 'resourceId', message: 'El recurso no existe' })
   })
 
   it('devuelve objetos nuevos en cada llamada', () => {

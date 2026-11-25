@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test'
 
 const PORT = 4173
 
+process.env.TZ = 'America/Caracas'
+
 export default defineConfig({
   testDir: './e2e',
   snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',

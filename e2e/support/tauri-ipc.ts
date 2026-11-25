@@ -54,6 +54,7 @@ export async function installTauriIpc(page: Page, options: TauriIpcOptions = {})
       auth: authBackend,
       session: () => users.find((user) => user.id === sessionUserId) ?? null,
       seed: createSeed(SEED_REFERENCE_DATE),
+      now: () => (nowMs === 0 ? Date.now() : nowMs),
     })
   let backend = buildBackend()
 

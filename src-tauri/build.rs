@@ -40,6 +40,7 @@ const APP_COMMANDS: &[&str] = &[
     "update_client",
     "set_client_deleted",
     "list_appointments",
+    "list_all_appointments",
     "create_appointment",
     "move_appointment",
     "transition_appointment",

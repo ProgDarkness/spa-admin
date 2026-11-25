@@ -15,7 +15,8 @@ pub mod setup;
 mod test_support;
 
 use features::appointments::commands::{
-    create_appointment, list_appointments, move_appointment, transition_appointment,
+    create_appointment, list_all_appointments, list_appointments, move_appointment,
+    transition_appointment,
 };
 use features::auth::audit_commands::list_audit;
 use features::auth::commands::{
@@ -85,6 +86,7 @@ fn command_catalog<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
             update_client,
             set_client_deleted,
             list_appointments,
+            list_all_appointments,
             create_appointment,
             move_appointment,
             transition_appointment,

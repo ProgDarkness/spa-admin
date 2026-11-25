@@ -77,12 +77,12 @@ describe('getClientHistory refresca el cliente desde Rust', () => {
     expect((await entriesOfJose()).length).toBeGreaterThan(0)
   })
 
-  it('consulta get_client con el id pedido', async () => {
+  it('consulta get_client con el id pedido y luego sincroniza citas', async () => {
     const calls = stubRustCatalog({ clients: [rustClient()] })
 
     await getClientHistory(JOSE_ID)
 
-    expect(calls).toEqual(['get_client'])
+    expect(calls).toEqual(['get_client', 'list_all_appointments'])
   })
 
   it('responde notFound si Rust no tiene al cliente aunque el espejo sí', async () => {
@@ -123,5 +123,70 @@ describe('getClientHistory refresca el cliente desde Rust', () => {
 
     expect(await getClientHistory(JOSE_ID)).toMatchObject({ status: 'error', error: { code: 'forbidden' } })
     expect(calls).toEqual([])
+  })
+})
+
+describe('getClientHistory sincroniza las citas desde Rust', () => {
+  it('arma las entradas con las citas de Rust y no con las del espejo', async () => {
+    const rustAppointment = { ...getState().appointments[0]!, id: 700, clientId: JOSE_ID }
+    stubRustCatalog({
+      services: getState().services,
+      resources: getState().resources,
+      clients: [rustClient()],
+      appointments: [rustAppointment],
+    })
+
+    const entries = await entriesOfJose()
+
+    expect(entries.map((entry) => entry.id)).toEqual([700])
+  })
+
+  it('consulta get_client y luego list_all_appointments', async () => {
+    const calls = stubRustCatalog({ clients: [rustClient()] })
+
+    await getClientHistory(JOSE_ID)
+
+    expect(calls).toEqual(['get_client', 'list_all_appointments'])
+  })
+
+  it('devuelve el error y no arma historial si falla list_all_appointments', async () => {
+    stubRustCatalog({ clients: [rustClient()], failing: ['list_all_appointments'] })
+
+    expect(await getClientHistory(JOSE_ID)).toMatchObject({ status: 'error', error: { code: 'internal' } })
+  })
+})
+
+describe('getClientHistory lee el store una sola vez al final', () => {
+  it('muestra un pago reflejado en el store mientras corrían get_client y la sincronización', async () => {
+    const appointment = getState().appointments.find((row) => row.clientId === JOSE_ID)
+    if (!appointment) throw new Error('el seed debe tener una cita de José')
+    const lateNote = 'pago tardío'
+    mockIPC((cmd) => {
+      if (cmd === 'get_client') return rustClient()
+      commit({
+        ...getState(),
+        payments: [
+          ...getState().payments,
+          {
+            id: 900,
+            appointmentId: appointment.id,
+            methodId: 1,
+            currency: 'USD',
+            amountCents: 100,
+            rateBsPerUsdE4: null,
+            usdEquivalentCents: 100,
+            paidAt: '2026-11-12T09:00',
+            voidedAt: null,
+            voidedBy: null,
+            voidReason: lateNote,
+          },
+        ],
+      })
+      return getState().appointments
+    })
+
+    const entry = (await entriesOfJose()).find((candidate) => candidate.id === appointment.id)
+
+    expect(entry?.payments.map((payment) => payment.id)).toContain(900)
   })
 })

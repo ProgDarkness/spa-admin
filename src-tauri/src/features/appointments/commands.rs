@@ -5,7 +5,7 @@ use super::model::{
     AppointmentError, AppointmentInput, AppointmentMove, AppointmentRange, AppointmentSummary,
     AppointmentTransition, AppointmentTransitionRequest,
 };
-use super::{service, service_change};
+use super::{repository, service, service_change};
 use crate::db::Database;
 use crate::errors::AppError;
 use crate::features::auth::model::{PermissionKey, SessionUser};
@@ -111,6 +111,20 @@ pub fn list_appointments(
         |conn| -> Result<Vec<AppointmentSummary>, AppointmentError> {
             authorize_read(conn, &session)?;
             service::list_appointments(conn, &range)
+        },
+    )?)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn list_all_appointments(
+    db: State<'_, Database>,
+    session: State<'_, SessionState>,
+) -> Result<Vec<AppointmentSummary>, AppError> {
+    Ok(db.with_conn_mapped(
+        |conn| -> Result<Vec<AppointmentSummary>, AppointmentError> {
+            authorize_read(conn, &session)?;
+            Ok(repository::list_all_appointments(conn)?)
         },
     )?)
 }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { commit, getState, resetStore } from '@/lib/mock/store'
 import { freezeDate } from '@/test/clock'
+import { installDevIpc } from '@/test/dev-ipc'
 import { signInAs } from '@/test/session'
 import { dataOf, errorOf } from '@/test/appointment-fixtures'
 import { getMonthlyMetrics } from './api'
@@ -8,6 +9,7 @@ import { getMonthlyMetrics } from './api'
 beforeEach(() => {
   freezeDate('2026-11-12T09:00')
   resetStore()
+  installDevIpc()
 })
 
 describe('getMonthlyMetrics autorización', () => {
@@ -77,12 +79,16 @@ describe('getMonthlyMetrics contra el seed con hoy 2026-11-12', () => {
     expect(dataOf(await getMonthlyMetrics('2025-01')).appointments.completed).toBe(0)
   })
 
-  it('no modifica el store', async () => {
+  it('deja el store con las mismas filas tras sincronizar las citas, sin importar su orden', async () => {
     const before = getState()
 
     await getMonthlyMetrics('2026-11')
 
-    expect(getState()).toBe(before)
+    const byId = (rows: typeof before.appointments) => rows.toSorted((first, second) => first.id - second.id)
+    expect({ ...getState(), appointments: byId(getState().appointments) }).toEqual({
+      ...before,
+      appointments: byId(before.appointments),
+    })
     commit(before)
   })
 })

@@ -137,3 +137,52 @@ describe('createPayment refresca el espejo desde Rust antes de validar', () => {
     expect(getState().payments).toBe(before)
   })
 })
+
+describe('createPayment sincroniza las citas desde Rust antes de validar', () => {
+  it('registra el pago de una cita que solo existe en Rust y la refleja en el espejo', async () => {
+    commit({ ...getState(), appointments: [] })
+    stubRustCatalog({ paymentMethods: [method()], appointments: [appointmentTemplate({ id: APPOINTMENT_ID })] })
+
+    const created = dataOf(await createPayment(input()))
+
+    expect(created.appointmentId).toBe(APPOINTMENT_ID)
+    expect(getState().appointments.map((appointment) => appointment.id)).toEqual([APPOINTMENT_ID])
+  })
+
+  it('rechaza con notFound sobre appointmentId una cita que el espejo tiene pero Rust no devuelve', async () => {
+    stubRustCatalog({ paymentMethods: [method()], appointments: [] })
+
+    const error = errorOf(await createPayment(input()))
+
+    expect(error).toMatchObject({ code: 'notFound', field: 'appointmentId' })
+  })
+
+  it('un fallo de list_all_appointments propaga el error y no registra el pago', async () => {
+    stubRustCatalog({ paymentMethods: [method()], failing: ['list_all_appointments'] })
+    const before = getState().payments
+
+    const error = errorOf(await createPayment(input()))
+
+    expect(error.code).toBe('internal')
+    expect(getState().payments).toBe(before)
+  })
+
+  it('consulta list_all_appointments exactamente una vez', async () => {
+    const calls = stubRustCatalog({ paymentMethods: [method()] })
+
+    await createPayment(input())
+
+    expect(calls.filter((cmd) => cmd === 'list_all_appointments')).toHaveLength(1)
+  })
+})
+
+describe('createPayment con citas fuera de cualquier ventana de fechas', () => {
+  it('paga una cita de hace 8 meses que solo existe en Rust', async () => {
+    seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID, startsAt: '2026-03-10T10:00', endsAt: '2026-03-10T11:00' }))
+    commit({ ...getState(), appointments: [] })
+
+    const created = dataOf(await createPayment(input()))
+
+    expect(created.appointmentId).toBe(APPOINTMENT_ID)
+  })
+})
