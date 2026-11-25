@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clientIdentitiesOf,
+  EXPECTED_DEV_CLIENTS,
   EXPECTED_DEV_PAYMENT_METHODS,
   EXPECTED_DEV_RATES,
   EXPECTED_DEV_RESOURCES,
@@ -23,6 +25,24 @@ describe('resourceIdentitiesOf', () => {
 
   it('devuelve vacío para un arreglo vacío', () => {
     expect(resourceIdentitiesOf([])).toEqual([])
+  })
+})
+
+describe('clientIdentitiesOf', () => {
+  it('conserva id, nombre, apellido, cédula y teléfono, y reduce deletedAt a un indicador', () => {
+    const rows = [
+      { id: 1, firstName: 'Ana', lastName: 'Pérez', nationalId: 'V-12345678', phone: '0414-1234567', deletedAt: null, extra: 1 },
+      { id: 2, firstName: 'Luis', lastName: 'Díaz', nationalId: 'V-87654321', phone: '0424-7654321', deletedAt: '2026-11-12T10:00' },
+    ]
+
+    expect(clientIdentitiesOf(rows)).toEqual([
+      { id: 1, firstName: 'Ana', lastName: 'Pérez', nationalId: 'V-12345678', phone: '0414-1234567', deleted: false },
+      { id: 2, firstName: 'Luis', lastName: 'Díaz', nationalId: 'V-87654321', phone: '0424-7654321', deleted: true },
+    ])
+  })
+
+  it.each([[null], [undefined], ['texto'], [{}], [42]])('devuelve vacío si lo recibido no es un arreglo (%s)', (value) => {
+    expect(clientIdentitiesOf(value)).toEqual([])
   })
 })
 
@@ -87,6 +107,28 @@ describe('esperados del seed de desarrollo', () => {
       [2, 'Cabina 2', true],
       [3, 'Manicure (Rosa)', false],
     ])
+  })
+
+  it('los clientes esperados son los nueve del mock con ids 1 a 9 y solo el último borrado', () => {
+    expect(EXPECTED_DEV_CLIENTS.map(({ id, deleted }) => [id, deleted])).toEqual([
+      [1, false],
+      [2, false],
+      [3, false],
+      [4, false],
+      [5, false],
+      [6, false],
+      [7, false],
+      [8, false],
+      [9, true],
+    ])
+    expect(EXPECTED_DEV_CLIENTS[0]).toEqual({
+      id: 1,
+      firstName: 'María',
+      lastName: 'González',
+      nationalId: 'V-12345678',
+      phone: '0414-1234567',
+      deleted: false,
+    })
   })
 
   it('los servicios esperados provienen del seed y no están vacíos', () => {

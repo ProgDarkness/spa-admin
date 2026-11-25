@@ -1,4 +1,5 @@
 import { addMinutes, crossesMidnight, dateOf, nowLocal, type TimeRange } from '@/lib/datetime'
+import { listClients } from '@/features/clients/api'
 import { listResources } from '@/features/resources/api'
 import { listServices } from '@/features/catalog/api'
 import { authorize } from '@/lib/mock/authorize'
@@ -30,10 +31,17 @@ const INVALID_TRANSITION_MESSAGE = 'La cita no admite esa operación en su estad
 
 const INCLUDE_INACTIVE = { includeInactive: true }
 
-async function refreshCatalogFromRust(): Promise<Result<never> | null> {
-  const [services, resources] = await Promise.all([listServices(INCLUDE_INACTIVE), listResources(INCLUDE_INACTIVE)])
+const ALL_CLIENTS = { query: null, includeDeleted: true }
+
+async function refreshMirrorsFromRust(): Promise<Result<never> | null> {
+  const [services, resources, clients] = await Promise.all([
+    listServices(INCLUDE_INACTIVE),
+    listResources(INCLUDE_INACTIVE),
+    listClients(ALL_CLIENTS),
+  ])
   if (services.status === 'error') return services
   if (resources.status === 'error') return resources
+  if (clients.status === 'error') return clients
   return null
 }
 
@@ -82,7 +90,7 @@ export async function createAppointment(input: AppointmentInput): Promise<Result
   if (access.status === 'error') return access
   const parsed = appointmentInputSchema.safeParse(input)
   if (!parsed.success) return validationError(parsed.error.issues)
-  const refreshFailure = await refreshCatalogFromRust()
+  const refreshFailure = await refreshMirrorsFromRust()
   if (refreshFailure) return refreshFailure
   const state = getState()
   const { clientId, serviceId, resourceId, startsAt, notes } = parsed.data

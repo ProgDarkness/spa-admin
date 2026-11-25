@@ -22,6 +22,14 @@ describe('buildAppointmentLabels', () => {
   })
 })
 
+describe('buildAppointmentLabels con el espejo de clientes reducido por una búsqueda', () => {
+  it('usa el texto de respaldo para toda cita cuyo cliente ya no está en el espejo y no lanza', () => {
+    const labels = buildAppointmentLabels([], [], [])
+
+    expect([1, 2, 9].map((clientId) => labels.clientNameOf(clientId))).toEqual(['Cliente', 'Cliente', 'Cliente'])
+  })
+})
+
 describe('timeOf', () => {
   it('extrae HH:mm', () => {
     expect(timeOf('2026-11-12T09:05')).toBe('09:05')

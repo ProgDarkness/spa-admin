@@ -1,10 +1,10 @@
+import { mockIPC } from '@tauri-apps/api/mocks'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getState, resetStore } from '@/lib/mock/store'
 import { clientRecordHref } from '@/lib/routes'
 import { freezeDate } from '@/test/clock'
 import { renderWithProviders } from '@/test/render'
-import { dropMockSessionKeepingRustActive } from '@/test/session'
 import { ClientList } from './client-list'
 
 beforeEach(() => {
@@ -132,6 +132,20 @@ describe('ClientList escritura', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
+  it('muestra el notFound de Rust como alerta cuando el cliente ya no existe', async () => {
+    const { user } = renderWithProviders(<ClientList canWrite onEditAction={vi.fn()} />, { as: 'recepcion' })
+    await user.click(await screen.findByRole('button', { name: 'Eliminar María González' }))
+    mockIPC((cmd) =>
+      cmd === 'set_client_deleted'
+        ? Promise.reject({ code: 'notFound', message: 'Cliente no encontrado', field: null, entityIds: null })
+        : [],
+    )
+
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Eliminar' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Cliente no encontrado')
+  })
+
   it('un cliente eliminado ofrece Reactivar en vez de Editar/Eliminar', async () => {
     const { user } = renderWithProviders(<ClientList canWrite onEditAction={vi.fn()} />, { as: 'recepcion' })
     await screen.findByRole('link', { name: 'María González' })
@@ -151,10 +165,14 @@ describe('ClientList escritura', () => {
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Eliminar' }))
     await waitFor(() => expect(getState().clients[0]?.deletedAt).not.toBeNull())
     await user.click(screen.getByRole('checkbox', { name: 'Mostrar eliminados' }))
-    dropMockSessionKeepingRustActive()
+    mockIPC((cmd) =>
+      cmd === 'set_client_deleted'
+        ? Promise.reject({ code: 'unauthenticated', message: 'Inicia sesión para continuar', field: null, entityIds: null })
+        : [],
+    )
 
     fireEvent.click(await screen.findByRole('button', { name: 'Reactivar María González' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Debes iniciar sesión')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Inicia sesión para continuar')
   })
 })

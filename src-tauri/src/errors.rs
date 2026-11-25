@@ -8,6 +8,9 @@ pub enum AppErrorCode {
     Unauthenticated,
     Forbidden,
     SessionLocked,
+    NotFound,
+    NationalIdTaken,
+    ClientDeletedReactivate,
     Internal,
 }
 
@@ -26,6 +29,11 @@ const UNAUTHENTICATED_MESSAGE: &str = "Inicia sesión para continuar";
 const FORBIDDEN_MESSAGE: &str = "No tienes permiso para esta acción";
 const SESSION_LOCKED_MESSAGE: &str = "Sesión bloqueada. Ingresa tu contraseña para continuar";
 const VALIDATION_MESSAGE: &str = "Revisa el dato ingresado";
+const NOT_FOUND_MESSAGE: &str = "Cliente no encontrado";
+const NATIONAL_ID_TAKEN_MESSAGE: &str = "Ya existe un cliente con esa cédula";
+const CLIENT_DELETED_REACTIVATE_MESSAGE: &str =
+    "Ya existió un cliente eliminado con esa cédula. ¿Reactivarlo?";
+const NATIONAL_ID_FIELD: &str = "nationalId";
 
 impl AppError {
     fn without_details(code: AppErrorCode, message: &str) -> Self {
@@ -60,6 +68,28 @@ impl AppError {
         Self {
             field: Some(field.to_string()),
             ..Self::without_details(AppErrorCode::Validation, VALIDATION_MESSAGE)
+        }
+    }
+
+    pub fn not_found() -> Self {
+        Self::without_details(AppErrorCode::NotFound, NOT_FOUND_MESSAGE)
+    }
+
+    pub fn national_id_taken() -> Self {
+        Self {
+            field: Some(NATIONAL_ID_FIELD.to_string()),
+            ..Self::without_details(AppErrorCode::NationalIdTaken, NATIONAL_ID_TAKEN_MESSAGE)
+        }
+    }
+
+    pub fn client_deleted_reactivate(client_id: i64) -> Self {
+        Self {
+            field: Some(NATIONAL_ID_FIELD.to_string()),
+            entity_ids: Some(vec![client_id]),
+            ..Self::without_details(
+                AppErrorCode::ClientDeletedReactivate,
+                CLIENT_DELETED_REACTIVATE_MESSAGE,
+            )
         }
     }
 

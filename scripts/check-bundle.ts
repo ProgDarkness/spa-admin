@@ -7,6 +7,7 @@ const IDENTIFIER_MARKERS: readonly string[] = [
   'createResourcesIpcBackend',
   'createPaymentMethodsIpcBackend',
   'createRatesIpcBackend',
+  'createClientsIpcBackend',
   'createDevBackends',
   'composeBackends',
   'createAuthIpcBackend',
@@ -26,7 +27,7 @@ export const FORBIDDEN_BUNDLE_MARKERS: readonly string[] = [
   ...IDENTIFIER_MARKERS,
 ]
 
-export const SEED_SENTINEL_MARKERS: readonly string[] = ['Manicure (Rosa)', '(ejemplo)', 'Cabina 1', 'createSeed']
+export const SEED_SENTINEL_MARKERS: readonly string[] = ['Manicure (Rosa)', '(ejemplo)', 'Cabina 1', 'createSeed', 'V-26789012']
 
 export const SEED_SENTINELS_BLOCK_BUNDLE = false
 

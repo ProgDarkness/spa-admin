@@ -279,3 +279,19 @@ test('waitForReply no resuelve mientras el backend retiene la respuesta y resuel
   expect(repliedWhileHeld).toBe(false)
   expect(hasReplied).toBe(true)
 })
+
+test('recargar la página reinicia los datos de clientes al seed', async ({ page }) => {
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+  const newClient = { firstName: 'Temporal', lastName: 'Recarga', nationalId: 'V-30555666', phone: '0414-5550001' }
+  const created = await invokeInPage(page, 'create_client', { input: newClient })
+  expect(created.resolved).toBe(true)
+
+  await page.reload()
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+  const listed = await invokeInPage(page, 'list_clients', { filter: { includeDeleted: true } })
+
+  expect(listed.resolved).toBe(true)
+  const names = (listed as { value: { firstName: string }[] }).value.map((client) => client.firstName)
+  expect(names).toHaveLength(9)
+  expect(names).not.toContain('Temporal')
+})

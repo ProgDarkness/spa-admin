@@ -110,7 +110,7 @@ fn is_empty(conn: &Connection, table: NamedTable) -> Result<bool, DbError> {
     Ok(rows == 0)
 }
 
-fn seeded_owner_id(conn: &Connection) -> Result<Option<i64>, DbError> {
+pub(crate) fn seeded_owner_id(conn: &Connection) -> Result<Option<i64>, DbError> {
     Ok(conn
         .query_row(
             "SELECT id FROM users WHERE username = ?1 AND role_id = ?2 AND active = 1",

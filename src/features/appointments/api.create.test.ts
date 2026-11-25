@@ -22,15 +22,17 @@ import {
 import { signInAs } from '@/test/session'
 import { createAppointment, transitionAppointment } from './api'
 
-function withoutRefreshedCatalogs(state: StoreState): Omit<StoreState, 'services' | 'resources'> {
+type RefreshedMirror = 'services' | 'resources' | 'clients'
+const REFRESHED_MIRRORS: readonly string[] = ['services', 'resources', 'clients']
+
+function withoutRefreshedMirrors(state: StoreState): Omit<StoreState, RefreshedMirror> {
   return Object.fromEntries(
-    Object.entries(state).filter(([key]) => key !== 'services' && key !== 'resources'),
-  ) as Omit<StoreState, 'services' | 'resources'>
+    Object.entries(state).filter(([key]) => !REFRESHED_MIRRORS.includes(key)),
+  ) as Omit<StoreState, RefreshedMirror>
 }
 
 function expectRecordsUntouched(before: StoreState): void {
-  expect(withoutRefreshedCatalogs(getState())).toEqual(withoutRefreshedCatalogs(before))
-  expect(getState().clients).toBe(before.clients)
+  expect(withoutRefreshedMirrors(getState())).toEqual(withoutRefreshedMirrors(before))
   expect(getState().appointments).toBe(before.appointments)
   expect(getState().payments).toBe(before.payments)
 }

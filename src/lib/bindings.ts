@@ -36,6 +36,11 @@ export const commands = {
 	listRates: (options?: InvokeOptions) => typedError<ExchangeRate[], AppError>(__TAURI_INVOKE("list_rates", undefined, options)),
 	getRate: (date: string, options?: InvokeOptions) => typedError<ExchangeRate | null, AppError>(__TAURI_INVOKE("get_rate", { date }, options)),
 	upsertRate: (date: string, rateBsPerUsdE4: number, options?: InvokeOptions) => typedError<ExchangeRate, AppError>(__TAURI_INVOKE("upsert_rate", { date, rateBsPerUsdE4 }, options)),
+	listClients: (filter: ClientFilter, options?: InvokeOptions) => typedError<ClientSummary[], AppError>(__TAURI_INVOKE("list_clients", { filter }, options)),
+	getClient: (id: number, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("get_client", { id }, options)),
+	createClient: (input: ClientInput, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("create_client", { input }, options)),
+	updateClient: (update: ClientUpdate, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("update_client", { update }, options)),
+	setClientDeleted: (deletion: ClientDeletion, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("set_client_deleted", { deletion }, options)),
 };
 
 /* Types */
@@ -46,7 +51,7 @@ export type AppError = {
 	entityIds: number[] | null,
 };
 
-export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "internal";
+export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "notFound" | "nationalIdTaken" | "clientDeletedReactivate" | "internal";
 
 export type AuditAction = "login_succeeded" | "logout" | "login_failed" | "login_locked_out" | "session_locked" | "session_unlocked" | "owner_created" | "recovery_used" | "clock_rollback" | "user_created" | "user_updated" | "password_reset" | "role_created" | "unlock_failed" | "recovery_failed" | "role_permissions_changed" | "create" | "update" | "deactivate" | "soft_delete" | "reactivate" | "void" | "backup_created" | "backup_restored";
 
@@ -71,6 +76,40 @@ export type AuditPage = {
 export type AuditQuery = {
 	beforeId: number | null,
 	limit: number,
+};
+
+export type ClientDeletion = {
+	id: number,
+	deleted: boolean,
+};
+
+export type ClientFilter = {
+	query: string,
+	includeDeleted: boolean,
+};
+
+export type ClientInput = {
+	firstName: string,
+	lastName: string,
+	nationalId: string,
+	phone: string,
+};
+
+export type ClientSummary = {
+	id: number,
+	firstName: string,
+	lastName: string,
+	nationalId: string,
+	phone: string,
+	deletedAt: string | null,
+};
+
+export type ClientUpdate = {
+	id: number,
+	firstName: string,
+	lastName: string,
+	nationalId: string,
+	phone: string,
 };
 
 export type ClockRollback = {

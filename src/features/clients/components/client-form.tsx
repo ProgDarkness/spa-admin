@@ -25,6 +25,9 @@ const FIELD_SPECS: readonly FieldSpec[] = [
 const EMPTY_VALUES: ClientInput = { firstName: '', lastName: '', nationalId: '', phone: '' }
 const FORM_FIELDS: readonly string[] = FIELD_SPECS.map((spec) => spec.name)
 const UNEXPECTED_ERROR_MESSAGE = 'No se pudo guardar el cliente'
+const REACTIVATION_MESSAGE_ID = 'client-reactivation-message'
+
+type Reactivation = Readonly<{ clientId: Id; message: string }>
 
 function valuesOf(client: Client | undefined): ClientInput {
   if (!client) return EMPTY_VALUES
@@ -46,12 +49,24 @@ function useClientSubmission(client: Client | undefined, onSaved: (client: Clien
   const updateClient = useUpdateClient()
   const reactivateClient = useReactivateClient()
   const [formErrorMessage, setFormErrorMessage] = useState<string | null>(null)
-  const [reactivableClientId, setReactivableClientId] = useState<Id | null>(null)
+  const [reactivation, setReactivation] = useState<Reactivation | null>(null)
+
+  function clearFailures() {
+    setFormErrorMessage(null)
+    setReactivation(null)
+    form.clearErrors()
+  }
 
   function reportFailure(caught: unknown) {
+    setReactivation(null)
     const error = appErrorOf(caught)
+    const reactivableId = error?.code === 'clientDeletedReactivate' ? error.entityIds?.[0] : undefined
+    if (error && reactivableId !== undefined) {
+      setReactivation({ clientId: reactivableId, message: error.message })
+      form.setError('nationalId', { message: '' })
+      return
+    }
     const field = error ? formFieldOf(error) : null
-    setReactivableClientId(error?.code === 'clientDeletedReactivate' ? (error.entityIds?.[0] ?? null) : null)
     if (error && field) {
       form.setError(field, { message: error.message })
       return
@@ -60,8 +75,7 @@ function useClientSubmission(client: Client | undefined, onSaved: (client: Clien
   }
 
   async function submit(input: ClientInput) {
-    setFormErrorMessage(null)
-    setReactivableClientId(null)
+    clearFailures()
     try {
       const saved = client
         ? await updateClient.mutateAsync({ id: client.id, input })
@@ -73,6 +87,8 @@ function useClientSubmission(client: Client | undefined, onSaved: (client: Clien
   }
 
   async function reactivate(id: Id) {
+    setFormErrorMessage(null)
+    form.clearErrors()
     try {
       onSaved(await reactivateClient.mutateAsync(id))
     } catch (caught) {
@@ -80,7 +96,7 @@ function useClientSubmission(client: Client | undefined, onSaved: (client: Clien
     }
   }
 
-  return { formErrorMessage, reactivableClientId, submit, reactivate }
+  return { formErrorMessage, reactivation, isReactivating: reactivateClient.isPending, submit, reactivate }
 }
 
 function ClientFields({ control }: { control: Control<ClientInput> }) {
@@ -107,7 +123,7 @@ export function ClientForm({ client, onSaved }: ClientFormProps) {
     resolver: zodResolver(clientInputSchema),
     defaultValues: valuesOf(client),
   })
-  const { formErrorMessage, reactivableClientId, submit, reactivate } = useClientSubmission(client, onSaved, form)
+  const { formErrorMessage, reactivation, isReactivating, submit, reactivate } = useClientSubmission(client, onSaved, form)
 
   return (
     <Form {...form}>
@@ -118,10 +134,21 @@ export function ClientForm({ client, onSaved }: ClientFormProps) {
             {formErrorMessage}
           </p>
         ) : null}
-        {reactivableClientId !== null ? (
-          <Button type="button" variant="outline" onClick={() => reactivate(reactivableClientId)}>
-            Reactivar cliente
-          </Button>
+        {reactivation ? (
+          <>
+            <p id={REACTIVATION_MESSAGE_ID} role="alert" data-tone="error" className="text-sm text-destructive">
+              {reactivation.message}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              aria-describedby={REACTIVATION_MESSAGE_ID}
+              disabled={isReactivating}
+              onClick={() => reactivate(reactivation.clientId)}
+            >
+              Reactivar cliente
+            </Button>
+          </>
         ) : null}
         <Button type="submit" disabled={form.formState.isSubmitting}>
           Guardar cliente

@@ -23,7 +23,17 @@ describe('clientInputSchema', () => {
     expect(issueFieldsOf({ ...VALID_INPUT, nationalId })).toEqual([])
   })
 
-  it.each(['v12345678', 'v-12345678', 'X-1', 'V-12345', 'V-1234567890', 'V12345678', 'V-12a45678', '', ' '])(
+  it.each([
+    ['v12345678', 'V-12345678'],
+    ['v 12345678', 'V-12345678'],
+    ['V-12.345.678', 'V-12345678'],
+    ['v-12345678', 'V-12345678'],
+    [' e-81.234.567 ', 'E-81234567'],
+  ])('normaliza la cédula %j a %j como Rust', (typed, normalized) => {
+    expect(clientInputSchema.parse({ ...VALID_INPUT, nationalId: typed }).nationalId).toBe(normalized)
+  })
+
+  it.each(['X-1', 'V-12345', 'V-1234567890', 'V-12a45678', 'V--12-34-56-78', 'V-1.2345.678', '', ' '])(
     'rechaza la cédula "%s"',
     (nationalId) => {
       expect(issueFieldsOf({ ...VALID_INPUT, nationalId })).toEqual(['nationalId'])

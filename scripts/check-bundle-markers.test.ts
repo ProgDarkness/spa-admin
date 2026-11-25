@@ -64,6 +64,7 @@ describe('marcadores literales del bundle', () => {
     'createResourcesIpcBackend',
     'createPaymentMethodsIpcBackend',
     'createRatesIpcBackend',
+    'createClientsIpcBackend',
     'createDevBackends',
     'composeBackends',
     'createAuthIpcBackend',
@@ -90,7 +91,7 @@ describe('marcadores literales del bundle', () => {
 })
 
 describe('centinelas del seed (informativos)', () => {
-  const SEED_SENTINELS = ['Manicure (Rosa)', '(ejemplo)', 'Cabina 1', 'createSeed']
+  const SEED_SENTINELS = ['Manicure (Rosa)', '(ejemplo)', 'Cabina 1', 'createSeed', 'V-26789012']
 
   it.each(SEED_SENTINELS)('incluye el centinela %s', (sentinel) => {
     expect(SEED_SENTINEL_MARKERS).toContain(sentinel)
@@ -108,6 +109,12 @@ describe('centinelas del seed (informativos)', () => {
     writeFileSync(join(outputDirectory, 'chunk.js'), 'x="Cabina 1";y=1')
 
     expect(findSeedSentinels(outputDirectory)).toEqual([{ file: 'chunk.js', marker: 'Cabina 1' }])
+  })
+
+  it('detecta la cédula del cliente eliminado del seed', () => {
+    writeFileSync(join(outputDirectory, 'chunk.js'), 'x="V-26789012"')
+
+    expect(findSeedSentinels(outputDirectory)).toEqual([{ file: 'chunk.js', marker: 'V-26789012' }])
   })
 
   it('no reporta nada en un bundle limpio', () => {

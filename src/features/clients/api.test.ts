@@ -98,12 +98,16 @@ describe('listClients', () => {
     expect(shown.map((client) => client.firstName)).toEqual(['Carlos'])
   })
 
-  it('no altera el estado', async () => {
-    const before = getState()
+  it('una búsqueda conserva las nueve filas en el espejo', async () => {
+    expect(await namesMatching('maria')).toEqual(['María'])
 
-    await listClients({ query: 'a', includeDeleted: true })
+    expect(getState().clients).toHaveLength(9)
+  })
 
-    expect(getState()).toBe(before)
+  it('refleja en el espejo la colección completa que devuelve Rust', async () => {
+    await listClients({ query: null, includeDeleted: false })
+
+    expect(getState().clients).toHaveLength(9)
   })
 
   it('permite leer al rol de solo lectura', async () => {
@@ -187,7 +191,7 @@ describe('createClient', () => {
   it.each([
     ['firstName', { firstName: '  ' }],
     ['lastName', { lastName: '' }],
-    ['nationalId', { nationalId: 'v12345678' }],
+    ['nationalId', { nationalId: 'X-12345678' }],
     ['nationalId', { nationalId: '' }],
     ['phone', { phone: '' }],
     ['phone', { phone: 'abc' }],
@@ -200,10 +204,10 @@ describe('createClient', () => {
     expect(getState()).toBe(before)
   })
 
-  it('rechaza entradas no objeto con validation', async () => {
-    const result = await createClient(null as unknown as ClientInput)
+  it('Rust normaliza la cédula escrita en minúsculas o sin guion', async () => {
+    const created = dataOf(await createClient({ ...NEW_CLIENT, nationalId: 'v 30.111.222' }))
 
-    expect(result).toMatchObject({ status: 'error', error: { code: 'validation' } })
+    expect(created.nationalId).toBe('V-30111222')
   })
 
   it('prohíbe al rol de solo lectura sin tocar el estado', async () => {
@@ -314,17 +318,17 @@ describe('softDeleteClient', () => {
     await softDeleteClient(MARIA_ID)
 
     expect(await namesMatching('maria')).toEqual([])
-    expect(getState().clients).toHaveLength(9)
+    const withDeleted = dataOf(await listClients({ query: 'maria', includeDeleted: true }))
+    expect(withDeleted.map((client) => [client.firstName, client.deletedAt])).toEqual([['María', '2026-11-12T09:00']])
   })
 
   it('es idempotente sobre un cliente ya eliminado', async () => {
-    const before = getState()
-    const original = before.clients.find((client) => client.id === DELETED_CARLOS_ID) as Client
+    const original = dataOf(await getClient(DELETED_CARLOS_ID))
 
     const result = dataOf(await softDeleteClient(DELETED_CARLOS_ID))
 
-    expect(result.deletedAt).toBe(original.deletedAt)
-    expect(getState()).toBe(before)
+    expect(result).toEqual(original)
+    expect(getState().clients.find((client) => client.id === DELETED_CARLOS_ID)).toEqual(original)
   })
 
   it('responde notFound para id inexistente', async () => {
@@ -363,10 +367,10 @@ describe('reactivateClient', () => {
   })
 
   it('es idempotente sobre un cliente activo', async () => {
-    const before = getState()
+    const original = getState().clients.find((client) => client.id === MARIA_ID) as Client
 
-    expect(dataOf(await reactivateClient(MARIA_ID)).deletedAt).toBeNull()
-    expect(getState()).toBe(before)
+    expect(dataOf(await reactivateClient(MARIA_ID))).toEqual(original)
+    expect(getState().clients.find((client) => client.id === MARIA_ID)).toEqual(original)
   })
 
   it('responde notFound para id inexistente', async () => {

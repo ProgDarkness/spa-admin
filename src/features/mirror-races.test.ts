@@ -1,6 +1,7 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createService, listServices } from '@/features/catalog/api'
+import { createClient, listClients } from '@/features/clients/api'
 import { createPaymentMethod, listPaymentMethods } from '@/features/payment-methods/api'
 import { listRates, upsertRate } from '@/features/rates/api'
 import { createResource, listResources } from '@/features/resources/api'
@@ -32,6 +33,15 @@ type EntityCase = Readonly<{
 }>
 
 const idKey = (id: number): string => String(id)
+
+const CLIENT_ROW = (id: number) => ({
+  id,
+  firstName: 'De lista',
+  lastName: 'Persona',
+  nationalId: 'V-30111222',
+  phone: '0414-5550000',
+  deletedAt: null,
+})
 
 const CASES: readonly EntityCase[] = [
   {
@@ -90,6 +100,20 @@ const CASES: readonly EntityCase[] = [
     list: () => listPaymentMethods(ALL),
     mutate: () => createPaymentMethod({ name: 'Nuevo' }),
     storeKeys: () => getState().paymentMethods.map((row) => idKey(row.id)),
+  },
+  {
+    entity: 'clients',
+    listCommand: 'list_clients',
+    mutationCommand: 'create_client',
+    mutationPayload: CLIENT_ROW(MUTATION_ID),
+    rowWith: (key) => CLIENT_ROW(Number(key)),
+    keyOfMutation: idKey(MUTATION_ID),
+    staleKey: idKey(STALE_ID),
+    newerKey: idKey(NEWER_ID),
+    list: () => listClients({ query: null, includeDeleted: true }),
+    mutate: () =>
+      createClient({ firstName: 'Nueva', lastName: 'Persona', nationalId: 'V-30111222', phone: '0414-5550000' }),
+    storeKeys: () => getState().clients.map((row) => idKey(row.id)),
   },
   {
     entity: 'rates',

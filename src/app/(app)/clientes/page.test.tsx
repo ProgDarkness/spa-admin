@@ -34,6 +34,22 @@ describe('ClientsPage', () => {
     expect(getState().clients).toHaveLength(10)
   })
 
+  it('un alta con la cédula de un cliente eliminado ofrece reactivarlo y lo devuelve a la lista', async () => {
+    const { user } = renderWithProviders(<ClientsPage />, { as: 'recepcion' })
+
+    await user.click(await screen.findByRole('button', { name: 'Nuevo cliente' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo cliente' })
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Otro')
+    await user.type(within(dialog).getByLabelText('Apellido'), 'Nombre')
+    await user.type(within(dialog).getByLabelText('Cédula'), 'v-26789012')
+    await user.type(within(dialog).getByLabelText('Teléfono'), '0414-5550000')
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cliente' }))
+    await user.click(await within(dialog).findByRole('button', { name: 'Reactivar cliente' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByRole('link', { name: 'Carlos Mendoza' })).toBeInTheDocument()
+  })
+
   it('Editar abre el diálogo con los datos y guarda los cambios', async () => {
     const { user } = renderWithProviders(<ClientsPage />, { as: 'recepcion' })
 
