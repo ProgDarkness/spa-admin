@@ -64,3 +64,33 @@ fn validation_constructor_carries_the_field() {
     assert_eq!(error.field.as_deref(), Some("password"));
     assert_eq!(error.entity_ids, None);
 }
+
+#[test]
+fn not_found_serializes_with_its_own_code_and_no_details() {
+    let value = serde_json::to_value(AppError::not_found()).unwrap();
+    assert_eq!(value["code"], "notFound");
+    assert_eq!(value["message"], "Cliente no encontrado");
+    assert_eq!(value["field"], json!(null));
+    assert_eq!(value["entityIds"], json!(null));
+}
+
+#[test]
+fn national_id_taken_points_at_the_national_id_field() {
+    let value = serde_json::to_value(AppError::national_id_taken()).unwrap();
+    assert_eq!(value["code"], "nationalIdTaken");
+    assert_eq!(value["message"], "Ya existe un cliente con esa cédula");
+    assert_eq!(value["field"], "nationalId");
+    assert_eq!(value["entityIds"], json!(null));
+}
+
+#[test]
+fn client_deleted_reactivate_carries_the_entity_ids() {
+    let value = serde_json::to_value(AppError::client_deleted_reactivate(7)).unwrap();
+    assert_eq!(value["code"], "clientDeletedReactivate");
+    assert_eq!(
+        value["message"],
+        "Ya existió un cliente eliminado con esa cédula. ¿Reactivarlo?"
+    );
+    assert_eq!(value["field"], "nationalId");
+    assert_eq!(value["entityIds"], json!([7]));
+}

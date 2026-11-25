@@ -5,6 +5,7 @@ const RESOURCE_IDENTITY_KEYS = ['id', 'name', 'kind', 'active']
 const SERVICE_IDENTITY_KEYS = ['id', 'name']
 const PAYMENT_METHOD_IDENTITY_KEYS = ['id', 'name', 'active']
 const RATE_IDENTITY_KEYS = ['date', 'rateBsPerUsdE4']
+const CLIENT_IDENTITY_KEYS = ['id', 'firstName', 'lastName', 'nationalId', 'phone']
 
 export const EXPECTED_DEV_RESOURCES = [
   { id: 1, name: 'Cabina 1', kind: 'cabin', active: true },
@@ -22,6 +23,17 @@ export const EXPECTED_DEV_PAYMENT_METHODS = [
 
 export const EXPECTED_DEV_RATES = createSeed(SEED_REFERENCE_DATE).rates
 
+export const EXPECTED_DEV_CLIENTS = createSeed(SEED_REFERENCE_DATE).clients.map(
+  ({ id, firstName, lastName, nationalId, phone, deletedAt }) => ({
+    id,
+    firstName,
+    lastName,
+    nationalId,
+    phone,
+    deleted: deletedAt !== null,
+  }),
+)
+
 export const EXPECTED_DEV_SERVICES = createSeed(SEED_REFERENCE_DATE).services.map(({ id, name }) => ({ id, name }))
 
 function project(rows: unknown, keys: readonly string[]): unknown[] {
@@ -31,6 +43,14 @@ function project(rows: unknown, keys: readonly string[]): unknown[] {
 
 export function resourceIdentitiesOf(rows: unknown): unknown[] {
   return project(rows, RESOURCE_IDENTITY_KEYS)
+}
+
+export function clientIdentitiesOf(rows: unknown): unknown[] {
+  if (!Array.isArray(rows)) return []
+  return rows.map((row) => ({
+    ...Object.fromEntries(CLIENT_IDENTITY_KEYS.map((key) => [key, Reflect.get(row, key)])),
+    deleted: Reflect.get(row, 'deletedAt') !== null,
+  }))
 }
 
 export function serviceIdentitiesOf(rows: unknown): unknown[] {

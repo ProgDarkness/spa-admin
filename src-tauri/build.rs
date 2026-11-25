@@ -34,6 +34,11 @@ const APP_COMMANDS: &[&str] = &[
     "list_rates",
     "get_rate",
     "upsert_rate",
+    "list_clients",
+    "get_client",
+    "create_client",
+    "update_client",
+    "set_client_deleted",
 ];
 const WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
 

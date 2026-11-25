@@ -209,6 +209,9 @@ fn bindings_expose_the_session_status_and_error_code_variants() {
             "unauthenticated",
             "forbidden",
             "sessionLocked",
+            "notFound",
+            "nationalIdTaken",
+            "clientDeletedReactivate",
             "internal"
         ]
     );

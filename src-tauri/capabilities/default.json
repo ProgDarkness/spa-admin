@@ -35,6 +35,11 @@
     "allow-set-payment-method-active",
     "allow-list-rates",
     "allow-get-rate",
-    "allow-upsert-rate"
+    "allow-upsert-rate",
+    "allow-list-clients",
+    "allow-get-client",
+    "allow-create-client",
+    "allow-update-client",
+    "allow-set-client-deleted"
   ]
 }
