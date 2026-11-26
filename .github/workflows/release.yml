@@ -16,7 +16,7 @@ env:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -54,7 +54,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-2025, macos-15]
     defaults:
       run:
         shell: bash
@@ -84,24 +84,34 @@ jobs:
         with:
           toolchain: 1.100.0
           targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
-        with:
-          workspaces: src-tauri
       - if: runner.os == 'Windows'
         run: bunx tauri build --bundles nsis,msi -- --locked
       - if: runner.os == 'macOS'
         run: bunx tauri build --target universal-apple-darwin --bundles dmg -- --locked
       - if: runner.os == 'macOS'
+        env:
+          DMG_DIR: src-tauri/target/universal-apple-darwin/release/bundle/dmg
+          MOUNT_POINT: ${{ runner.temp }}/dmg-check
         run: |
           set -euo pipefail
-          app="$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
-          test -n "$app"
-          for binary in "$app"/Contents/MacOS/*; do
-            info="$(lipo -info "$binary")"
-            echo "$info"
-            echo "$info" | grep -q 'x86_64'
-            echo "$info" | grep -q 'arm64'
+          dmg_count="$(find "$DMG_DIR" -maxdepth 1 -name '*.dmg' | wc -l | tr -d ' ')"
+          test "$dmg_count" -eq 1
+          dmg="$(find "$DMG_DIR" -maxdepth 1 -name '*.dmg')"
+          mkdir -p "$MOUNT_POINT"
+          trap 'hdiutil detach -force "$MOUNT_POINT" || true' EXIT
+          hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$MOUNT_POINT" "$dmg"
+          checked=0
+          for app in "$MOUNT_POINT"/*.app; do
+            test -d "$app"
+            for binary in "$app"/Contents/MacOS/*; do
+              archs="$(lipo -archs "$binary")"
+              echo "$binary: $archs"
+              [[ " $archs " == *" x86_64 "* ]]
+              [[ " $archs " == *" arm64 "* ]]
+              checked=$((checked + 1))
+            done
           done
+          test "$checked" -ge 1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: installers-${{ runner.os }}
@@ -112,24 +122,60 @@ jobs:
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
 
-  publish:
-    if: github.event_name == 'push'
+  assemble:
     needs: [verify, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: installers-*
           merge-multiple: true
           path: dist
-      - working-directory: dist
-        run: |
+      - run: find dist -type f
+      - run: |
           set -euo pipefail
-          sha256sum -- *.exe *.msi *.dmg > SHA256SUMS
-          sha256sum -c SHA256SUMS
+          mkdir release-assets
+          for extension in exe msi dmg; do
+            mapfile -d '' matches < <(find dist -type f -name "*.${extension}" -print0)
+            test "${#matches[@]}" -eq 1
+            cp -- "${matches[0]}" release-assets/
+          done
+          cd release-assets
+          mapfile -d '' names < <(find . -maxdepth 1 -type f -printf '%f\0' | sort -z)
+          test "${#names[@]}" -eq 3
+          for name in "${names[@]}"; do
+            if [[ "$name" =~ [[:space:]] ]]; then
+              echo "nombre con espacios: $name"
+              exit 1
+            fi
+          done
+          sha256sum -- "${names[@]}" > SHA256SUMS
+          cat SHA256SUMS
+          malformed="$(grep -Evc '^[0-9a-f]{64}  [^/[:space:]]+$' SHA256SUMS || true)"
+          test "$malformed" -eq 0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-assets
+          if-no-files-found: error
+          retention-days: 7
+          path: release-assets/*
+
+  publish:
+    if: github.event_name == 'push'
+    needs: assemble
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-assets
+          path: release-assets
       - env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -137,8 +183,11 @@ jobs:
           TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          gh release create "$TAG" dist/*.exe dist/*.msi dist/*.dmg dist/SHA256SUMS \
+          mapfile -d '' files < <(find release-assets -maxdepth 1 -type f -print0 | sort -z)
+          test "${#files[@]}" -eq 4
+          gh release create "$TAG" "${files[@]}" \
             --draft \
+            --verify-tag \
             --target "$TARGET_SHA" \
             --title "Spa $TAG" \
             --notes "Borrador. Verificar los instaladores con SHA256SUMS antes de distribuir."
