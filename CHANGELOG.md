@@ -239,6 +239,42 @@ Métricas mensuales calculadas en Rust con las definiciones D16 y foto consisten
 
 - `metrics.read` (solo Propietaria) se valida fuera de la transacción y otra vez dentro de ella. Un fallo de suma fuera de rango o un estado desconocido devuelven un error interno controlado, sin datos sensibles.
 
+### Fase 8: Respaldo, restauración y empaquetado
+
+Respaldo cifrado `.spabak` con restauración en dos etapas, recuperación al arrancar, banner semanal, restauración en el primer arranque, diálogo de fallo de arranque y empaquetado NSIS, MSI y DMG. Sin publicar: el release se crea en draft. Decisiones en `docs/adr/0012-respaldo-y-empaquetado.md`; descripción de la PR en `docs/pr/fase8-respaldo.md`; guía en `docs/guia-instalacion.md` y manual en `docs/manual-usuario.md`.
+
+#### Added
+
+- Formato `.spabak` v1: cabecera de 66 bytes usada como AAD, cuerpo XChaCha20-Poly1305 con la clave de 32 bytes seguida de `spa.db`, y argon2id (m=65536 KiB, t=3, p=1 al exportar).
+- Frase de respaldo en NFC, de 12 a 1024 bytes, con `Zeroizing` y `Debug` redactado.
+- 3 comandos IPC nuevos (49 en total): `export_backup`, `restore_backup` y `get_backup_status`.
+- Errores nuevos `backupUnreadable` ("La frase no coincide o el archivo está dañado"), `backupNotRecognized` ("El archivo no es un respaldo reconocido") y `backupFromNewerApp` ("El respaldo fue creado con una versión más nueva de la aplicación").
+- Restauración en dos etapas: validación y descifrado a un temporal fuera del lock de la BD; intercambio con deshacer ordenado; auditoría `backup_restored`.
+- Recuperación al arrancar (`features/backup/recovery.rs`) antes de `load_or_create`, para una restauración interrumpida.
+- Banner semanal de respaldo, calculado desde la auditoría (7 días).
+- Restauración desde el primer arranque (`/setup/restaurar`), con enlace desde la creación de la Propietaria.
+- Diálogo nativo de fallo de arranque ("Spa no pudo iniciar").
+- Diálogos nativos de guardado y apertura desde Rust con `tauri-plugin-dialog`.
+- Empaquetado: `bundle.targets` NSIS, MSI y DMG; versión `0.1.0`; firma ad-hoc en macOS. Release en draft, en el repositorio público.
+- Guía de instalación, manual de usuario breve y checklist de máquina limpia.
+- El diálogo de fallo de arranque remite al Manual de usuario entregado con el instalador (sección "Si la aplicación no abre") en lugar de a una ruta del repositorio.
+- Dependencias Rust: `chacha20poly1305` `=0.11.0` y `tauri-plugin-dialog` `=2.8.4`; `argon2` con features `password-hash`, `getrandom` y `zeroize`; `zeroize` con `derive`.
+
+#### Changed
+
+- Los pins de dependencias directas se verifican con `src-tauri/tests/manifest_pins.rs` (incluye las dos nuevas).
+- `ADR 0002`: el punto 8 (respaldo) pasa a implementado; la restauración usa `.prev` en lugar de `.bak`.
+- El criterio de salida de la Fase 8 en `docs/planeers/plan-mvp.md` contempla macOS 15 y posteriores (Gatekeeper sin "clic derecho → Abrir").
+
+#### Security
+
+- Exportar exige sesión activa con `backup.manage`, validada dentro de la transacción; restaurar exige primer arranque o sesión con `backup.manage`, reverificado dentro del lock.
+- La clave del respaldo se guarda primero en una cuenta pending del keychain y solo se promueve tras verificar la BD nueva.
+- Sin permisos de diálogo ni de sistema de archivos en las capabilities del front; los diálogos son solo de Rust.
+- Frase incorrecta y archivo dañado producen el mismo error, para no dar un oráculo.
+- Auditoría `backup_created` y `backup_restored` sin ruta ni clave.
+- Firma ad-hoc en macOS, no firma de desarrollador: sin notarización. Instaladores sin firma, con SHA-256 publicado en `SHA256SUMS`.
+
 ## [0.2.0] - 2026-11-13
 
 Rediseño visual «Piedra y bronce». Sin cambios de lógica de dominio ni de textos. Decisiones en `docs/design/piedra-y-bronce.md`.

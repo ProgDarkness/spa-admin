@@ -123,7 +123,7 @@ fn start<R: tauri::Runtime>(
 }
 
 pub(crate) const STARTUP_FAILURE_TITLE: &str = "Spa no pudo iniciar";
-pub(crate) const STARTUP_FAILURE_MESSAGE: &str = "La aplicación no pudo abrir sus datos y se cerrará. Consulte docs/manual-usuario.md: allí se explica cómo apartar la carpeta de datos y restaurar un respaldo en el primer arranque.";
+pub(crate) const STARTUP_FAILURE_MESSAGE: &str = "La aplicación no pudo abrir sus datos y se cerrará. Abre el Manual de usuario que recibiste con el instalador: en la sección \"Si la aplicación no abre\" se explica cómo apartar la carpeta de datos y restaurar un respaldo en el primer arranque.";
 
 fn guarded_setup<R: tauri::Runtime>(
     setup: impl FnOnce(&mut tauri::App<R>) -> Result<(), Box<dyn std::error::Error>> + Send + 'static,

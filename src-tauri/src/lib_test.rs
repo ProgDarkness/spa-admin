@@ -307,10 +307,15 @@ fn counting_reporter() -> (
 }
 
 #[test]
-fn the_startup_failure_message_points_to_the_user_manual_without_leaking_paths_or_keys() {
-    assert!(STARTUP_FAILURE_MESSAGE.contains("docs/manual-usuario.md"));
-    assert!(STARTUP_FAILURE_MESSAGE.contains("carpeta de datos"));
-    assert!(STARTUP_FAILURE_MESSAGE.contains("restaur"));
+fn the_startup_failure_message_points_to_the_delivered_user_manual_without_leaking_paths_or_keys() {
+    assert_eq!(
+        STARTUP_FAILURE_MESSAGE,
+        "La aplicación no pudo abrir sus datos y se cerrará. Abre el Manual de usuario que recibiste con el instalador: en la sección \"Si la aplicación no abre\" se explica cómo apartar la carpeta de datos y restaurar un respaldo en el primer arranque."
+    );
+    assert!(!STARTUP_FAILURE_MESSAGE.contains("docs/"));
+    assert!(!STARTUP_FAILURE_MESSAGE.contains(".md"));
+    assert!(!STARTUP_FAILURE_MESSAGE.contains('/'));
+    assert!(!STARTUP_FAILURE_MESSAGE.contains('\\'));
     assert!(!STARTUP_FAILURE_MESSAGE.contains("spa.db"));
     assert!(!STARTUP_FAILURE_MESSAGE.contains("keychain"));
     assert!(!STARTUP_FAILURE_MESSAGE.contains("{"));

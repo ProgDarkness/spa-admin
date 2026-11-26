@@ -138,9 +138,18 @@ Estimaciones para una persona a tiempo parcial. Cada fase cierra con sus tests e
 5. **Citas (4–5 días).** Crear/mover/cancelar, vista día/semana por recurso, solape, estados.
 6. **Pagos e historial (3 días).** Registro de pagos por cita (USD/VES con tasa congelada), línea de tiempo por cliente, tiempo total y monto pagado.
 7. **Métricas (2–3 días).** Definiciones D16, consultas SQL agregadas; lista ampliable cuando la empleada y la dueña cierren la suya.
-8. **Respaldo y empaquetado (3–4 días).** Exportar/importar `.spabak`, recordatorio semanal, instaladores `.msi/.exe` y `.dmg` (macOS como binario universal `universal-apple-darwin`, para Apple Silicon e Intel), guía de instalación y manual breve, checklist en máquinas limpias. **Criterio de salida:** el instalador descargado del release privado, verificado con su SHA-256 y sin firma, se instala y llega al primer arranque (crear Propietaria) en un Windows y un macOS limpios siguiendo solo la guía (macOS: clic derecho → Abrir, o `xattr -dr com.apple.quarantine`).
+8. **Respaldo y empaquetado (3–4 días).** Exportar/importar `.spabak`, recordatorio semanal, instaladores `.msi/.exe` y `.dmg` (macOS como binario universal `universal-apple-darwin`, para Apple Silicon e Intel), guía de instalación y manual breve, checklist en máquinas limpias. **Criterio de salida:** el instalador descargado del release privado, verificado con su SHA-256 y sin firma, se instala y llega al primer arranque (crear Propietaria) en un Windows y un macOS limpios siguiendo solo la guía (macOS 15 y posteriores: clic derecho → Abrir ya no basta; usar Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente, o `xattr -dr com.apple.quarantine`). Decisiones de la Fase 8 en la sección siguiente y en `docs/adr/0012-respaldo-y-empaquetado.md`.
 
 **Total estimado: 28–35 días de trabajo** (la Fase 0 pasó de 1–2 a 4–5 días) (incluye integración de CI en dos SO, pruebas en máquinas limpias y 1 día de margen). Tu entorno de desarrollo es WSL/Linux: el instalador de macOS y las pruebas en macOS dependen de CI o de un Mac prestado.
+
+### Decisiones de la Fase 8 (2026-11-26)
+
+- **Instaladores:** NSIS y MSI en Windows, DMG universal en macOS (Q1). NSIS por usuario (`installMode: currentUser`).
+- **Release:** draft en el repositorio público; nunca se publica desde el flujo automatizado. La publicación es manual (Q2, DB11).
+- **WebView2:** `downloadBootstrapper`; requiere internet durante la instalación salvo que el runtime ya esté presente (Q3, supuesto por confirmar).
+- **Fallo de arranque:** diálogo nativo que remite al Manual de usuario entregado junto al instalador, sección "Si la aplicación no abre" (Q4, DB12).
+- **Firma macOS:** firma ad-hoc (`signingIdentity "-"`), aceptada como no-firma a efectos de D17 (Q5). Sin Developer ID ni notarización.
+- **Restauración:** reemplaza todos los datos y la clave; no hay rollback tras el éxito (ver ADR 0012, M3 y L7).
 
 ## Dependencias externas / pendientes
 

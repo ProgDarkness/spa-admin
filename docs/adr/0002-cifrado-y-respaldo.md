@@ -2,8 +2,8 @@
 
 - **Estado:** Aceptada
 - **Fecha:** 2026-11-14
-- **Actualizada:** 2026-11-18 (ITEM-18): punto 11, límite de permisos en Windows. 2026-11-17 (Fase 2, S12): puntos 6, 7, 9 y 10 pasan a implementados; el estado de cada punto indica su fase y slice
-- **Fase:** 1 (slice S0). Lockout de login y bloqueo por inactividad implementados en Fase 1. Implementados en Fase 2: detección de reanudación (S4), lockout persistente (S6), código de recuperación D13 (S7, S8), copia previa a migrar (S1) y auditoría de solo inserción D15 (S2, S5, S9, S10). Diferido: D14 (respaldo y restauración) en Fase 8
+- **Actualizada:** 2026-11-26 (Fase 8, ADR 0012): punto 3 enlaza la recuperación al arranque (`features/backup/recovery.rs`); punto 8 pasa a implementado; punto 9 documenta la limpieza de snapshots tras una restauración; "Pendiente tras Fase 2" queda cerrado. 2026-11-18 (ITEM-18): punto 11, límite de permisos en Windows. 2026-11-17 (Fase 2, S12): puntos 6, 7, 9 y 10 pasan a implementados; el estado de cada punto indica su fase y slice
+- **Fase:** 1 (slice S0). Respaldo y restauración cifrados implementados en Fase 8 (ADR 0012). Lockout de login y bloqueo por inactividad implementados en Fase 1. Implementados en Fase 2: detección de reanudación (S4), lockout persistente (S6), código de recuperación D13 (S7, S8), copia previa a migrar (S1) y auditoría de solo inserción D15 (S2, S5, S9, S10). Implementado en Fase 8: D14 (respaldo y restauración), ver punto 8 y ADR 0012
 - **Fuentes:** `docs/planeers/plan-mvp.md` (D2, D12, D13, D14, D15, "Seguridad (offline)", "Respaldo y restauración"), run `run-mwfno8h1-a6fafa9b`; para Fase 2, `docs/adr/0004-sesion-y-auditoria.md`
 
 ## Contexto
@@ -23,7 +23,7 @@
 3. **`load_or_create` nunca regenera una clave si la BD existe.**
    - Sin clave y sin BD: crea clave y BD.
    - Sin clave y con BD: `KeyStoreError::MissingForExistingDb`. No se regenera.
-   - La recuperación de esa situación es restaurar un respaldo (Fase 8).
+   - La recuperación de esa situación es restaurar un respaldo (Fase 8, implementado). `load_or_create` no cambia; la recuperación tras una restauración interrumpida corre antes, en `recovery.rs` (ADR 0012, DB6).
 4. **Sin fallback en texto plano.** Si el keychain no está disponible, `setup::init` aborta. No hay modo parcial.
 5. **Contraseñas con argon2id** `m=19456 t=2 p=1`, mediante `PasswordPolicy` con hash dummy (`features/auth/password.rs`).
    - `login` siempre verifica. Usuario inexistente, inactivo o clave incorrecta devuelven el mismo `InvalidCredentials`.
@@ -53,10 +53,12 @@
    - **Auditoría:** `recovery_used` (actor = usuario) al rotar; nunca código ni hash. El evento de creación `owner_created` no contiene el código.
    - **Primer arranque (S7):** `setup_owner` crea la Propietaria y devuelve el código una vez. `RecoveryCodePanel` (`src/features/auth/components/recovery-code-panel.tsx`) exige marcar que se guardó antes de continuar. Discrepancia con D13: el plan dice que el código se confirma "impreso"; el código exige un checkbox de confirmación y no tiene acción de imprimir.
    - **LÍMITE CONOCIDO:** el código viaja como `String` serializada por IPC, tanto en la salida (`OwnerSetupResult.recoveryCode`, `RecoveryResult.recoveryCode`) como en la entrada de `recover_password` (`RecoveryRequest.recoveryCode`). Una vez cruzado el IPC no se puede poner a cero. En Rust solo se cubren con `Zeroizing` las copias propias. En el front el código vive en estado de componente de vida corta (`useState` en `setup-owner-form.tsx` y `recover-form.tsx`).
-8. **Respaldo cifrado (D14): diferido a Fase 8.** Archivo `.spabak` con BD, clave y `schema_version`, cifrado con frase del usuario (KDF argon2id + XChaCha20-Poly1305).
-   - Restaurar: descifrar a temporal → `integrity_check` → validar versión (acepta igual o menor con migración; rechaza mayor) → intercambio atómico de BD y clave → guardar la clave nueva en el keychain. La BD previa queda como `.bak` hasta confirmar apertura correcta.
-   - Recordatorio semanal de respaldo en la app.
-   - Fase 2 no implementa exportación ni importación; la copia previa a migrar (punto 9) es un mecanismo distinto.
+8. **Respaldo cifrado (D14): implementado (Fase 8, ADR 0012).**
+   - Archivo `.spabak` v1 con cabecera de 66 bytes, BD + clave + `schema_version`, cifrado con la frase del usuario (argon2id + XChaCha20-Poly1305). Formato en `features/backup/format.rs` y `crypto.rs`.
+   - Exportar: `export_backup`, con auditoría `backup_created` dentro de la misma transacción que el renombrado final (ADR 0012, DB3).
+   - Restaurar en dos etapas (ADR 0012, DB5): validación y descifrado a un temporal `spa.db.<stamp>.restoring` sin tocar la BD viva; después, intercambio con la clave nueva guardada primero en pending, BD anterior movida a `spa.db.<stamp>.prev`, verificación, auditoría `backup_restored` y promoción de la clave. Ante cualquier fallo se intenta deshacer.
+   - La BD anterior no se llama `.bak` en la restauración: se llama `.prev` y se borra tras el éxito (el `.bak` es la copia de la punto 9).
+   - Recordatorio semanal de respaldo: banner que consulta `get_backup_status`, calculado con la auditoría (ADR 0012, DB8).
 9. **Copia previa a migrar: implementado (S1, `db/snapshot.rs`).**
    - Antes de `migrate`, si `PRAGMA user_version` está en el rango `[1, versión soportada)` (`pending_from`), `snapshot_before_migrate` copia el archivo de BD a `spa.db.{epoch_millis:016}.v{from}.bak`, por ejemplo `spa.db.0001763412345678.v2.bak`. Una BD nueva (versión 0) no genera copia.
    - La copia es exclusiva (`create_new`) y se sincroniza a disco antes de devolver la ruta. Si la copia falla a medio camino, se elimina el destino parcial (`copy_exclusive`).
@@ -65,7 +67,7 @@
    - **Retención:** `SNAPSHOT_RETENTION` = 3 copias del mismo archivo, ordenadas por nombre; la poda elimina las más antiguas (Q6).
    - **Poda no bloqueante (DN4):** si la poda falla, se registra con `eprintln` y el arranque continúa.
    - **Cifrada con la clave actual:** la copia es byte a byte del archivo SQLCipher; no se re-cifra y la clave no aparece en el nombre. Solo la clave vigente en el keychain la abre.
-   - No hay comando de restauración en Fase 2; el flujo de restauración pertenece a D14 (Fase 8).
+   - Fase 2 no tenía comando de restauración. Desde Fase 8, la restauración usa `spa.db.<stamp>.prev` (no estas copias), y tras una restauración exitosa se borran todos los `spa.db.*.v<n>.bak` (ADR 0012, DB5 S8).
 10. **Auditoría de solo inserción (D15): implementado (S2, S5, S9, S10).**
     - Tabla `audit_log` (`db/migrations/0003_audit_log.sql`): `id`, `occurred_at` (local, para mostrar: DEFAULT `strftime('%Y-%m-%dT%H:%M:%S','now','localtime')`, CHECK de 19 caracteres), `occurred_at_utc` (para comparar: DEFAULT `strftime('%Y-%m-%dT%H:%M:%fZ','now')`, CHECK de 24 caracteres, índice `audit_log_occurred_at_utc`; ADR 0005), `actor_user_id` (NULL cuando no hay actor autenticado), `action` (CHECK con 16 acciones fijas), `entity` (CHECK `user|role|system`), `entity_id` y `diff` (CHECK `json_valid` o NULL).
     - Triggers `audit_log_no_update` y `audit_log_no_delete`: `BEFORE UPDATE` / `BEFORE DELETE` con `RAISE(ABORT, 'audit_log is append-only')`.
@@ -88,7 +90,7 @@
 - **Código de recuperación perdido junto con la contraseña de la Propietaria:** el código solo se muestra una vez. La salida operativa es que otra cuenta activa con `users.manage` use `reset_user_password` sobre la Propietaria. Si no existe otra cuenta con ese permiso, solo queda restaurar un respaldo (Fase 8).
 - **Tests:** keychain con `keyring-core::mock::Store` (inyección de fallos). El keychain real (`--features real-keyring`) se prueba en CI en Windows, macOS y Ubuntu (Ubuntu con `gnome-keyring-daemon` bajo `dbus-run-session` y `xvfb-run`). WSL local no ejecuta esa prueba sin Secret Service.
 - **Abrir el `.db` con un cliente SQLite normal debe fallar** (criterio de verificación del plan).
-- **Pendiente tras Fase 2:** respaldo y restauración cifrados (D14, Fase 8). El resto de D12 a D15 queda implementado según los puntos 6 a 10.
+- **Cerrado en Fase 8:** respaldo y restauración cifrados (D14), ver punto 8 y ADR 0012. El resto de D12 a D15 queda implementado según los puntos 6 a 10.
 - **Verificado en Linux** (`cargo test --locked`, clippy y `cargo check --locked --features real-keyring`, 2026-11-16): `init_native_store`, `delete`/`NoEntry` en keyring 4 y API de `argon2` 0.6. Las verificaciones de Fase 2 se registran en la fase TEST del run.
 - **Verificado en CI:** OpenSSL vendored en Windows: el job `rust (windows-latest)` instala NASM y Perl y ejecuta `cargo test --features real-keyring` en verde.
 
