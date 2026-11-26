@@ -8,6 +8,7 @@ use rusqlite::Connection;
 use serde_json::json;
 
 use super::errors::BackupError;
+use super::fs_retry::rename_with_retry;
 use super::leftovers::{discard_with_sidecars, path_for, report_cleanup, stamp_now, Leftover};
 use super::model::{BackupSource, RestoreResult};
 use super::restore::StagedRestore;
@@ -176,10 +177,10 @@ impl Swap<'_> {
         close_live(live)?;
         progress.live_closed = true;
         self.announce(SwapStep::MoveCurrentAside)?;
-        fs::rename(self.database_path(), &self.previous_path)?;
+        rename_with_retry(self.database_path(), &self.previous_path)?;
         progress.moved_aside = true;
         self.announce(SwapStep::InstallRestored)?;
-        fs::rename(&self.staged.restoring_path, self.database_path())?;
+        rename_with_retry(&self.staged.restoring_path, self.database_path())?;
         self.announce(SwapStep::VerifyAndAudit)?;
         let fresh = self.open_and_audit(actor)?;
         progress.promotion_attempted = true;
@@ -242,7 +243,10 @@ impl Swap<'_> {
     fn restore_previous_database(&self) -> Result<(), BackupError> {
         self.announce(SwapStep::RollbackRestoreDatabase)?;
         discard_with_sidecars(self.database_path())?;
-        Ok(fs::rename(&self.previous_path, self.database_path())?)
+        Ok(rename_with_retry(
+            &self.previous_path,
+            self.database_path(),
+        )?)
     }
 
     fn reopen_live(&self) -> Result<Connection, BackupError> {

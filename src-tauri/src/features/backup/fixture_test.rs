@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use rusqlite::Connection;
 use tempfile::TempDir;
 
 use super::crypto::{seal, BackupPassphrase};
@@ -24,10 +25,17 @@ pub(crate) const RECEPTION: &str = "recepcion";
 pub(crate) const PASSPHRASE: &str = "frase-de-respaldo-larga";
 
 pub(crate) struct BackupFixture {
-    pub(crate) dir: TempDir,
     pub(crate) database: Database,
     pub(crate) session: SessionState,
     pub(crate) source: BackupSource,
+    pub(crate) dir: TempDir,
+}
+
+impl BackupFixture {
+    pub(crate) fn with_database_released(mut self) -> Self {
+        self.database = Database::new(Connection::open_in_memory().unwrap());
+        self
+    }
 }
 
 pub(crate) fn backup_fixture() -> BackupFixture {
@@ -52,6 +60,16 @@ pub(crate) fn first_run_fixture() -> BackupFixture {
         },
         dir,
     }
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn open_handles_on(path: &std::path::Path) -> usize {
+    let target = fs::canonicalize(path).unwrap();
+    fs::read_dir("/proc/self/fd")
+        .unwrap()
+        .filter_map(|entry| fs::read_link(entry.ok()?.path()).ok())
+        .filter(|linked| *linked == target)
+        .count()
 }
 
 pub(crate) fn add_user(database: &Database, username: &str, role_id: i64) {
@@ -211,4 +229,25 @@ pub(crate) fn assert_untouched(target: &BackupFixture, before: &Untouched) {
     assert!(find(&target.source.database_path, Leftover::Restoring)
         .unwrap()
         .is_empty());
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod released_database_tests {
+    use super::*;
+
+    #[test]
+    fn a_live_fixture_holds_the_database_file_open() {
+        let fixture = backup_fixture();
+
+        assert!(open_handles_on(&fixture.source.database_path) > 0);
+    }
+
+    #[test]
+    fn a_released_fixture_holds_no_handle_so_windows_can_move_the_file() {
+        let fixture = backup_fixture().with_database_released();
+
+        assert_eq!(open_handles_on(&fixture.source.database_path), 0);
+        let aside = fixture.dir.path().join("data").join("moved.db");
+        fs::rename(&fixture.source.database_path, aside).unwrap();
+    }
 }

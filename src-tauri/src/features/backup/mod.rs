@@ -4,6 +4,7 @@ pub mod crypto;
 pub mod dialogs;
 pub mod errors;
 pub mod format;
+pub(crate) mod fs_retry;
 pub(crate) mod leftovers;
 pub mod model;
 pub mod naming;

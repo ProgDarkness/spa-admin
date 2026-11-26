@@ -1,7 +1,8 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::errors::BackupError;
+use super::fs_retry::rename_with_retry;
 use super::leftovers::{
     discard_with_sidecars, find, find_sidecars, path_for, report_cleanup, stamp_now, Leftover,
 };
@@ -18,7 +19,7 @@ pub fn recover_interrupted_restore(
             return Ok(());
         };
         discard_with_sidecars(database_path)?;
-        fs::rename(copy, database_path)?;
+        rename_with_retry(&copy, database_path)?;
     }
     let main = store.read()?;
     if opens_with(database_path, main.as_ref())? {
@@ -58,7 +59,7 @@ fn opens_with(database_path: &Path, key: Option<&DbKey>) -> Result<bool, BackupE
 
 fn roll_back_to(
     database_path: &Path,
-    previous: &PathBuf,
+    previous: &Path,
     main: Option<&DbKey>,
     store: &KeyStore,
 ) -> Result<(), BackupError> {
@@ -66,9 +67,9 @@ fn roll_back_to(
         return Err(DbError::NotADatabase.into());
     }
     let failed = path_for(database_path, &stamp_now()?, Leftover::Failed);
-    fs::rename(database_path, failed)?;
+    rename_with_retry(database_path, &failed)?;
     discard_with_sidecars(database_path)?;
-    fs::rename(previous, database_path)?;
+    rename_with_retry(previous, database_path)?;
     store.delete_pending()?;
     clean_up(database_path, store)
 }

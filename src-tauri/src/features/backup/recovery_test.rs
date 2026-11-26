@@ -206,7 +206,7 @@ fn a_first_install_with_no_database_and_no_keys_creates_nothing() {
 
 #[test]
 fn an_unreadable_database_without_a_previous_copy_is_left_for_the_normal_startup_to_report() {
-    let target = backup_fixture();
+    let target = backup_fixture().with_database_released();
     fs::write(&target.source.database_path, b"basura").unwrap();
 
     recover(&target).unwrap();
@@ -219,7 +219,7 @@ fn an_unreadable_database_without_a_previous_copy_is_left_for_the_normal_startup
 
 #[test]
 fn the_newest_previous_copy_wins_when_there_are_several() {
-    let target = backup_fixture();
+    let target = backup_fixture().with_database_released();
     let database = target.source.database_path.clone();
     let original = database_bytes(&target);
     fs::rename(
@@ -300,7 +300,7 @@ fn a_previous_copy_that_does_not_open_with_the_main_key_is_not_rolled_back_to() 
 
 #[test]
 fn a_malformed_pending_key_is_discarded_even_when_nothing_else_can_be_recovered() {
-    let target = backup_fixture();
+    let target = backup_fixture().with_database_released();
     fs::write(&target.source.database_path, b"basura").unwrap();
     write_malformed_pending(&target);
 

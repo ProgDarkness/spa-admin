@@ -9,6 +9,7 @@ use zeroize::Zeroizing;
 use super::crypto::{seal, BackupPassphrase};
 use super::errors::BackupError;
 use super::format::{KdfParams, HEADER_LEN, MAX_BACKUP_BYTES};
+use super::fs_retry::rename_with_retry;
 use super::leftovers::report_cleanup;
 use super::model::{BackupExported, BackupSource};
 use crate::db::migrations::supported_version;
@@ -181,7 +182,7 @@ fn displace_existing(destination: &Path) -> Result<Option<PathBuf>, BackupError>
         return Ok(None);
     }
     let displaced = sibling_path_for(destination, REPLACED_TAG)?;
-    fs::rename(destination, &displaced)?;
+    rename_with_retry(destination, &displaced)?;
     Ok(Some(displaced))
 }
 
@@ -196,7 +197,10 @@ fn settle_placement(placement: Placement, destination: &Path, partial: &Path, co
         report_cleanup("partial backup", fs::remove_file(partial));
     }
     match placement.displaced {
-        Some(displaced) => report_cleanup("previous backup", fs::rename(displaced, destination)),
+        Some(displaced) => report_cleanup(
+            "previous backup",
+            rename_with_retry(&displaced, destination),
+        ),
         None if placement.moved_into_place => {
             report_cleanup("unconfirmed backup", fs::remove_file(destination))
         }
@@ -218,7 +222,7 @@ pub fn write_export(
         let actor = authorize(tx, session)?;
         let exported = audit_export(tx, &actor, schema_version, &file_name)?;
         placement.displaced = displace_existing(destination)?;
-        fs::rename(&partial, destination)?;
+        rename_with_retry(&partial, destination)?;
         placement.moved_into_place = true;
         Ok(exported)
     });
