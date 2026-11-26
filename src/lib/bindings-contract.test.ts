@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { commands } from './bindings'
 
 describe('contrato entre bindings generados y model', () => {
-  it('commands expone exactamente los 46 comandos de la aplicación', () => {
+  it('commands expone exactamente los 49 comandos de la aplicación', () => {
     expect(Object.keys(commands).sort()).toEqual([
       'createAppointment',
       'createClient',
@@ -13,6 +13,8 @@ describe('contrato entre bindings generados y model', () => {
       'createService',
       'createUser',
       'currentSession',
+      'exportBackup',
+      'getBackupStatus',
       'getClient',
       'getClientHistory',
       'getMonthlyMetrics',
@@ -34,6 +36,7 @@ describe('contrato entre bindings generados y model', () => {
       'recordActivity',
       'recoverPassword',
       'resetUserPassword',
+      'restoreBackup',
       'setClientDeleted',
       'setPaymentMethodActive',
       'setResourceActive',

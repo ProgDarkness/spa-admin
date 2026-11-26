@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { DEV_PASSWORD, IDLE_LOCK_MS } from '../../src/test/ipc/auth-backend'
 import {
   EXPECTED_DEV_PAYMENT_METHODS,
@@ -294,4 +294,59 @@ test('recargar la página reinicia los datos de clientes al seed', async ({ page
   const names = (listed as { value: { firstName: string }[] }).value.map((client) => client.firstName)
   expect(names).toHaveLength(9)
   expect(names).not.toContain('Temporal')
+})
+
+test('el diálogo de respaldo simulado se elige desde el handle y se consume', async ({ page }) => {
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+  ipc.setNextPickedBackup('corrupt')
+
+  const failed = await invokeInPage(page, 'restore_backup', { passphrase: 'frase de prueba larga' })
+  const cancelled = (ipc.setNextPickedBackup(null), await invokeInPage(page, 'restore_backup', { passphrase: 'frase de prueba larga' }))
+
+  expect(failed).toMatchObject({ resolved: false, payload: { code: 'backupUnreadable' } })
+  expect(cancelled).toEqual({ resolved: true, value: null })
+})
+
+test('recargar la página restablece el diálogo de respaldo simulado', async ({ page }) => {
+  ipc.setNextPickedBackup('corrupt')
+
+  await page.reload()
+  await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+
+  expect(await invokeInPage(page, 'restore_backup', { passphrase: 'frase de prueba larga' })).toMatchObject({
+    resolved: true,
+    value: { schemaVersion: 12 },
+  })
+})
+
+test.describe('respaldo previo sembrado', () => {
+  async function statusWith(context: BrowserContext, lastBackupAtUtc: string | undefined): Promise<Outcome> {
+    const page = await context.newPage()
+    await installTauriIpc(page, lastBackupAtUtc ? { lastBackupAtUtc } : {})
+    await page.clock.install({ time: FIXED_NOW })
+    await page.goto('/login/')
+    await invokeInPage(page, 'login', OWNER_CREDENTIALS)
+    return invokeInPage(page, 'get_backup_status')
+  }
+
+  test('un respaldo de ayer deja el recordatorio sin vencer', async ({ context }) => {
+    expect(await statusWith(context, '2026-11-11T14:00:00.000Z')).toMatchObject({
+      resolved: true,
+      value: { lastBackupAt: '2026-11-11T10:00:00', isDue: false },
+    })
+  })
+
+  test('un respaldo de hace ocho días vence', async ({ context }) => {
+    expect(await statusWith(context, '2026-11-04T14:00:00.000Z')).toMatchObject({
+      resolved: true,
+      value: { isDue: true },
+    })
+  })
+
+  test('sin semilla nunca se exportó', async ({ context }) => {
+    expect(await statusWith(context, undefined)).toMatchObject({
+      resolved: true,
+      value: { lastBackupAt: null, isDue: true },
+    })
+  })
 })

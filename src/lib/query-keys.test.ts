@@ -5,6 +5,7 @@ describe('QUERY_KEYS', () => {
   it('expone cada dominio con su string estable', () => {
     expect(QUERY_KEYS).toEqual({
       appointments: 'appointments',
+      backupStatus: 'backupStatus',
       clientHistory: 'clientHistory',
       clients: 'clients',
       metrics: 'metrics',

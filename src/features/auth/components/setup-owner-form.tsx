@@ -1,10 +1,12 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
+import Link from 'next/link'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
+import { ROUTES } from '@/lib/routes'
 import { useSession } from '@/lib/session'
 import { setupOwner } from '../api'
 import { errorTextOf } from '../error-text'
@@ -57,6 +59,9 @@ export function SetupOwnerForm({ onComplete }: SetupOwnerFormProps) {
         <Button type="submit" disabled={form.formState.isSubmitting}>
           Crear cuenta
         </Button>
+        <Link href={ROUTES.restoreFirstRun} className="text-center text-sm text-primary underline-offset-4 hover:underline">
+          Restaurar desde un respaldo
+        </Link>
       </form>
     </Form>
   )

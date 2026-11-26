@@ -60,6 +60,26 @@ describe('SidebarNav', () => {
     expect(await screen.findByRole('link', { name: 'Métodos de pago' })).toBeInTheDocument()
   })
 
+  it('muestra Respaldo solo con backup.manage', async () => {
+    const withPermission = renderWithOnlyPermissions(['backup.manage'])
+    expect(await screen.findByRole('link', { name: 'Respaldo' })).toHaveAttribute('href', '/ajustes/respaldo')
+    withPermission.unmount()
+
+    renderWithOnlyPermissions(['clients.read'])
+    await screen.findByRole('link', { name: 'Clientes' })
+    expect(screen.queryByRole('link', { name: 'Respaldo' })).not.toBeInTheDocument()
+  })
+
+  it('Recepción no ve Respaldo y la Propietaria sí', async () => {
+    const reception = renderWithProviders(<SidebarNav />, { as: 'recepcion' })
+    await screen.findByRole('link', { name: 'Citas' })
+    expect(screen.queryByRole('link', { name: 'Respaldo' })).not.toBeInTheDocument()
+    reception.unmount()
+
+    renderWithProviders(<SidebarNav />, { as: 'propietaria' })
+    expect(await screen.findByRole('link', { name: 'Respaldo' })).toBeInTheDocument()
+  })
+
   it('oculta Métodos de pago sin catalog.read ni payments.read', async () => {
     renderWithOnlyPermissions(['clients.read'])
 

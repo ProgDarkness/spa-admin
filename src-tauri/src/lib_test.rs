@@ -2,7 +2,7 @@ use tauri::Manager;
 
 use super::*;
 
-pub(super) const REGISTERED_COMMANDS: [&str; 46] = [
+pub(super) const REGISTERED_COMMANDS: [&str; 49] = [
     "login",
     "logout",
     "current_session",
@@ -49,6 +49,9 @@ pub(super) const REGISTERED_COMMANDS: [&str; 46] = [
     "void_payment",
     "get_client_history",
     "get_monthly_metrics",
+    "export_backup",
+    "restore_backup",
+    "get_backup_status",
 ];
 
 pub(super) fn camel_case(command: &str) -> String {
@@ -245,4 +248,183 @@ fn startup_failure_message_names_the_failure_and_the_cause() {
         "{message}"
     );
     assert!(message.contains("index.html"), "{message}");
+}
+
+#[test]
+fn capability_grants_no_dialog_or_filesystem_permissions_to_the_webview() {
+    let raw = std::fs::read_to_string(CAPABILITY_PATH).unwrap();
+    let capability: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    let forbidden: Vec<&str> = capability["permissions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|permission| permission.as_str().unwrap())
+        .filter(|permission| permission.starts_with("dialog:") || permission.starts_with("fs:"))
+        .collect();
+    assert_eq!(forbidden, Vec::<&str>::new());
+}
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn start_registers_the_dialog_plugin_before_the_setup_hook_runs() {
+    let dialog_available = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let witness = dialog_available.clone();
+    let setup = move |app: &mut tauri::App<tauri::test::MockRuntime>| {
+        let is_managed = app
+            .try_state::<tauri_plugin_dialog::Dialog<tauri::test::MockRuntime>>()
+            .is_some();
+        witness.store(is_managed, std::sync::atomic::Ordering::SeqCst);
+        app.get_webview_window("main").unwrap().destroy()?;
+        Ok(())
+    };
+
+    start(tauri::test::mock_builder(), app_context(), setup).unwrap();
+
+    assert!(dialog_available.load(std::sync::atomic::Ordering::SeqCst));
+}
+
+fn failing_setup(
+    _: &mut tauri::App<tauri::test::MockRuntime>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    Err("database unavailable".into())
+}
+
+fn succeeding_setup(
+    _: &mut tauri::App<tauri::test::MockRuntime>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
+}
+
+fn counting_reporter() -> (
+    std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    impl FnOnce(&tauri::AppHandle<tauri::test::MockRuntime>) + Send + 'static,
+) {
+    let reports = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let witness = reports.clone();
+    (reports, move |_| {
+        witness.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    })
+}
+
+#[test]
+fn the_startup_failure_message_points_to_the_delivered_user_manual_without_leaking_paths_or_keys() {
+    assert_eq!(
+        STARTUP_FAILURE_MESSAGE,
+        "La aplicación no pudo abrir sus datos y se cerrará. Abre el Manual de usuario que recibiste con el instalador: en la sección \"Si la aplicación no abre\" se explica cómo apartar la carpeta de datos y restaurar un respaldo en el primer arranque."
+    );
+    assert!(!STARTUP_FAILURE_MESSAGE.contains("docs/"));
+    assert!(!STARTUP_FAILURE_MESSAGE.contains(".md"));
+    assert!(!STARTUP_FAILURE_MESSAGE.contains('/'));
+    assert!(!STARTUP_FAILURE_MESSAGE.contains('\\'));
+    assert!(!STARTUP_FAILURE_MESSAGE.contains("spa.db"));
+    assert!(!STARTUP_FAILURE_MESSAGE.contains("keychain"));
+    assert!(!STARTUP_FAILURE_MESSAGE.contains("{"));
+    assert!(!STARTUP_FAILURE_TITLE.is_empty());
+}
+
+#[test]
+fn a_failing_setup_reports_once_and_lets_the_app_shut_down_cleanly() {
+    let (reports, reporter) = counting_reporter();
+    let mut app = tauri::test::mock_app();
+
+    let outcome = guarded_setup(failing_setup, reporter)(&mut app);
+
+    assert!(outcome.is_ok());
+    assert_eq!(reports.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_succeeding_setup_reports_nothing() {
+    let (reports, reporter) = counting_reporter();
+    let mut app = tauri::test::mock_app();
+
+    let outcome = guarded_setup(succeeding_setup, reporter)(&mut app);
+
+    assert!(outcome.is_ok());
+    assert_eq!(reports.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn start_survives_a_failing_setup_by_reporting_it_instead_of_panicking() {
+    let reports = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let witness = reports.clone();
+    let reporter = move |handle: &tauri::AppHandle<tauri::test::MockRuntime>| {
+        witness.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        handle
+            .get_webview_window("main")
+            .unwrap()
+            .destroy()
+            .unwrap();
+    };
+
+    let outcome = start(
+        tauri::test::mock_builder(),
+        app_context(),
+        guarded_setup(failing_setup, reporter),
+    );
+
+    assert!(outcome.is_ok());
+    assert_eq!(reports.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+fn exit_witness() -> (
+    std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    impl FnOnce() + Send + 'static,
+) {
+    let exits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let witness = exits.clone();
+    (exits, move || {
+        witness.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    })
+}
+
+#[test]
+fn the_app_exits_once_the_failure_dialog_is_dismissed() {
+    let (exits, exit) = exit_witness();
+    let presented = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let witness = presented.clone();
+
+    present_then_exit(
+        move || witness.store(true, std::sync::atomic::Ordering::SeqCst),
+        exit,
+    )
+    .join()
+    .unwrap();
+
+    assert!(presented.load(std::sync::atomic::Ordering::SeqCst));
+    assert_eq!(exits.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[test]
+fn the_app_exits_even_when_the_failure_dialog_cannot_be_shown() {
+    let (exits, exit) = exit_witness();
+
+    present_then_exit(|| panic!("no display available"), exit)
+        .join()
+        .unwrap();
+
+    assert_eq!(exits.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[test]
+fn the_app_does_not_exit_before_the_failure_dialog_returns() {
+    let (exits, exit) = exit_witness();
+    let (release, wait_for_release) = std::sync::mpsc::channel::<()>();
+    let exits_seen_while_open = exits.clone();
+
+    let handle = present_then_exit(
+        move || {
+            wait_for_release.recv().unwrap();
+        },
+        exit,
+    );
+
+    assert_eq!(
+        exits_seen_while_open.load(std::sync::atomic::Ordering::SeqCst),
+        0
+    );
+    release.send(()).unwrap();
+    handle.join().unwrap();
+    assert_eq!(exits.load(std::sync::atomic::Ordering::SeqCst), 1);
 }

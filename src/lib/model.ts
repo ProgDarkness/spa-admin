@@ -150,6 +150,9 @@ export type AppErrorCode =
   | 'invalidTransition'
   | 'rateMissing'
   | 'alreadyVoided'
+  | 'backupUnreadable'
+  | 'backupNotRecognized'
+  | 'backupFromNewerApp'
   | 'internal'
 
 export type AppError = {

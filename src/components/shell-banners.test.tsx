@@ -20,6 +20,19 @@ it('muestra el aviso de tasa faltante cuando no hay tasa de hoy', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Falta la tasa de cambio de hoy')
 })
 
+it('muestra el recordatorio de respaldo a quien tiene backup.manage', async () => {
+  renderWithProviders(<ShellBanners />, { as: 'propietaria' })
+
+  expect(await screen.findByText('Aún no has exportado ningún respaldo')).toBeInTheDocument()
+})
+
+it('no muestra el recordatorio de respaldo a Recepción', async () => {
+  const { queryClient } = renderWithProviders(<ShellBanners />, { as: 'recepcion' })
+
+  await waitFor(() => expect(queryClient.getQueryCache().findAll()[0]?.state.status).toBe('success'))
+  expect(screen.queryByText(/respaldo/)).not.toBeInTheDocument()
+})
+
 it('no renderiza avisos cuando existe la tasa de hoy', async () => {
   const { container, queryClient } = renderWithProviders(<ShellBanners />, { as: 'recepcion' })
 

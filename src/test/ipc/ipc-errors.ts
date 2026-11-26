@@ -109,3 +109,42 @@ export function alreadyVoidedError(paymentId: number): AppError {
 export function internalError(): AppError {
   return { code: 'internal', message: 'No se pudo completar la operación', field: null, entityIds: null }
 }
+
+export function sessionLockedError(): AppError {
+  return { code: 'sessionLocked', message: 'Sesión bloqueada. Ingresa tu contraseña para continuar', field: null, entityIds: null }
+}
+
+export function backupUnreadableError(): AppError {
+  return { code: 'backupUnreadable', message: 'La frase no coincide o el archivo está dañado', field: null, entityIds: null }
+}
+
+export function backupNotRecognizedError(): AppError {
+  return { code: 'backupNotRecognized', message: 'El archivo no es un respaldo reconocido', field: null, entityIds: null }
+}
+
+export function backupFromNewerAppError(): AppError {
+  return {
+    code: 'backupFromNewerApp',
+    message: 'El respaldo fue creado con una versión más nueva de la aplicación',
+    field: null,
+    entityIds: null,
+  }
+}
+
+export function backupRollbackFailedError(): AppError {
+  return {
+    code: 'internal',
+    message: 'La restauración quedó a medias; reinicia la aplicación para completarla o recuperar el estado anterior',
+    field: null,
+    entityIds: null,
+  }
+}
+
+export function backupTooLargeError(): AppError {
+  return {
+    code: 'internal',
+    message: 'La base de datos supera el tamaño máximo admitido para un respaldo',
+    field: null,
+    entityIds: null,
+  }
+}

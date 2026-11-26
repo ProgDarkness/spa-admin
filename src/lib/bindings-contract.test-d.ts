@@ -1,10 +1,13 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import { commands } from './bindings'
 import type {
+  BackupExported as BindingsBackupExported,
+  BackupStatus as BindingsBackupStatus,
   ClockRollback as BindingsClockRollback,
   ExchangeRate as BindingsExchangeRate,
   OwnerSetup as BindingsOwnerSetup,
   OwnerSetupResult as BindingsOwnerSetupResult,
+  RestoreResult as BindingsRestoreResult,
   SetupStatus as BindingsSetupStatus,
 } from './bindings'
 import type {
@@ -294,6 +297,28 @@ describe('contrato de tipos entre bindings generados y model', () => {
     expectTypeOf<BindingsAuditEntry['action']>().toEqualTypeOf<BindingsAuditAction>()
     expectTypeOf<BindingsAuditEntry['entity']>().toEqualTypeOf<BindingsAuditEntity>()
     expectTypeOf(commands.listAudit).parameter(0).toEqualTypeOf<BindingsAuditQuery>()
+  })
+
+  it('los comandos de respaldo exponen sus tipos', () => {
+    expectTypeOf<BindingsBackupExported>().toEqualTypeOf<{ fileName: string; createdAt: string }>()
+    expectTypeOf<BindingsRestoreResult>().toEqualTypeOf<{ sourceSchemaVersion: number; schemaVersion: number }>()
+    expectTypeOf<BindingsBackupStatus>().toEqualTypeOf<{ lastBackupAt: string | null; isDue: boolean }>()
+    expectTypeOf(commands.exportBackup).parameter(0).toEqualTypeOf<string>()
+    expectTypeOf(commands.restoreBackup).parameter(0).toEqualTypeOf<string>()
+    expectTypeOf<Awaited<ReturnType<typeof commands.getBackupStatus>>>().toEqualTypeOf<
+      { status: 'ok'; data: BindingsBackupStatus } | { status: 'error'; error: BindingsAppError }
+    >()
+    expectTypeOf<Awaited<ReturnType<typeof commands.exportBackup>>>().toEqualTypeOf<
+      { status: 'ok'; data: BindingsBackupExported | null } | { status: 'error'; error: BindingsAppError }
+    >()
+    expectTypeOf<Awaited<ReturnType<typeof commands.restoreBackup>>>().toEqualTypeOf<
+      { status: 'ok'; data: BindingsRestoreResult | null } | { status: 'error'; error: BindingsAppError }
+    >()
+  })
+
+  it('los códigos de error de respaldo pertenecen a ambos AppErrorCode', () => {
+    expectTypeOf<'backupUnreadable' | 'backupNotRecognized' | 'backupFromNewerApp'>().toExtend<BindingsAppErrorCode>()
+    expectTypeOf<'backupUnreadable' | 'backupNotRecognized' | 'backupFromNewerApp'>().toExtend<AppErrorCode>()
   })
 
   it('PermissionKey es equivalente en ambos sentidos', () => {

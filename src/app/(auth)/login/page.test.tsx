@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { DEV_PASSWORD } from '@/test/ipc/auth-backend'
 import { commit, getState, resetStore } from '@/lib/mock/store'
 import { freezeDate } from '@/test/clock'
-import { routerMock } from '@/test/navigation'
+import { routerMock, setSearchParams } from '@/test/navigation'
 import { renderWithProviders } from '@/test/render'
 import LoginPage from './page'
 
@@ -139,6 +139,42 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
 
     await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/setup'))
+  })
+
+  it('muestra el aviso de restauración cuando llega con restored=1', async () => {
+    setSearchParams({ restored: '1' })
+    renderWithProviders(<LoginPage />)
+
+    expect(screen.getByRole('status')).toHaveTextContent('Respaldo restaurado. Inicia sesión con una cuenta del respaldo.')
+    await screen.findByLabelText('Usuario')
+  })
+
+  it('mantiene la región de estado montada y vacía y le añade el aviso al llegar restored=1', async () => {
+    const { rerender } = renderWithProviders(<LoginPage />)
+    const region = screen.getByRole('status')
+    expect(region).toBeEmptyDOMElement()
+
+    setSearchParams({ restored: '1' })
+    rerender(<LoginPage />)
+
+    expect(screen.getByRole('status')).toBe(region)
+    expect(region).toHaveTextContent('Respaldo restaurado. Inicia sesión con una cuenta del respaldo.')
+    await screen.findByLabelText('Usuario')
+  })
+
+  it('no muestra el aviso de restauración sin el parámetro', async () => {
+    renderWithProviders(<LoginPage />)
+    await screen.findByLabelText('Usuario')
+
+    expect(screen.queryByText(/Respaldo restaurado/)).not.toBeInTheDocument()
+  })
+
+  it('no muestra el aviso de restauración con restored distinto de 1', async () => {
+    setSearchParams({ restored: '0' })
+    renderWithProviders(<LoginPage />)
+    await screen.findByLabelText('Usuario')
+
+    expect(screen.queryByText(/Respaldo restaurado/)).not.toBeInTheDocument()
   })
 
   it('el aviso de fallo no aparece cuando setup_status responde', async () => {

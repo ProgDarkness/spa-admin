@@ -212,3 +212,70 @@ fn missing_appointment_and_method_references_have_their_own_messages() {
     assert_eq!(method["field"], "methodId");
     assert_eq!(method["message"], "El método de pago no existe");
 }
+
+#[test]
+fn unreadable_backup_does_not_distinguish_a_wrong_passphrase_from_a_damaged_file() {
+    let value = serialized(AppError::backup_unreadable());
+    assert_eq!(value["code"], "backupUnreadable");
+    assert_eq!(
+        value["message"],
+        "La frase no coincide o el archivo está dañado"
+    );
+    assert_eq!(value["field"], json!(null));
+    assert_eq!(value["entityIds"], json!(null));
+}
+
+#[test]
+fn unrecognized_backup_has_its_own_code_and_message() {
+    let value = serialized(AppError::backup_not_recognized());
+    assert_eq!(value["code"], "backupNotRecognized");
+    assert_eq!(value["message"], "El archivo no es un respaldo reconocido");
+    assert_eq!(value["field"], json!(null));
+}
+
+#[test]
+fn backup_from_a_newer_app_has_its_own_code_and_message() {
+    let value = serialized(AppError::backup_from_newer_app());
+    assert_eq!(value["code"], "backupFromNewerApp");
+    assert_eq!(
+        value["message"],
+        "El respaldo fue creado con una versión más nueva de la aplicación"
+    );
+    assert_eq!(value["field"], json!(null));
+}
+
+#[test]
+fn backup_error_codes_are_distinct() {
+    let codes = [
+        AppError::backup_unreadable().code,
+        AppError::backup_not_recognized().code,
+        AppError::backup_from_newer_app().code,
+    ];
+    assert_ne!(codes[0], codes[1]);
+    assert_ne!(codes[1], codes[2]);
+    assert_ne!(codes[0], codes[2]);
+}
+
+#[test]
+fn an_unfinished_restore_tells_the_user_to_restart_and_keeps_the_internal_code() {
+    let value = serialized(AppError::backup_rollback_failed());
+    assert_eq!(value["code"], "internal");
+    assert_eq!(
+        value["message"],
+        "La restauración quedó a medias; reinicia la aplicación para completarla o recuperar el estado anterior"
+    );
+    assert_eq!(value["field"], json!(null));
+    assert_eq!(value["entityIds"], json!(null));
+}
+
+#[test]
+fn an_oversized_database_explains_the_backup_size_limit_and_keeps_the_internal_code() {
+    let value = serialized(AppError::backup_too_large());
+    assert_eq!(value["code"], "internal");
+    assert_eq!(
+        value["message"],
+        "La base de datos supera el tamaño máximo admitido para un respaldo"
+    );
+    assert_eq!(value["field"], json!(null));
+    assert_eq!(value["entityIds"], json!(null));
+}

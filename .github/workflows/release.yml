@@ -1,0 +1,144 @@
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "push" ]; then
+            tag="$REF_NAME"
+          else
+            tag="v$(jq -r .version package.json)"
+          fi
+          bun scripts/release-version-cli.ts "$tag"
+      - if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+  build:
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - if: runner.os == 'Windows'
+        run: |
+          choco install nasm --version=2.16.3 --yes --no-progress
+          echo 'C:\Program Files\NASM' >> "$GITHUB_PATH"
+      - if: runner.os == 'Windows'
+        run: |
+          echo 'OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe' >> "$GITHUB_ENV"
+          echo 'C:\Strawberry\perl\bin' >> "$GITHUB_PATH"
+      - if: runner.os == 'Windows'
+        run: |
+          test -x "$OPENSSL_SRC_PERL"
+          "$OPENSSL_SRC_PERL" -e "use Locale::Maketext::Simple; print 1"
+          "$OPENSSL_SRC_PERL" -v
+          nasm -v
+      - run: bun install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: 1.100.0
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
+        with:
+          workspaces: src-tauri
+      - if: runner.os == 'Windows'
+        run: bunx tauri build --bundles nsis,msi -- --locked
+      - if: runner.os == 'macOS'
+        run: bunx tauri build --target universal-apple-darwin --bundles dmg -- --locked
+      - if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          app="$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
+          test -n "$app"
+          for binary in "$app"/Contents/MacOS/*; do
+            info="$(lipo -info "$binary")"
+            echo "$info"
+            echo "$info" | grep -q 'x86_64'
+            echo "$info" | grep -q 'arm64'
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: installers-${{ runner.os }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+
+  publish:
+    if: github.event_name == 'push'
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: installers-*
+          merge-multiple: true
+          path: dist
+      - working-directory: dist
+        run: |
+          set -euo pipefail
+          sha256sum -- *.exe *.msi *.dmg > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" dist/*.exe dist/*.msi dist/*.dmg dist/SHA256SUMS \
+            --draft \
+            --target "$TARGET_SHA" \
+            --title "Spa $TAG" \
+            --notes "Borrador. Verificar los instaladores con SHA256SUMS antes de distribuir."

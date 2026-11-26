@@ -204,6 +204,73 @@ describe('useCan', () => {
   })
 })
 
+function RestoreControls() {
+  const { markRestored, signIn, signOut } = useSession()
+  return (
+    <>
+      <button onClick={markRestored}>marcar restaurado</button>
+      <button onClick={() => void signIn('lectura', DEV_PASSWORD)}>entrar</button>
+      <button onClick={() => void signOut()}>salir</button>
+    </>
+  )
+}
+
+describe('RequireSession tras una restauración', () => {
+  function renderGuarded() {
+    return renderWithProviders(
+      <RequireSession>
+        <RestoreControls />
+      </RequireSession>,
+      { as: 'lectura' },
+    )
+  }
+
+  it('al quedar sin sesión tras markRestored redirige al login con el aviso y no al login simple', async () => {
+    const { user } = renderGuarded()
+    await user.click(await screen.findByRole('button', { name: 'marcar restaurado' }))
+
+    await user.click(screen.getByRole('button', { name: 'salir' }))
+
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/login?restored=1'))
+    expect(routerMock.replace).not.toHaveBeenCalledWith('/login')
+  })
+
+  it('sin markRestored el cierre de sesión sigue yendo al login simple', async () => {
+    const { user } = renderGuarded()
+
+    await user.click(await screen.findByRole('button', { name: 'salir' }))
+
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/login'))
+    expect(routerMock.replace).not.toHaveBeenCalledWith('/login?restored=1')
+  })
+
+  it('el aviso no sobrevive a un nuevo inicio de sesión', async () => {
+    function Harness() {
+      const { status } = useSession()
+      return (
+        <>
+          <RestoreControls />
+          <RequireSession>
+            <p>{`dentro:${status}`}</p>
+          </RequireSession>
+        </>
+      )
+    }
+    const { user } = renderWithProviders(<Harness />, { as: 'lectura' })
+    await user.click(await screen.findByRole('button', { name: 'marcar restaurado' }))
+    await user.click(screen.getByRole('button', { name: 'salir' }))
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/login?restored=1'))
+    await user.click(screen.getByRole('button', { name: 'entrar' }))
+    await screen.findByText('dentro:signedIn')
+    routerMock.replace.mockClear()
+
+    await user.click(screen.getByRole('button', { name: 'salir' }))
+
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/login'))
+    expect(routerMock.replace).not.toHaveBeenCalledWith('/login?restored=1')
+  })
+})
+
 describe('RequireSession', () => {
   it('redirige a /login sin sesión y no renderiza los hijos', async () => {
     renderWithProviders(

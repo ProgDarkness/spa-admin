@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   appointmentNotFoundError,
+  backupFromNewerAppError,
+  backupNotRecognizedError,
+  backupUnreadableError,
   clientDeletedReactivateError,
   crossesMidnightError,
   forbiddenError,
@@ -12,6 +15,7 @@ import {
   referenceMissingError,
   resourceHasFutureAppointmentsError,
   resourceInactiveError,
+  sessionLockedError,
   unauthenticatedError,
   validationError,
 } from './ipc-errors'
@@ -109,5 +113,16 @@ describe('ipc-errors', () => {
 
   it('devuelve objetos nuevos en cada llamada', () => {
     expect(invalidCredentialsError()).not.toBe(invalidCredentialsError())
+  })
+})
+
+describe('ipc-errors de respaldo', () => {
+  it.each([
+    [sessionLockedError, 'sessionLocked', 'Sesión bloqueada. Ingresa tu contraseña para continuar'],
+    [backupUnreadableError, 'backupUnreadable', 'La frase no coincide o el archivo está dañado'],
+    [backupNotRecognizedError, 'backupNotRecognized', 'El archivo no es un respaldo reconocido'],
+    [backupFromNewerAppError, 'backupFromNewerApp', 'El respaldo fue creado con una versión más nueva de la aplicación'],
+  ] as const)('%o usa el código y el mensaje exacto de Rust', (build, code, message) => {
+    expect(build()).toEqual({ code, message, field: null, entityIds: null })
   })
 })

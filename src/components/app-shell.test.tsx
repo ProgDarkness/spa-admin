@@ -57,7 +57,7 @@ describe('AppShell', () => {
   it('lista todos los destinos para propietaria', async () => {
     const { navigation } = await renderShell('propietaria')
 
-    expect(within(navigation).getAllByRole('link')).toHaveLength(7)
+    expect(within(navigation).getAllByRole('link')).toHaveLength(8)
   })
 
   it('muestra el nombre de usuario y el rol', async () => {

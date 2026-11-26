@@ -213,6 +213,52 @@ describe('createDevBackends', () => {
     expect(backend('list_clients', { filter: { query: '', includeDeleted: true } })).toHaveLength(4)
   })
 
+  it('avisa onBackupRestored solo cuando una restauración válida termina', () => {
+    const restored: string[] = []
+    const auth: IpcBackend = (cmd) => (cmd === 'setup_status' ? { needsOwner: true, clockRollback: null } : null)
+    const backend = createDevBackends({
+      auth,
+      session: () => null,
+      seed: SEED,
+      onBackupRestored: () => restored.push('restaurado'),
+    })
+
+    backend('restore_backup', { passphrase: 'frase de prueba larga' })
+
+    expect(restored).toEqual(['restaurado'])
+  })
+
+  describe('respaldo previo sembrado', () => {
+    const NOW = Date.parse('2026-11-12T13:00:00.000Z')
+
+    function statusWith(lastBackupAtUtc?: string): unknown {
+      const backend = createDevBackends({
+        auth: authReplying('auth'),
+        session: () => userWith('backup.manage'),
+        seed: SEED,
+        now: () => NOW,
+        ...(lastBackupAtUtc ? { lastBackupAtUtc } : {}),
+      })
+      return backend('get_backup_status', undefined)
+    }
+
+    it('sin semilla el respaldo está vencido y sin fecha', () => {
+      expect(statusWith()).toEqual({ lastBackupAt: null, isDue: true })
+    })
+
+    it('un respaldo de ayer no vence y expone su fecha', () => {
+      expect(statusWith('2026-11-11T13:00:00.000Z')).toMatchObject({ isDue: false })
+      expect(statusWith('2026-11-11T13:00:00.000Z')).not.toMatchObject({ lastBackupAt: null })
+    })
+
+    it('un respaldo de hace ocho días vence pero conserva su fecha', () => {
+      const status = statusWith('2026-11-04T13:00:00.000Z')
+
+      expect(status).toMatchObject({ isDue: true })
+      expect(status).not.toMatchObject({ lastBackupAt: null })
+    })
+  })
+
   it('el estado es propio de cada composición', () => {
     const first = devBackends()
     const second = devBackends()

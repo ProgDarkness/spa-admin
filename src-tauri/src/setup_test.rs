@@ -317,6 +317,24 @@ fn install_manages_every_state_the_commands_depend_on() {
 }
 
 #[test]
+fn install_manages_the_backup_source_and_the_native_dialogs() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+
+    let (app, outcome) = installed_app(dir.path(), &store);
+
+    outcome.unwrap();
+    let source = app.state::<BackupSource>();
+    assert_eq!(source.database_path, database_path(dir.path()));
+    assert_eq!(
+        source.key_store.read().unwrap().unwrap().as_hex(),
+        store.read().unwrap().unwrap().as_hex()
+    );
+    assert!(app.try_state::<BackupDialogs>().is_some());
+    assert!(app.try_state::<BackupBackground>().is_some());
+}
+
+#[test]
 fn install_exposes_the_recorded_clock_rollback_to_the_frontend() {
     let dir = tempfile::tempdir().unwrap();
     let store = isolated_store();
@@ -340,6 +358,9 @@ fn install_manages_nothing_when_the_bootstrap_fails() {
     let (app, outcome) = installed_app(dir.path(), &store);
 
     assert!(outcome.is_err());
+    assert!(app.try_state::<BackupSource>().is_none());
+    assert!(app.try_state::<BackupDialogs>().is_none());
+    assert!(app.try_state::<BackupBackground>().is_none());
     assert!(app.try_state::<Database>().is_none());
     assert!(app.try_state::<SessionState>().is_none());
     assert!(app.try_state::<LoginThrottle>().is_none());
@@ -391,4 +412,63 @@ fn bootstrap_without_the_seed_variable_seeds_nothing() {
     assert_eq!(row_count(&bootstrap, "exchange_rates"), 0);
     assert_eq!(row_count(&bootstrap, "clients"), 0);
     assert_eq!(row_count(&bootstrap, "appointments"), 0);
+}
+
+#[test]
+fn backup_recovery_setup_error_message_is_fixed() {
+    let failure = SetupError::Backup(crate::features::backup::errors::BackupError::Io(
+        std::io::Error::other("/ruta/secreta"),
+    ));
+    assert_eq!(failure.to_string(), "backup recovery unavailable");
+}
+
+fn table_exists(bootstrap: &Bootstrap, name: &'static str) -> bool {
+    bootstrap
+        .database
+        .with_conn(|conn| {
+            Ok(conn.query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name = ?1",
+                [name],
+                |row| row.get::<_, i64>(0),
+            )? == 1)
+        })
+        .unwrap()
+}
+
+#[test]
+fn bootstrap_recovers_an_interrupted_restore_instead_of_creating_an_empty_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+    let first = bootstrap(dir.path(), &store).unwrap();
+    first
+        .database
+        .with_conn(|conn| Ok(conn.execute_batch("CREATE TABLE datos_de_la_clienta (id INTEGER)")?))
+        .unwrap();
+    drop(first);
+    let previous = crate::features::backup::leftovers::path_for(
+        &database_path(dir.path()),
+        "0000000000000003",
+        crate::features::backup::leftovers::Leftover::Prev,
+    );
+    fs::rename(database_path(dir.path()), previous).unwrap();
+
+    let second = bootstrap(dir.path(), &store).unwrap();
+
+    assert!(table_exists(&second, "datos_de_la_clienta"));
+}
+
+#[test]
+fn bootstrap_promotes_the_pending_key_when_the_database_only_opens_with_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = isolated_store();
+    drop(bootstrap(dir.path(), &store).unwrap());
+    let real_key = store.read().unwrap().unwrap();
+    store.write_pending(&real_key).unwrap();
+    store.write(&crate::db::DbKey::generate().unwrap()).unwrap();
+
+    let reopened = bootstrap(dir.path(), &store).unwrap();
+
+    assert_eq!(role_count(&reopened), 3);
+    assert_eq!(store.read().unwrap().unwrap().as_hex(), real_key.as_hex());
+    assert!(store.read_pending().unwrap().is_none());
 }

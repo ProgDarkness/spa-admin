@@ -260,3 +260,33 @@ fn snapshot_error_message_leaks_nothing() {
     let failure = SnapshotError::Io(std::io::Error::other("/ruta/secreta"));
     assert_eq!(failure.to_string(), "snapshot failed");
 }
+
+fn touch(dir: &Path, name: &str) -> PathBuf {
+    let path = dir.join(name);
+    fs::write(&path, b"x").unwrap();
+    path
+}
+
+#[test]
+fn all_snapshots_lists_every_versioned_copy_and_ignores_restore_leftovers() {
+    let dir = tempfile::tempdir().unwrap();
+    let database = touch(dir.path(), "spa.db");
+    let first = touch(dir.path(), "spa.db.0000000000000001.v2.bak");
+    let second = touch(dir.path(), "spa.db.0000000000000002.v3.bak");
+    touch(dir.path(), "spa.db.0000000000000003.prev");
+    touch(dir.path(), "spa.db.0000000000000003.restoring");
+    touch(dir.path(), "spa.db.0000000000000003.failed");
+    touch(dir.path(), "otro.db.0000000000000001.v2.bak");
+
+    let listed = all_snapshots(&database).unwrap();
+
+    assert_eq!(listed, [first, second]);
+}
+
+#[test]
+fn all_snapshots_of_a_directory_without_copies_is_empty() {
+    let dir = tempfile::tempdir().unwrap();
+    let database = touch(dir.path(), "spa.db");
+
+    assert!(all_snapshots(&database).unwrap().is_empty());
+}

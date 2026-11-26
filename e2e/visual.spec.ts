@@ -6,6 +6,7 @@ import { FIXED_TODAY, goToSection } from './support/session'
 import { installTauriIpc } from './support/tauri-ipc'
 
 const FIXED_VISUAL_TIME = new Date(`${FIXED_TODAY}T10:15:00-04:00`)
+const RECENT_BACKUP_UTC = '2026-11-11T14:00:00.000Z'
 const BRONZE_RGB = 'rgb(166, 124, 59)'
 const VIEWPORTS = [
   { name: '1280x800', width: 1280, height: 800 },
@@ -17,7 +18,7 @@ const SCREENSHOT_OPTIONS = { fullPage: true, animations: 'disabled' as const }
 test.use({ reducedMotion: 'reduce' })
 
 async function openLoginAtFixedTime(page: Page): Promise<void> {
-  const ipc = await installTauriIpc(page)
+  const ipc = await installTauriIpc(page, { lastBackupAtUtc: RECENT_BACKUP_UTC })
   await page.clock.setFixedTime(FIXED_VISUAL_TIME)
   await page.goto('/login/')
   await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible()

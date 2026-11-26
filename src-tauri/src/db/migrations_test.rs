@@ -382,3 +382,29 @@ fn login_throttle_table_exists_after_migrating() {
 pub(super) fn is_constraint_violation(outcome: rusqlite::Result<usize>) -> bool {
     outcome.is_err_and(|error| error.sqlite_error_code() == Some(ErrorCode::ConstraintViolation))
 }
+
+fn user_version_of(conn: &Connection) -> i64 {
+    conn.query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap()
+}
+
+#[test]
+fn migrate_to_stops_at_the_requested_version_and_migrate_finishes_the_rest() {
+    let mut conn = Connection::open_in_memory().unwrap();
+
+    migrate_to(&mut conn, 5).unwrap();
+    let stopped_at = user_version_of(&conn);
+    migrate(&mut conn).unwrap();
+
+    assert_eq!(stopped_at, 5);
+    assert_eq!(user_version_of(&conn), i64::from(supported_version()));
+}
+
+#[test]
+fn migrate_to_the_supported_version_is_the_full_migration() {
+    let mut conn = Connection::open_in_memory().unwrap();
+
+    migrate_to(&mut conn, supported_version()).unwrap();
+
+    assert_eq!(user_version_of(&conn), i64::from(supported_version()));
+}

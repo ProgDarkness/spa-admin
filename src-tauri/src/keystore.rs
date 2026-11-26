@@ -1,6 +1,7 @@
 use crate::db::DbKey;
 
 pub const DB_KEY_ACCOUNT: &str = "sqlcipher-db-key";
+pub const PENDING_KEY_ACCOUNT: &str = "sqlcipher-db-key-pending";
 
 #[derive(Debug, thiserror::Error)]
 pub enum KeyStoreError {
@@ -12,8 +13,11 @@ pub enum KeyStoreError {
     MissingForExistingDb,
     #[error("secure random generation failed")]
     Random,
+    #[error("pending database key missing")]
+    MissingPending,
 }
 
+#[derive(Clone)]
 pub struct KeyStore {
     service: String,
 }
@@ -25,12 +29,17 @@ impl KeyStore {
         }
     }
 
-    fn entry(&self) -> Result<keyring_core::Entry, KeyStoreError> {
-        Ok(keyring_core::Entry::new(&self.service, DB_KEY_ACCOUNT)?)
+    #[cfg(test)]
+    pub(crate) fn service_name(&self) -> &str {
+        &self.service
     }
 
-    pub fn read(&self) -> Result<Option<DbKey>, KeyStoreError> {
-        match self.entry()?.get_password() {
+    fn entry(&self, account: &str) -> Result<keyring_core::Entry, KeyStoreError> {
+        Ok(keyring_core::Entry::new(&self.service, account)?)
+    }
+
+    fn read_account(&self, account: &str) -> Result<Option<DbKey>, KeyStoreError> {
+        match self.entry(account)?.get_password() {
             Ok(stored) => DbKey::from_hex(stored).map(Some),
             Err(keyring_core::Error::NoEntry) => Ok(None),
             Err(keyring_core::Error::BadEncoding(_) | keyring_core::Error::BadDataFormat(..)) => {
@@ -40,8 +49,37 @@ impl KeyStore {
         }
     }
 
+    fn write_account(&self, account: &str, key: &DbKey) -> Result<(), KeyStoreError> {
+        Ok(self.entry(account)?.set_password(key.as_hex())?)
+    }
+
+    pub fn read(&self) -> Result<Option<DbKey>, KeyStoreError> {
+        self.read_account(DB_KEY_ACCOUNT)
+    }
+
     pub fn write(&self, key: &DbKey) -> Result<(), KeyStoreError> {
-        Ok(self.entry()?.set_password(key.as_hex())?)
+        self.write_account(DB_KEY_ACCOUNT, key)
+    }
+
+    pub fn read_pending(&self) -> Result<Option<DbKey>, KeyStoreError> {
+        self.read_account(PENDING_KEY_ACCOUNT)
+    }
+
+    pub fn write_pending(&self, key: &DbKey) -> Result<(), KeyStoreError> {
+        self.write_account(PENDING_KEY_ACCOUNT, key)
+    }
+
+    pub fn delete_pending(&self) -> Result<(), KeyStoreError> {
+        match self.entry(PENDING_KEY_ACCOUNT)?.delete_credential() {
+            Ok(()) | Err(keyring_core::Error::NoEntry) => Ok(()),
+            Err(other) => Err(other.into()),
+        }
+    }
+
+    pub fn promote_pending(&self) -> Result<(), KeyStoreError> {
+        let pending = self.read_pending()?.ok_or(KeyStoreError::MissingPending)?;
+        self.write(&pending)?;
+        self.delete_pending()
     }
 }
 

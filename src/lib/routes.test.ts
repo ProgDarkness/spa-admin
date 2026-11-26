@@ -17,6 +17,8 @@ describe('ROUTES', () => {
       resources: '/ajustes/recursos',
       rates: '/ajustes/tasas',
       paymentMethods: '/ajustes/metodos-pago',
+      backup: '/ajustes/respaldo',
+      restoreFirstRun: '/setup/restaurar',
     })
   })
 })
@@ -45,6 +47,7 @@ describe('NAV_ITEMS', () => {
       [ROUTES.resources]: ['resources.manage'],
       [ROUTES.rates]: ['rates.manage'],
       [ROUTES.paymentMethods]: ['catalog.read', 'payments.read'],
+      [ROUTES.backup]: ['backup.manage'],
     })
   })
 

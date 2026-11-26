@@ -1,6 +1,7 @@
 pub mod appointments;
 pub mod audit;
 pub mod auth;
+pub mod backup;
 pub mod catalog;
 pub mod client_history;
 pub mod clients;
