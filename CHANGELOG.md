@@ -214,6 +214,31 @@ Pagos en Rust con tasa copiada al registrarse, anulación con motivo e historial
 - Pagos inmutables a nivel de base de datos (triggers) y tasa congelada en cada pago.
 - Centinelas del seed bloqueantes en CI (`check:bundle`).
 
+### Fase 7: Métricas
+
+Métricas mensuales calculadas en Rust con las definiciones D16 y foto consistente de un mes. Se eliminan los espejos completos de citas y de pagos del front, junto con `list_all_appointments` y `list_all_payments`. Sin publicar. Decisiones en `docs/adr/0011-metricas.md`; descripción de la PR en `docs/pr/fase7-metricas.md`.
+
+#### Added
+
+- Comando IPC `get_monthly_metrics(month)` (46 comandos en total): clientes nuevos y recurrentes, citas por estado, ingreso por moneda, cobros en citas no completadas y cobrado por adelantado (citas pendientes), todo en USD y VES sin conversión.
+- Mes en formato `YYYY-MM`, de `0001-01` a `9998-12`. Los pagos cuentan en el mes de su cita, no en el mes del cobro.
+- Bloque "Cobrado por adelantado (citas pendientes)" en el resumen de métricas.
+
+#### Changed
+
+- Métricas leen de Rust con una sola transacción. `compute.ts` y los esquemas de métricas del front se eliminan.
+- El selector de mes acota la navegación entre `0001-01` y `9998-12`.
+- `AmountsByCurrency` se mueve a `payments::model`, compartido por pagos, historial de cliente y métricas.
+
+#### Removed
+
+- Comandos IPC `list_all_appointments` y `list_all_payments`.
+- Espejos del front de citas y pagos (`syncAppointmentsMirror`, `syncPaymentsMirror`, `listUntilApplied` y sus `replace*`/`mirror*`). `getState()` ya no devuelve `appointments` ni `payments`.
+
+#### Security
+
+- `metrics.read` (solo Propietaria) se valida fuera de la transacción y otra vez dentro de ella. Un fallo de suma fuera de rango o un estado desconocido devuelven un error interno controlado, sin datos sensibles.
+
 ## [0.2.0] - 2026-11-13
 
 Rediseño visual «Piedra y bronce». Sin cambios de lógica de dominio ni de textos. Decisiones en `docs/design/piedra-y-bronce.md`.

@@ -84,7 +84,7 @@
 ### 9. Comandos IPC
 
 - 6 comandos nuevos: `list_appointments(range)`, `list_all_appointments()`, `create_appointment`, `move_appointment`, `transition_appointment`, `list_future_appointments_of_resource`. Total: **42 comandos** (`src/lib/bindings.ts`, verificado: 42 invocaciones `__TAURI_INVOKE` distintas).
-- `list_all_appointments` es la colección completa para el espejo del front. Existe porque `list_appointments` con la ventana de ±182 días dejaba fuera citas fuera de ese rango, y el espejo las perdía.
+- `list_all_appointments` es la colección completa para el espejo del front. Existe porque `list_appointments` con la ventana de ±182 días dejaba fuera citas fuera de ese rango, y el espejo las perdía. **Eliminado en Fase 7** (ADR 0011): ya no hay espejo de citas en el front. Total vigente: 46 comandos.
 - Lectura (`list_appointments`, `list_all_appointments`): `appointments.read` o `appointments.write`.
 - Escritura (`create`, `move`, `transition`): `appointments.write`. `transition` con `reopen` además exige `appointments.reopen`.
 
@@ -145,7 +145,7 @@
 
 ## Límites
 
-- `list_appointments` y `list_all_appointments` no paginan. La colección completa viaja en cada sincronización del espejo.
+- `list_appointments` no pagina. Límite de `list_all_appointments` cerrado en Fase 7 (ADR 0011): el comando se eliminó.
 - `resourceInactive` al reabrir se evalúa con `ends_at > now`, no con `starts_at > now`. Una cita final cuyo `ends_at` aún no llegó no puede reabrirse en un recurso inactivo; una cuyo `ends_at` ya pasó sí puede, aunque quede `scheduled` en el pasado.
 - La guarda D9 vive en el comando de desactivación de recursos. Cualquier otra vía de escritura a `resources.active` debe pasar por el mismo servicio.
 - `cargo test --release --no-run` no compila. Es deuda preexistente: `insert_user` y `NewUser` quedan detrás de `cfg(debug_assertions)` y las pruebas de `features/auth` los importan. Se verificó en esta fase (37 errores, todos de `features/auth`).
