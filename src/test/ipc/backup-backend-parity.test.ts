@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { invoke } from '@tauri-apps/api/core'
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -129,6 +131,36 @@ describe('paridad de forma con los bindings generados', () => {
 
     expect(rejection).not.toBeInstanceOf(Error)
     expect(rejection).toMatchObject({ code: 'unauthenticated' })
+  })
+})
+
+function rustMessageOf(constantName: string): string {
+  const source = readFileSync(resolve(process.cwd(), 'src-tauri/src/errors.rs'), 'utf8')
+  const match = new RegExp(`const ${constantName}: &str =\\s*"([^"]*)";`).exec(source)
+  if (!match?.[1]) throw new Error(`constante Rust inexistente: ${constantName}`)
+  return match[1]
+}
+
+describe('paridad de mensajes con src-tauri/src/errors.rs', () => {
+  it.each([
+    ['unreadable', 'BACKUP_UNREADABLE_MESSAGE'],
+    ['notRecognized', 'BACKUP_NOT_RECOGNIZED_MESSAGE'],
+    ['future', 'BACKUP_FROM_NEWER_APP_MESSAGE'],
+    ['rollbackFailed', 'BACKUP_ROLLBACK_FAILED_MESSAGE'],
+  ] as const)('el mensaje del fallo de restauración %s coincide con %s', async (pick, constant) => {
+    setNextPickedBackup(pick === 'unreadable' ? 'corrupt' : pick)
+
+    const error = await errorOf(() => commands.restoreBackup(PASSPHRASE))
+
+    expect(error.message).toBe(rustMessageOf(constant))
+  })
+
+  it('el mensaje de exportación demasiado grande coincide con BACKUP_TOO_LARGE_MESSAGE', async () => {
+    setNextPickedBackup('tooLarge')
+
+    const error = await errorOf(() => commands.exportBackup(PASSPHRASE))
+
+    expect(error).toMatchObject({ code: 'internal', message: rustMessageOf('BACKUP_TOO_LARGE_MESSAGE') })
   })
 })
 

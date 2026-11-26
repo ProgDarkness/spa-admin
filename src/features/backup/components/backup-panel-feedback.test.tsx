@@ -22,4 +22,18 @@ describe('BackupPanelFeedback', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Error: La frase no coincide')
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
+
+  it('mueve el foco al error cuando aparece', () => {
+    const { rerender } = render(<BackupPanelFeedback message={null} errorText={null} />)
+
+    rerender(<BackupPanelFeedback message={null} errorText="La frase no coincide" />)
+
+    expect(screen.getByRole('alert')).toHaveFocus()
+  })
+
+  it('no roba el foco mientras no hay error', () => {
+    render(<BackupPanelFeedback message="Exportando respaldo…" errorText={null} />)
+
+    expect(document.body).toHaveFocus()
+  })
 })

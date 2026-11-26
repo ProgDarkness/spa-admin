@@ -12,7 +12,7 @@ import type {
 import type { Appointment, Client, ExchangeRate, Payment, PaymentMethod, Resource, Service, SessionUser } from '@/lib/model'
 import { createAppointmentsIpcBackend } from './appointments-backend'
 import type { IpcBackend } from './auth-backend'
-import { createBackupIpcBackend, type BackupAuditRow } from './backup-backend'
+import { createBackupIpcBackend, seededBackupAuditRow, type BackupAuditRow } from './backup-backend'
 import { createCatalogIpcBackend } from './catalog-backend'
 import { createClientHistoryIpcBackend } from './client-history-backend'
 import { createClientsIpcBackend } from './clients-backend'
@@ -38,13 +38,15 @@ export type DevBackendsOptions = {
     payments: readonly Payment[]
   }
   now?: () => number
+  onBackupRestored?: () => void
+  lastBackupAtUtc?: string
 }
 
 export function composeBackends(base: IpcBackend, ...decorators: BackendDecorator[]): IpcBackend {
   return decorators.reduce((backend, decorate) => decorate(backend), base)
 }
 
-export function createDevBackends({ auth, session, seed, now }: DevBackendsOptions): IpcBackend {
+export function createDevBackends({ auth, session, seed, now, onBackupRestored, lastBackupAtUtc }: DevBackendsOptions): IpcBackend {
   const clients = createSharedRows<ClientSummary>()
   const services = createSharedRows<ServiceSummary>()
   const resources = createSharedRows<ResourceSummary>()
@@ -52,7 +54,7 @@ export function createDevBackends({ auth, session, seed, now }: DevBackendsOptio
   const paymentMethods = createSharedRows<PaymentMethodSummary>()
   const rates = createSharedRows<RateSummary>()
   const payments = createSharedRows<PaymentSummary>()
-  const audit = createSharedRows<BackupAuditRow>()
+  const audit = createSharedRows<BackupAuditRow>(lastBackupAtUtc ? [seededBackupAuditRow(lastBackupAtUtc)] : [])
   const clock = now ? { now } : {}
   return composeBackends(
     auth,
@@ -90,6 +92,7 @@ export function createDevBackends({ auth, session, seed, now }: DevBackendsOptio
         needsOwner: () => (auth('setup_status', undefined) as SetupStatus).needsOwner,
         endSession: () => auth('logout', undefined),
         audit,
+        ...(onBackupRestored ? { onRestored: onBackupRestored } : {}),
         ...clock,
       }),
   )

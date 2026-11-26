@@ -17,11 +17,7 @@ function RestoredNotice() {
   const wasRestored = useSearchParams().get('restored') === '1'
   if (!wasRestored) return null
 
-  return (
-    <p role="status" className="w-full rounded-md border border-border bg-background p-3 text-sm font-medium">
-      {RESTORED_NOTICE}
-    </p>
-  )
+  return <p className="w-full rounded-md border border-border bg-background p-3 text-sm font-medium">{RESTORED_NOTICE}</p>
 }
 
 export default function LoginPage() {
@@ -36,9 +32,11 @@ export default function LoginPage() {
 
   return (
     <AuthCard title="Iniciar sesión">
-      <Suspense fallback={null}>
-        <RestoredNotice />
-      </Suspense>
+      <div role="status" className="contents">
+        <Suspense fallback={null}>
+          <RestoredNotice />
+        </Suspense>
+      </div>
       {clockRollback ? <ClockRollbackBanner {...clockRollback} /> : null}
       {hasFailed ? (
         <div role="alert" className="flex w-full items-center justify-between gap-2 text-sm text-destructive">

@@ -18,25 +18,33 @@ type RestoreFormValues = z.input<typeof backupRestoreFormSchema>
 const EMPTY_RESTORE_FORM: RestoreFormValues = { passphrase: '' }
 const RESTORING_MESSAGE = 'Restaurando respaldo…'
 
-type RestoreBackupPanelProps = { onRestored: () => void; advice?: ReactNode }
+type RestoreBackupPanelProps = { onRestored?: () => void; advice?: ReactNode }
 
 export function RestoreBackupPanel({ onRestored, advice }: RestoreBackupPanelProps) {
-  const { refresh } = useSession()
+  const { refresh, markRestored } = useSession()
   const restoreBackup = useRestoreBackup()
   const [hasUnderstood, setHasUnderstood] = useState(false)
   const [errorText, setErrorText] = useState<string | null>(null)
   const form = useForm<RestoreFormValues>({ resolver: zodResolver(backupRestoreFormSchema), defaultValues: EMPTY_RESTORE_FORM })
   const isRestoring = form.formState.isSubmitting
 
+  function clearSensitiveInput() {
+    form.reset(EMPTY_RESTORE_FORM)
+    setHasUnderstood(false)
+  }
+
   async function submit({ passphrase }: RestoreFormValues) {
+    if (!hasUnderstood) return
     setErrorText(null)
     try {
       const restored = await restoreBackup.mutateAsync(passphrase)
       if (restored === null) return
-      form.reset(EMPTY_RESTORE_FORM)
+      clearSensitiveInput()
+      markRestored()
       await refresh()
-      onRestored()
+      onRestored?.()
     } catch (caught) {
+      clearSensitiveInput()
       setErrorText((appErrorOf(caught) ?? UNEXPECTED_ERROR).message)
     }
   }
@@ -52,7 +60,7 @@ export function RestoreBackupPanel({ onRestored, advice }: RestoreBackupPanelPro
         {advice}
       </div>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(submit)} className="grid w-full max-w-sm gap-4" noValidate>
+        <form onSubmit={form.handleSubmit(submit, () => setErrorText(null))} className="grid w-full max-w-sm gap-4" noValidate>
           <AuthTextField
             control={form.control}
             name="passphrase"

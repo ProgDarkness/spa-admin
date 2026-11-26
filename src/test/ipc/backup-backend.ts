@@ -1,11 +1,13 @@
 import type { AuditAction, BackupExported, BackupStatus, RestoreResult } from '@/lib/bindings'
-import { isAcceptableBackupPassphrase } from '@/lib/backup-passphrase'
+import { backupPassphraseProblem } from '@/lib/backup-passphrase'
 import { toLocalDateTime } from '@/lib/datetime'
 import type { SessionUser } from '@/lib/model'
 import type { IpcBackend } from './auth-backend'
 import {
   backupFromNewerAppError,
   backupNotRecognizedError,
+  backupRollbackFailedError,
+  backupTooLargeError,
   backupUnreadableError,
   forbiddenError,
   sessionLockedError,
@@ -15,7 +17,14 @@ import {
 import { isRecord } from './record-backend-support'
 import type { SharedRows } from './shared-rows'
 
-export type PickedBackup = 'valid' | 'corrupt' | 'future' | 'wrongPassphrase' | 'notRecognized'
+export type PickedBackup =
+  | 'valid'
+  | 'corrupt'
+  | 'future'
+  | 'wrongPassphrase'
+  | 'notRecognized'
+  | 'rollbackFailed'
+  | 'tooLarge'
 
 export type BackupAuditRow = {
   id: number
@@ -33,6 +42,7 @@ export type BackupBackendOptions = {
   endSession: () => void
   audit: SharedRows<BackupAuditRow>
   now?: () => number
+  onRestored?: () => void
 }
 
 const BACKUP_PERMISSION = 'backup.manage'
@@ -47,6 +57,17 @@ const BACKUP_ACTIONS: readonly AuditAction[] = ['backup_created', 'backup_restor
 
 const DEFAULT_PICK: PickedBackup = 'valid'
 let nextPick: PickedBackup | null = DEFAULT_PICK
+
+export function seededBackupAuditRow(occurredAtUtc: string): BackupAuditRow {
+  return {
+    id: 1,
+    action: 'backup_created',
+    actorUserId: null,
+    occurredAt: localInstant(Date.parse(occurredAtUtc)),
+    occurredAtUtc,
+    diff: null,
+  }
+}
 
 export function setNextPickedBackup(pick: PickedBackup | null): void {
   nextPick = pick
@@ -65,7 +86,7 @@ function passphraseArgument(args: unknown): string {
 }
 
 function requireAcceptablePassphrase(passphrase: string): void {
-  if (!isAcceptableBackupPassphrase(passphrase)) throw validationError(PASSPHRASE_FIELD)
+  if (backupPassphraseProblem(passphrase) !== null) throw validationError(PASSPHRASE_FIELD)
 }
 
 function localInstant(ms: number): string {
@@ -118,7 +139,9 @@ export function createBackupIpcBackend(next: IpcBackend, options: BackupBackendO
   function exportBackup(args: unknown): BackupExported | null {
     const actor = authorize()
     requireAcceptablePassphrase(passphraseArgument(args))
-    if (takeNextPick() === null) return null
+    const pick = takeNextPick()
+    if (pick === null) return null
+    if (pick === 'tooLarge') throw backupTooLargeError()
     const fileName = defaultFileName(now())
     const row = record({
       actorUserId: actor.id,
@@ -132,6 +155,7 @@ export function createBackupIpcBackend(next: IpcBackend, options: BackupBackendO
     if (pick === 'corrupt' || pick === 'wrongPassphrase') return backupUnreadableError()
     if (pick === 'notRecognized') return backupNotRecognizedError()
     if (pick === 'future') return backupFromNewerAppError()
+    if (pick === 'rollbackFailed') return backupRollbackFailedError()
     return null
   }
 
@@ -149,6 +173,7 @@ export function createBackupIpcBackend(next: IpcBackend, options: BackupBackendO
       diff: { restoredBy: actor?.username ?? null, ...result },
     })
     options.endSession()
+    options.onRestored?.()
     return result
   }
 

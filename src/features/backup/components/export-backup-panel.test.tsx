@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { commit, getState, resetStore } from '@/lib/mock/store'
 import { freezeDate } from '@/test/clock'
@@ -147,5 +147,55 @@ describe('ExportBackupPanel', () => {
 
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.queryByText(/spa-respaldo/)).not.toBeInTheDocument()
+  })
+
+  it('limpia la frase y la confirmación también cuando el backend falla', async () => {
+    const { user } = renderPanel()
+    await fill(user)
+    commit({ ...getState(), sessionUserId: null })
+
+    await user.click(exportButton())
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.getByLabelText('Frase del respaldo')).toHaveValue('')
+    expect(screen.getByLabelText('Confirmar frase')).toHaveValue('')
+  })
+
+  it('un error del backend recibe el foco para que se anuncie', async () => {
+    const { user } = renderPanel()
+    await fill(user)
+    commit({ ...getState(), sessionUserId: null })
+
+    await user.click(exportButton())
+
+    expect(await screen.findByRole('alert')).toHaveFocus()
+  })
+
+  it('al fallar la validación después de un error del backend queda un solo alert', async () => {
+    const { user } = renderPanel()
+    await fill(user)
+    commit({ ...getState(), sessionUserId: null })
+    await user.click(exportButton())
+    await screen.findByText(/^Error:/)
+
+    await fill(user, 'corta', 'corta')
+    await user.click(exportButton())
+
+    await screen.findByText('La frase debe tener al menos 12 caracteres')
+    expect(screen.queryByText(/^Error:/)).not.toBeInTheDocument()
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+  })
+
+  it('el envío directo del formulario con una frase corta no llama al backend', async () => {
+    renderPanel()
+    const input = screen.getByLabelText('Frase del respaldo')
+    if (!(input instanceof HTMLInputElement) || !input.form) throw new Error('formulario inexistente')
+    fireEvent.change(input, { target: { value: 'corta' } })
+
+    fireEvent.submit(input.form)
+
+    await screen.findByText('La frase debe tener al menos 12 caracteres')
+    expect(screen.queryByText(/spa-respaldo/)).not.toBeInTheDocument()
+    expect(getState().sessionUserId).not.toBeNull()
   })
 })

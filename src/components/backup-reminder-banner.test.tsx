@@ -1,4 +1,5 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ExportBackupPanel } from '@/features/backup/components/export-backup-panel'
 import { login } from '@/features/auth/api'
@@ -8,6 +9,8 @@ import { freezeDate } from '@/test/clock'
 import { installDevIpc } from '@/test/dev-ipc'
 import { DEV_PASSWORD } from '@/test/ipc/auth-backend'
 import { setNextPickedBackup } from '@/test/ipc/backup-backend'
+import { setPathname } from '@/test/navigation'
+import { deferred } from '@/test/deferred'
 import { renderWithProviders } from '@/test/render'
 import { signInAs } from '@/test/session'
 import { BackupReminderBanner } from './backup-reminder-banner'
@@ -38,8 +41,8 @@ describe('BackupReminderBanner', () => {
   it('avisa que nunca se exportó un respaldo y enlaza a Respaldo', async () => {
     renderWithProviders(<BackupReminderBanner />, { as: 'propietaria' })
 
-    const banner = await screen.findByRole('status')
-    expect(banner).toHaveTextContent(NEVER_EXPORTED_TEXT)
+    expect(await screen.findByText(NEVER_EXPORTED_TEXT)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(NEVER_EXPORTED_TEXT)
     expect(screen.getByRole('link', { name: 'Exportar un respaldo' })).toHaveAttribute('href', '/ajustes/respaldo')
   })
 
@@ -48,9 +51,8 @@ describe('BackupReminderBanner', () => {
     await signInAgainAt('2026-11-12T09:00')
     renderWithProviders(<BackupReminderBanner />)
 
-    const banner = await screen.findByRole('status')
-    expect(banner).toHaveTextContent(OVERDUE_TEXT)
-    expect(banner).not.toHaveTextContent(NEVER_EXPORTED_TEXT)
+    expect(await screen.findByText(OVERDUE_TEXT)).toBeInTheDocument()
+    expect(screen.getByRole('status')).not.toHaveTextContent(NEVER_EXPORTED_TEXT)
   })
 
   it('no se muestra con un respaldo reciente', async () => {
@@ -59,7 +61,34 @@ describe('BackupReminderBanner', () => {
     const { queryClient } = renderWithProviders(<BackupReminderBanner />)
 
     await waitFor(() => expect(queryClient.getQueryCache().findAll()[0]?.state.status).toBe('success'))
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
+  })
+
+  it('monta la región de estado vacía antes de saber si hay aviso y le añade el texto después', async () => {
+    renderWithProviders(<BackupReminderBanner />, { as: 'propietaria' })
+    const region = await screen.findByRole('status')
+    expect(region).toBeEmptyDOMElement()
+
+    await screen.findByText(NEVER_EXPORTED_TEXT)
+
+    expect(screen.getByRole('status')).toBe(region)
+    expect(region).toHaveTextContent(NEVER_EXPORTED_TEXT)
+  })
+
+  it.each(['/ajustes/respaldo', '/ajustes/respaldo/'])('no muestra el aviso dentro de %s porque ya está en la pantalla', async (pathname) => {
+    setPathname(pathname)
+    const { queryClient } = renderWithProviders(<BackupReminderBanner />, { as: 'propietaria' })
+
+    expect(await screen.findByRole('status')).toBeEmptyDOMElement()
+    expect(queryClient.getQueryCache().findAll()).toHaveLength(0)
+    expect(screen.queryByRole('link', { name: 'Exportar un respaldo' })).not.toBeInTheDocument()
+  })
+
+  it('sí lo muestra en otras pantallas de ajustes', async () => {
+    setPathname('/ajustes/tasas')
+    renderWithProviders(<BackupReminderBanner />, { as: 'propietaria' })
+
+    expect(await screen.findByText(NEVER_EXPORTED_TEXT)).toBeInTheDocument()
   })
 
   it('no consulta el estado ni se muestra sin backup.manage', async () => {
@@ -74,10 +103,10 @@ describe('BackupReminderBanner', () => {
 
   it('no se muestra si la consulta del estado falla', async () => {
     failCommand('get_backup_status')
-    const { container, queryClient } = renderWithProviders(<BackupReminderBanner />, { as: 'propietaria' })
+    const { queryClient } = renderWithProviders(<BackupReminderBanner />, { as: 'propietaria' })
 
     await waitFor(() => expect(queryClient.getQueryCache().findAll()[0]?.state.status).toBe('error'))
-    expect(container).toBeEmptyDOMElement()
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
   it('desaparece tras exportar un respaldo', async () => {
@@ -96,6 +125,48 @@ describe('BackupReminderBanner', () => {
 
     await waitFor(() => expect(screen.queryByText(NEVER_EXPORTED_TEXT)).not.toBeInTheDocument())
     expect(screen.getByText(/spa-respaldo/)).toBeInTheDocument()
+  })
+})
+
+function LockableShell() {
+  const [isLocked, setIsLocked] = useState(false)
+  return (
+    <>
+      <button onClick={() => setIsLocked((previous) => !previous)}>alternar bloqueo</button>
+      {isLocked ? <p>pantalla bloqueada</p> : (
+        <>
+          <BackupReminderBanner />
+          <ExportBackupPanel />
+        </>
+      )}
+    </>
+  )
+}
+
+describe('exportación en vuelo durante un bloqueo de sesión', () => {
+  it('al volver a la pantalla el aviso refleja el respaldo que terminó mientras estaba bloqueada', async () => {
+    const pending = deferred<void>()
+    const hooks = Reflect.get(window, '__TAURI_INTERNALS__') as { invoke: InvokeHook }
+    const original = hooks.invoke
+    hooks.invoke = async (cmd, args) => {
+      if (cmd === 'export_backup') await pending.promise
+      return original(cmd, args)
+    }
+    const { user, queryClient } = renderWithProviders(<LockableShell />, { as: 'propietaria' })
+    await screen.findByText(NEVER_EXPORTED_TEXT)
+    await user.type(screen.getByLabelText('Frase del respaldo'), PASSPHRASE)
+    await user.type(screen.getByLabelText('Confirmar frase'), PASSPHRASE)
+    await user.click(screen.getByRole('button', { name: 'Exportar respaldo' }))
+
+    await user.click(screen.getByRole('button', { name: 'alternar bloqueo' }))
+    act(() => queryClient.clear())
+    await user.click(screen.getByRole('button', { name: 'alternar bloqueo' }))
+    await screen.findByText(NEVER_EXPORTED_TEXT)
+    await act(async () => {
+      pending.resolve()
+    })
+
+    await waitFor(() => expect(screen.queryByText(NEVER_EXPORTED_TEXT)).not.toBeInTheDocument())
   })
 })
 

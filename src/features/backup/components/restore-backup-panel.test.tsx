@@ -1,11 +1,12 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { commit, getState, resetStore } from '@/lib/mock/store'
-import { useSession } from '@/lib/session'
+import { RequireSession, useSession } from '@/lib/session'
 import { freezeDate } from '@/test/clock'
 import { deferred } from '@/test/deferred'
 import { installDevIpc } from '@/test/dev-ipc'
 import { setNextPickedBackup } from '@/test/ipc/backup-backend'
+import { routerMock } from '@/test/navigation'
 import { renderWithProviders, type RenderWithProvidersOptions } from '@/test/render'
 import { RestoreBackupPanel } from './restore-backup-panel'
 
@@ -105,6 +106,22 @@ describe('RestoreBackupPanel', () => {
     await waitFor(() => expect(screen.getByTestId('session-status')).toHaveTextContent('signedOut'))
   })
 
+  it('dentro de RequireSession va una sola vez al login con el aviso y nunca al login simple', async () => {
+    const { user } = renderWithProviders(
+      <RequireSession>
+        <RestoreBackupPanel />
+      </RequireSession>,
+      { as: 'propietaria' },
+    )
+    await user.type(await screen.findByLabelText('Frase del respaldo a restaurar'), PASSPHRASE)
+    await user.click(screen.getByLabelText(CONSENT_LABEL))
+
+    await user.click(restoreButton())
+
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/login?restored=1'))
+    expect(routerMock.replace).not.toHaveBeenCalledWith('/login')
+  })
+
   it('cancelar el diálogo no muestra error, no avisa y conserva la sesión', async () => {
     setNextPickedBackup(null)
     const { user, onRestored } = renderPanel()
@@ -189,5 +206,101 @@ describe('RestoreBackupPanel', () => {
 
     expect(screen.queryByText('consejo de prueba')).not.toBeInTheDocument()
     await waitFor(() => expect(onRestored).toHaveBeenCalledTimes(1))
+  })
+
+  it('el envío directo del formulario sin la casilla marcada no restaura ni llama al backend', async () => {
+    const commandsSeen: string[] = []
+    const internals = Reflect.get(window, '__TAURI_INTERNALS__') as { invoke: InvokeHook }
+    const originalInvoke = internals.invoke
+    internals.invoke = async (cmd, args) => {
+      commandsSeen.push(cmd)
+      return originalInvoke(cmd, args)
+    }
+    const { onRestored } = renderPanel()
+    const input = screen.getByLabelText('Frase del respaldo a restaurar')
+    if (!(input instanceof HTMLInputElement) || !input.form) throw new Error('formulario inexistente')
+    fireEvent.change(input, { target: { value: PASSPHRASE } })
+
+    await act(async () => {
+      fireEvent.submit(input.form as HTMLFormElement)
+      await new Promise((settle) => setTimeout(settle, 0))
+    })
+
+    expect(commandsSeen).not.toContain('restore_backup')
+    expect(onRestored).not.toHaveBeenCalled()
+    expect(getState().sessionUserId).not.toBeNull()
+  })
+
+  it('limpia la frase y desmarca la casilla tras restaurar con éxito', async () => {
+    const { user } = renderPanel()
+    await fill(user)
+
+    await user.click(restoreButton())
+
+    await waitFor(() => expect(getState().sessionUserId).toBeNull())
+    expect(screen.getByLabelText('Frase del respaldo a restaurar')).toHaveValue('')
+    expect(screen.getByLabelText(CONSENT_LABEL)).not.toBeChecked()
+  })
+
+  it('limpia la frase y desmarca la casilla cuando el respaldo falla, y deja el foco en el error', async () => {
+    setNextPickedBackup('corrupt')
+    const { user } = renderPanel()
+    await fill(user)
+
+    await user.click(restoreButton())
+
+    expect(await screen.findByRole('alert')).toHaveFocus()
+    expect(screen.getByLabelText('Frase del respaldo a restaurar')).toHaveValue('')
+    expect(screen.getByLabelText(CONSENT_LABEL)).not.toBeChecked()
+  })
+
+  it('cancelar el diálogo conserva la frase y la casilla', async () => {
+    setNextPickedBackup(null)
+    const { user } = renderPanel()
+    await fill(user)
+
+    await user.click(restoreButton())
+
+    await waitFor(() => expect(restoreButton()).toBeEnabled())
+    expect(screen.getByLabelText('Frase del respaldo a restaurar')).toHaveValue(PASSPHRASE)
+    expect(screen.getByLabelText(CONSENT_LABEL)).toBeChecked()
+  })
+
+  it('la sesión sigue activa en el cliente tras un fallo del respaldo y tras cancelar', async () => {
+    setNextPickedBackup('corrupt')
+    const { user } = renderWithProviders(
+      <>
+        <RestoreBackupPanel />
+        <SessionStatusProbe />
+      </>,
+      { as: 'propietaria' },
+    )
+    await waitFor(() => expect(screen.getByTestId('session-status')).toHaveTextContent('signedIn'))
+    await fill(user)
+    await user.click(restoreButton())
+    await screen.findByRole('alert')
+
+    setNextPickedBackup(null)
+    await fill(user, true)
+    await user.click(restoreButton())
+    await waitFor(() => expect(restoreButton()).toBeEnabled())
+
+    expect(screen.getByTestId('session-status')).toHaveTextContent('signedIn')
+  })
+
+  it('al fallar la validación después de un error del backend queda un solo alert', async () => {
+    setNextPickedBackup('corrupt')
+    const { user } = renderPanel()
+    await fill(user)
+    await user.click(restoreButton())
+    await screen.findByText(/^Error:/)
+
+    await user.type(screen.getByLabelText('Frase del respaldo a restaurar'), 'corta')
+    await user.click(screen.getByLabelText(CONSENT_LABEL))
+    await user.click(restoreButton())
+
+    await screen.findByText('La frase debe tener al menos 12 caracteres')
+    expect(screen.queryByText(/^Error:/)).not.toBeInTheDocument()
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
   })
 })

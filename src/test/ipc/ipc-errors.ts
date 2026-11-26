@@ -130,3 +130,21 @@ export function backupFromNewerAppError(): AppError {
     entityIds: null,
   }
 }
+
+export function backupRollbackFailedError(): AppError {
+  return {
+    code: 'internal',
+    message: 'La restauración quedó a medias; reinicia la aplicación para completarla o recuperar el estado anterior',
+    field: null,
+    entityIds: null,
+  }
+}
+
+export function backupTooLargeError(): AppError {
+  return {
+    code: 'internal',
+    message: 'La base de datos supera el tamaño máximo admitido para un respaldo',
+    field: null,
+    entityIds: null,
+  }
+}

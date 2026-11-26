@@ -46,6 +46,7 @@ export function ExportBackupPanel() {
       form.reset(EMPTY_EXPORT_FORM)
       setOutcome({ kind: 'done', exported })
     } catch (caught) {
+      form.reset(EMPTY_EXPORT_FORM)
       setOutcome({ kind: 'failed', errorText: (appErrorOf(caught) ?? UNEXPECTED_ERROR).message })
     }
   }
@@ -60,7 +61,7 @@ export function ExportBackupPanel() {
       </p>
       <p className="text-sm font-medium">Si pierdes la frase, el respaldo no se puede recuperar.</p>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(submit)} className="grid w-full max-w-sm gap-4" noValidate>
+        <form onSubmit={form.handleSubmit(submit, () => setOutcome(IDLE_OUTCOME))} className="grid w-full max-w-sm gap-4" noValidate>
           <AuthTextField control={form.control} name="passphrase" label="Frase del respaldo" type="password" autoComplete="new-password" />
           <AuthTextField control={form.control} name="confirmation" label="Confirmar frase" type="password" autoComplete="new-password" />
           <BackupPanelFeedback

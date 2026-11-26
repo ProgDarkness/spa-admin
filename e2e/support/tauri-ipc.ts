@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 import { createSeed } from '../../src/lib/mock/seed'
 import type { Id, SessionUser } from '../../src/lib/model'
 import { createAuthIpcBackend } from '../../src/test/ipc/auth-backend'
+import { setNextPickedBackup, type PickedBackup } from '../../src/test/ipc/backup-backend'
 import { createDevBackends } from '../../src/test/ipc/dev-backends'
 
 const SEED_REFERENCE_DATE = '2026-11-12'
@@ -13,10 +14,15 @@ export type IpcOverride = (args: unknown) => unknown
 export type TauriIpcOptions = {
   withoutUsers?: boolean
   recoverableUsernames?: readonly string[]
+  lastBackupAtUtc?: string
   overrides?: Readonly<Record<string, IpcOverride>>
 }
 
-export type TauriIpcHandle = { advanceClock(ms: number): Promise<void>; waitForReply(cmd: string): Promise<void> }
+export type TauriIpcHandle = {
+  advanceClock(ms: number): Promise<void>
+  waitForReply(cmd: string): Promise<void>
+  setNextPickedBackup(pick: PickedBackup | null): void
+}
 
 type BridgeReply = { ok: true; value: unknown } | { ok: false; isError: boolean; payload: unknown }
 type Bridge = (cmd: string, args: unknown, browserNowMs: number) => Promise<BridgeReply>
@@ -55,6 +61,10 @@ export async function installTauriIpc(page: Page, options: TauriIpcOptions = {})
       session: () => users.find((user) => user.id === sessionUserId) ?? null,
       seed: createSeed(SEED_REFERENCE_DATE),
       now: () => (nowMs === 0 ? Date.now() : nowMs),
+      onBackupRestored: () => {
+        if (users.length === 0) users = createSeed(SEED_REFERENCE_DATE).users
+      },
+      ...(options.lastBackupAtUtc ? { lastBackupAtUtc: options.lastBackupAtUtc } : {}),
     })
   let backend = buildBackend()
 
@@ -70,6 +80,7 @@ export async function installTauriIpc(page: Page, options: TauriIpcOptions = {})
 
   function resetForPageLoad(): void {
     sessionUserId = null
+    setNextPickedBackup('valid')
     backend = buildBackend()
   }
 
@@ -117,6 +128,7 @@ export async function installTauriIpc(page: Page, options: TauriIpcOptions = {})
 
   return {
     advanceClock: (ms) => page.clock.fastForward(ms),
+    setNextPickedBackup,
     waitForReply: (cmd) =>
       repliedCommands.has(cmd)
         ? Promise.resolve()

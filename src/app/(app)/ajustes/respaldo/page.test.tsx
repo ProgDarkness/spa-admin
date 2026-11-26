@@ -5,6 +5,7 @@ import { freezeDate } from '@/test/clock'
 import { installDevIpc } from '@/test/dev-ipc'
 import { setNextPickedBackup } from '@/test/ipc/backup-backend'
 import { routerMock } from '@/test/navigation'
+import { RequireSession } from '@/lib/session'
 import { renderWithProviders } from '@/test/render'
 import BackupPage from './page'
 
@@ -45,14 +46,20 @@ describe('BackupPage', () => {
     expect(await screen.findByText('Último respaldo: 12/11/2026 09:00')).toBeInTheDocument()
   })
 
-  it('tras restaurar con éxito va al login con el aviso', async () => {
-    const { user } = renderWithProviders(<BackupPage />, { as: 'propietaria' })
+  it('tras restaurar con éxito va al login con el aviso y nunca al login simple', async () => {
+    const { user } = renderWithProviders(
+      <RequireSession>
+        <BackupPage />
+      </RequireSession>,
+      { as: 'propietaria' },
+    )
     await user.type(await screen.findByLabelText('Frase del respaldo a restaurar'), PASSPHRASE)
     await user.click(screen.getByLabelText('Entiendo que se reemplazarán todos los datos actuales'))
 
     await user.click(screen.getByRole('button', { name: 'Restaurar respaldo' }))
 
     await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/login?restored=1'))
+    expect(routerMock.replace).not.toHaveBeenCalledWith('/login')
   })
 
   it('si la restauración falla no redirige y muestra el error', async () => {

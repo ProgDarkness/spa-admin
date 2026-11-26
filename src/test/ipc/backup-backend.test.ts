@@ -16,6 +16,7 @@ let session: SessionUser | null
 let locked: boolean
 let ownerPending: boolean
 let sessionsEnded: number
+let restoredNotifications: number
 let audit: SharedRows<BackupAuditRow>
 let nowMs: number
 
@@ -35,6 +36,9 @@ function installBackend(): void {
         },
         audit,
         now: () => nowMs,
+        onRestored: () => {
+          restoredNotifications += 1
+        },
       },
     ),
   )
@@ -45,6 +49,7 @@ beforeEach(() => {
   locked = false
   ownerPending = false
   sessionsEnded = 0
+  restoredNotifications = 0
   nowMs = NOW
   audit = createSharedRows<BackupAuditRow>()
   setNextPickedBackup('valid')
@@ -366,6 +371,133 @@ describe('restaurar: flujo', () => {
     expect(sessionsEnded).toBe(0)
     expect(session).toBe(OWNER)
     expect(audit.read()).toEqual([])
+  })
+})
+
+describe('restaurar: fallos internos con los mensajes de Rust', () => {
+  const ROLLBACK_FAILED_MESSAGE =
+    'La restauración quedó a medias; reinicia la aplicación para completarla o recuperar el estado anterior'
+
+  it('rollbackFailed responde internal con el mensaje exacto y no cierra la sesión ni audita', async () => {
+    setNextPickedBackup('rollbackFailed')
+
+    const failure = errorOf(await commands.restoreBackup(PASSPHRASE))
+
+    expect(failure).toEqual({ code: 'internal', message: ROLLBACK_FAILED_MESSAGE, field: null, entityIds: null })
+    expect(sessionsEnded).toBe(0)
+    expect(session).toBe(OWNER)
+    expect(audit.read()).toEqual([])
+    expect(restoredNotifications).toBe(0)
+  })
+
+  it('rollbackFailed se consume como cualquier otro diálogo', async () => {
+    setNextPickedBackup('rollbackFailed')
+    await commands.restoreBackup(PASSPHRASE)
+
+    expect((await commands.restoreBackup(PASSPHRASE)).status).toBe('ok')
+  })
+
+  it('tooLarge no aplica al restaurar: el tamaño máximo del archivo es notRecognized en Rust y aquí el diálogo se ignora', async () => {
+    setNextPickedBackup('tooLarge')
+
+    expect((await commands.restoreBackup(PASSPHRASE)).status).toBe('ok')
+  })
+
+  it('tras restaurar el estado cuenta la restauración como último respaldo aunque el audit previo trajera otro', async () => {
+    audit.write([row('backup_created', '2026-12-09T12:00:00.000Z', '2026-12-09T08:00:00')])
+
+    await commands.restoreBackup(PASSPHRASE)
+    session = OWNER
+
+    expect(await commands.getBackupStatus()).toEqual({
+      status: 'ok',
+      data: { lastBackupAt: '2026-12-10T08:00:00', isDue: false },
+    })
+  })
+})
+
+describe('exportar: fallos internos con los mensajes de Rust', () => {
+  it('tooLarge responde internal con el mensaje exacto y no audita', async () => {
+    setNextPickedBackup('tooLarge')
+
+    const failure = errorOf(await commands.exportBackup(PASSPHRASE))
+
+    expect(failure).toEqual({
+      code: 'internal',
+      message: 'La base de datos supera el tamaño máximo admitido para un respaldo',
+      field: null,
+      entityIds: null,
+    })
+    expect(audit.read()).toEqual([])
+  })
+
+  it('rollbackFailed no aplica al exportar y el diálogo se ignora', async () => {
+    setNextPickedBackup('rollbackFailed')
+
+    expect((await commands.exportBackup(PASSPHRASE)).status).toBe('ok')
+    expect(audit.read()).toHaveLength(1)
+  })
+})
+
+describe('restaurar: aviso onRestored', () => {
+  it('se invoca una sola vez tras un respaldo válido', async () => {
+    await commands.restoreBackup(PASSPHRASE)
+
+    expect(restoredNotifications).toBe(1)
+  })
+
+  it.each(['corrupt', 'wrongPassphrase', 'notRecognized', 'future'] as const)(
+    'no se invoca con el respaldo %s',
+    async (pick) => {
+      setNextPickedBackup(pick)
+
+      await commands.restoreBackup(PASSPHRASE)
+
+      expect(restoredNotifications).toBe(0)
+    },
+  )
+
+  it('no se invoca al cancelar el diálogo ni al exportar', async () => {
+    setNextPickedBackup(null)
+    await commands.restoreBackup(PASSPHRASE)
+    await commands.exportBackup(PASSPHRASE)
+
+    expect(restoredNotifications).toBe(0)
+  })
+
+  it('se invoca después de terminar la sesión y de auditar', async () => {
+    const observed: { sessionEnded: boolean; audited: number }[] = []
+    mockIPC(
+      createBackupIpcBackend(
+        () => null,
+        {
+          session: () => session,
+          isLocked: () => false,
+          needsOwner: () => false,
+          endSession: () => {
+            session = null
+          },
+          audit,
+          now: () => nowMs,
+          onRestored: () => observed.push({ sessionEnded: session === null, audited: audit.read().length }),
+        },
+      ),
+    )
+
+    await commands.restoreBackup(PASSPHRASE)
+
+    expect(observed).toEqual([{ sessionEnded: true, audited: 1 }])
+  })
+
+  it('sin el callback la restauración sigue funcionando', async () => {
+    mockIPC(
+      createBackupIpcBackend(
+        () => null,
+        { session: () => session, isLocked: () => false, needsOwner: () => false, endSession: () => undefined, audit },
+      ),
+    )
+
+    expect((await commands.restoreBackup(PASSPHRASE)).status).toBe('ok')
   })
 })
 

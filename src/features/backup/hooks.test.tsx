@@ -8,7 +8,13 @@ import { freezeDate } from '@/test/clock'
 import { installDevIpc } from '@/test/dev-ipc'
 import { setNextPickedBackup } from '@/test/ipc/backup-backend'
 import { signInAs } from '@/test/session'
-import { useBackupStatus, useExportBackup, useRestoreBackup } from './hooks'
+import {
+  BACKUP_STATUS_REFETCH_MS,
+  BACKUP_STATUS_STALE_MS,
+  useBackupStatus,
+  useExportBackup,
+  useRestoreBackup,
+} from './hooks'
 
 const PASSPHRASE = 'frase de prueba larga'
 
@@ -101,12 +107,12 @@ describe('useExportBackup', () => {
     const { wrapper } = setup()
     const { result } = renderHook(() => useExportBackup(), { wrapper })
 
+    let rejection: unknown
     await act(async () => {
-      await result.current.mutateAsync(PASSPHRASE).catch(() => undefined)
+      rejection = await result.current.mutateAsync(PASSPHRASE).catch((caught: unknown) => caught)
     })
 
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(appErrorOf(result.current.error)?.code).toBe('forbidden')
+    expect(appErrorOf(rejection)?.code).toBe('forbidden')
   })
 })
 
@@ -131,12 +137,12 @@ describe('useRestoreBackup', () => {
     const { wrapper } = setup()
     const { result } = renderHook(() => useRestoreBackup(), { wrapper })
 
+    let restored: unknown
     await act(async () => {
-      await result.current.mutateAsync(PASSPHRASE)
+      restored = await result.current.mutateAsync(PASSPHRASE)
     })
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data).toEqual({ sourceSchemaVersion: 12, schemaVersion: 12 })
+    expect(restored).toEqual({ sourceSchemaVersion: 12, schemaVersion: 12 })
   })
 
   it('cancelar el diálogo devuelve null y conserva la caché', async () => {
@@ -167,13 +173,130 @@ describe('useRestoreBackup', () => {
     queryClient.setQueryData(['clients'], [{ id: 1 }])
     const { result } = renderHook(() => useRestoreBackup(), { wrapper })
 
+    let rejection: unknown
+    await act(async () => {
+      rejection = await result.current.mutateAsync(PASSPHRASE).catch((caught: unknown) => caught)
+    })
+
+    expect(appErrorOf(rejection)?.code).toBe(code)
+    expect(queryClient.getQueryData(['clients'])).toEqual([{ id: 1 }])
+    expect(getState().sessionUserId).not.toBeNull()
+  })
+})
+
+function mutationStatesOf(queryClient: QueryClient): string {
+  return JSON.stringify(queryClient.getMutationCache().getAll().map((mutation) => mutation.state))
+}
+
+describe('la frase no queda en la caché de mutaciones', () => {
+  it('tras exportar con éxito', async () => {
+    signInAs('propietaria')
+    const { queryClient, wrapper } = setup()
+    const { result } = renderHook(() => useExportBackup(), { wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync(PASSPHRASE)
+    })
+
+    await waitFor(() => expect(mutationStatesOf(queryClient)).not.toContain(PASSPHRASE))
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(0)
+  })
+
+  it('tras fallar al exportar', async () => {
+    signInAs('recepcion')
+    const { queryClient, wrapper } = setup()
+    const { result } = renderHook(() => useExportBackup(), { wrapper })
+
     await act(async () => {
       await result.current.mutateAsync(PASSPHRASE).catch(() => undefined)
     })
 
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(appErrorOf(result.current.error)?.code).toBe(code)
-    expect(queryClient.getQueryData(['clients'])).toEqual([{ id: 1 }])
-    expect(getState().sessionUserId).not.toBeNull()
+    await waitFor(() => expect(mutationStatesOf(queryClient)).not.toContain(PASSPHRASE))
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(0)
+  })
+
+  it('tras cancelar el diálogo de exportar', async () => {
+    signInAs('propietaria')
+    setNextPickedBackup(null)
+    const { queryClient, wrapper } = setup()
+    const { result } = renderHook(() => useExportBackup(), { wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync(PASSPHRASE)
+    })
+
+    await waitFor(() => expect(mutationStatesOf(queryClient)).not.toContain(PASSPHRASE))
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(0)
+  })
+
+  it('tras restaurar con éxito', async () => {
+    signInAs('propietaria')
+    const { queryClient, wrapper } = setup()
+    const { result } = renderHook(() => useRestoreBackup(), { wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync(PASSPHRASE)
+    })
+
+    await waitFor(() => expect(mutationStatesOf(queryClient)).not.toContain(PASSPHRASE))
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(0)
+  })
+
+  it('tras fallar al restaurar', async () => {
+    signInAs('propietaria')
+    setNextPickedBackup('corrupt')
+    const { queryClient, wrapper } = setup()
+    const { result } = renderHook(() => useRestoreBackup(), { wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync(PASSPHRASE).catch(() => undefined)
+    })
+
+    await waitFor(() => expect(mutationStatesOf(queryClient)).not.toContain(PASSPHRASE))
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(0)
+  })
+
+  it('tras cancelar el diálogo de restaurar', async () => {
+    signInAs('propietaria')
+    setNextPickedBackup(null)
+    const { queryClient, wrapper } = setup()
+    const { result } = renderHook(() => useRestoreBackup(), { wrapper })
+
+    await act(async () => {
+      await result.current.mutateAsync(PASSPHRASE)
+    })
+
+    await waitFor(() => expect(mutationStatesOf(queryClient)).not.toContain(PASSPHRASE))
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(0)
+  })
+
+  it('mientras la operación está en curso la frase sí viaja en las variables', async () => {
+    signInAs('propietaria')
+    const { queryClient, wrapper } = setup()
+    const { result } = renderHook(() => useExportBackup(), { wrapper })
+
+    let pending: Promise<unknown> = Promise.resolve()
+    act(() => {
+      pending = result.current.mutateAsync(PASSPHRASE)
+    })
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(1)
+    await act(async () => {
+      await pending
+    })
+  })
+})
+
+describe('useBackupStatus: frescura', () => {
+  it('declara tiempo de frescura y refresco horario, y refresca al enfocar', async () => {
+    signInAs('propietaria')
+    const { queryClient, wrapper } = setup()
+    renderHook(() => useBackupStatus(), { wrapper })
+
+    await waitFor(() => expect(queryClient.getQueryData(['backupStatus'])).toBeDefined())
+    const options = queryClient.getQueryCache().find({ queryKey: ['backupStatus'] })?.observers[0]?.options
+
+    expect(options?.staleTime).toBe(BACKUP_STATUS_STALE_MS)
+    expect(options?.refetchInterval).toBe(BACKUP_STATUS_REFETCH_MS)
+    expect(options?.refetchOnWindowFocus).toBe(true)
   })
 })

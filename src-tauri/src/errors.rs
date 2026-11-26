@@ -63,7 +63,7 @@ const BACKUP_UNREADABLE_MESSAGE: &str = "La frase no coincide o el archivo está
 const BACKUP_NOT_RECOGNIZED_MESSAGE: &str = "El archivo no es un respaldo reconocido";
 const BACKUP_FROM_NEWER_APP_MESSAGE: &str =
     "El respaldo fue creado con una versión más nueva de la aplicación";
-const BACKUP_ROLLBACK_FAILED_MESSAGE: &str = "La restauración quedó a medias; reinicie la aplicación para completarla o recuperar el estado anterior";
+const BACKUP_ROLLBACK_FAILED_MESSAGE: &str = "La restauración quedó a medias; reinicia la aplicación para completarla o recuperar el estado anterior";
 const BACKUP_TOO_LARGE_MESSAGE: &str =
     "La base de datos supera el tamaño máximo admitido para un respaldo";
 const RATE_FIELD: &str = "rateBsPerUsdE4";

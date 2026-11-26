@@ -262,7 +262,7 @@ fn an_unfinished_restore_tells_the_user_to_restart_and_keeps_the_internal_code()
     assert_eq!(value["code"], "internal");
     assert_eq!(
         value["message"],
-        "La restauración quedó a medias; reinicie la aplicación para completarla o recuperar el estado anterior"
+        "La restauración quedó a medias; reinicia la aplicación para completarla o recuperar el estado anterior"
     );
     assert_eq!(value["field"], json!(null));
     assert_eq!(value["entityIds"], json!(null));

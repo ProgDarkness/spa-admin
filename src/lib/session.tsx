@@ -17,7 +17,7 @@ import { LockScreen } from '@/features/auth/components/lock-screen'
 import { useActivityTracker } from '@/features/auth/hooks/use-activity-tracker'
 import type { AppError, PermissionKey, Result, SessionUser, SessionView } from './model'
 import { appErrorOf } from './result'
-import { ROUTES } from './routes'
+import { RESTORED_LOGIN_HREF, ROUTES } from './routes'
 
 export type SessionStatus = 'loading' | 'signedIn' | 'locked' | 'signedOut'
 
@@ -30,6 +30,8 @@ export type SessionContextValue = {
   signOut(): Promise<Result<null>>
   unlock(password: string): Promise<Result<SessionUser>>
   refresh(): Promise<void>
+  markRestored(): void
+  signedOutHref(): string
 }
 
 type SessionSnapshot = { status: SessionStatus; user: SessionUser | null }
@@ -119,10 +121,18 @@ function useSessionSnapshot() {
   const [snapshot, setSnapshot] = useState<SessionSnapshot>(LOADING_SNAPSHOT)
   const statusRef = useRef<SessionStatus>('loading')
   const generationRef = useRef(0)
+  const restoredRef = useRef(false)
+
+  const markRestored = useCallback(() => {
+    restoredRef.current = true
+  }, [])
+
+  const signedOutHref = useCallback(() => (restoredRef.current ? RESTORED_LOGIN_HREF : ROUTES.login), [])
 
   const replaceSnapshot = useCallback(
     (next: SessionSnapshot) => {
       generationRef.current += 1
+      if (next.status === 'signedIn') restoredRef.current = false
       if (next.status !== 'signedIn') queryClient.clear()
       statusRef.current = next.status
       setSnapshot(next)
@@ -159,7 +169,7 @@ function useSessionSnapshot() {
 
   const refresh = useDeduplicatedRefresh(generationRef, applyResult)
 
-  return { snapshot, replaceSnapshot, applyActivityResult, loadInitial, refresh }
+  return { snapshot, replaceSnapshot, applyActivityResult, loadInitial, refresh, markRestored, signedOutHref }
 }
 
 function useSessionPolling(status: SessionStatus, refresh: () => Promise<void>): void {
@@ -219,7 +229,8 @@ function useSessionActions(replaceSnapshot: SnapshotWriter['replaceSnapshot'], r
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const { snapshot, replaceSnapshot, applyActivityResult, loadInitial, refresh } = useSessionSnapshot()
+  const { snapshot, replaceSnapshot, applyActivityResult, loadInitial, refresh, markRestored, signedOutHref } =
+    useSessionSnapshot()
   const { signIn, signOut, unlock } = useSessionActions(replaceSnapshot, refresh)
 
   useEffect(() => {
@@ -231,8 +242,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useActivityTracker(snapshot.status === 'signedIn', applyActivityResult)
 
   const value = useMemo(
-    () => ({ ...snapshot, signIn, signOut, unlock, refresh }),
-    [snapshot, signIn, signOut, unlock, refresh],
+    () => ({ ...snapshot, signIn, signOut, unlock, refresh, markRestored, signedOutHref }),
+    [snapshot, signIn, signOut, unlock, refresh, markRestored, signedOutHref],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
@@ -254,12 +265,12 @@ export function useCan(permission: PermissionKey): boolean {
 }
 
 export function RequireSession({ children }: { children: ReactNode }) {
-  const { status } = useSession()
+  const { status, signedOutHref } = useSession()
   const router = useRouter()
 
   useEffect(() => {
-    if (status === 'signedOut') router.replace(ROUTES.login)
-  }, [status, router])
+    if (status === 'signedOut') router.replace(signedOutHref())
+  }, [status, router, signedOutHref])
 
   if (status === 'loading') return <p role="status">Cargando…</p>
   if (status === 'signedOut') return null

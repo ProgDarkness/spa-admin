@@ -149,6 +149,19 @@ describe('LoginPage', () => {
     await screen.findByLabelText('Usuario')
   })
 
+  it('mantiene la región de estado montada y vacía y le añade el aviso al llegar restored=1', async () => {
+    const { rerender } = renderWithProviders(<LoginPage />)
+    const region = screen.getByRole('status')
+    expect(region).toBeEmptyDOMElement()
+
+    setSearchParams({ restored: '1' })
+    rerender(<LoginPage />)
+
+    expect(screen.getByRole('status')).toBe(region)
+    expect(region).toHaveTextContent('Respaldo restaurado. Inicia sesión con una cuenta del respaldo.')
+    await screen.findByLabelText('Usuario')
+  })
+
   it('no muestra el aviso de restauración sin el parámetro', async () => {
     renderWithProviders(<LoginPage />)
     await screen.findByLabelText('Usuario')

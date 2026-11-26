@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  isAcceptableBackupPassphrase,
+  backupPassphraseProblem,
   MAX_BACKUP_PASSPHRASE_BYTES,
   MIN_BACKUP_PASSPHRASE_CODE_POINTS,
 } from './backup-passphrase'
@@ -12,7 +12,11 @@ describe('constantes', () => {
   })
 })
 
-describe('isAcceptableBackupPassphrase', () => {
+function isAcceptableBackupPassphrase(raw: string): boolean {
+  return backupPassphraseProblem(raw) === null
+}
+
+describe('backupPassphraseProblem', () => {
   it('rechaza 11 code points y acepta 12', () => {
     expect(isAcceptableBackupPassphrase('a'.repeat(11))).toBe(false)
     expect(isAcceptableBackupPassphrase('a'.repeat(12))).toBe(true)

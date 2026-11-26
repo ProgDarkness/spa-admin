@@ -12,7 +12,3 @@ export function backupPassphraseProblem(raw: string): BackupPassphraseProblem | 
   if (countCodePoints(composed) < MIN_BACKUP_PASSPHRASE_CODE_POINTS) return 'tooShort'
   return utf8Encoder.encode(composed).length > MAX_BACKUP_PASSPHRASE_BYTES ? 'tooLong' : null
 }
-
-export function isAcceptableBackupPassphrase(raw: string): boolean {
-  return backupPassphraseProblem(raw) === null
-}
