@@ -1,6 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getState } from '@/lib/mock/store'
 import type { Appointment, AppointmentStatus } from '@/lib/model'
 import {
   DAY,
@@ -56,7 +55,7 @@ describe('AppointmentActions', () => {
 
     await user.click(screen.getByRole('button', { name: `Iniciar cita de ${CLIENT}` }))
 
-    await waitFor(() => expect(appointmentById(5).status).toBe('inProgress'))
+    await waitFor(async () => expect((await appointmentById(5)).status).toBe('inProgress'))
   })
 
   it('Completar desde scheduled iniciada cierra la cita', async () => {
@@ -64,7 +63,7 @@ describe('AppointmentActions', () => {
 
     await user.click(screen.getByRole('button', { name: `Completar cita de ${CLIENT}` }))
 
-    await waitFor(() => expect(appointmentById(5).status).toBe('completed'))
+    await waitFor(async () => expect((await appointmentById(5)).status).toBe('completed'))
   })
 
   it('No asistió marca noShow', async () => {
@@ -72,7 +71,7 @@ describe('AppointmentActions', () => {
 
     await user.click(screen.getByRole('button', { name: `Marcar no asistió cita de ${CLIENT}` }))
 
-    await waitFor(() => expect(appointmentById(5).status).toBe('noShow'))
+    await waitFor(async () => expect((await appointmentById(5)).status).toBe('noShow'))
   })
 
   it('Cancelar delega en onCancel sin tocar el store', async () => {
@@ -82,7 +81,7 @@ describe('AppointmentActions', () => {
     await user.click(screen.getByRole('button', { name: `Cancelar cita de ${CLIENT}` }))
 
     expect(onCancel).toHaveBeenCalledWith(appointment)
-    expect(appointmentById(5).status).toBe('scheduled')
+    expect((await appointmentById(5)).status).toBe('scheduled')
   })
 
   it('inProgress ofrece Completar y Cancelar', () => {
@@ -121,7 +120,7 @@ describe('AppointmentActions', () => {
 
     await user.click(await screen.findByRole('button', { name: `Reabrir cita de ${CLIENT}` }))
 
-    await waitFor(() => expect(appointmentById(5).status).toBe('scheduled'))
+    await waitFor(async () => expect((await appointmentById(5)).status).toBe('scheduled'))
   })
 
   it('Reabrir con la franja ocupada muestra el error y las citas en conflicto en un alert', async () => {
@@ -138,6 +137,6 @@ describe('AppointmentActions', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('El recurso ya tiene una cita en ese horario')
     expect(alert).toHaveTextContent('#6')
-    expect(getState().appointments.find((row) => row.id === 5)?.status).toBe('cancelled')
+    expect((await appointmentById(5)).status).toBe('cancelled')
   })
 })

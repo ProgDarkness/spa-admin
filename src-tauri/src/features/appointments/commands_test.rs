@@ -134,10 +134,6 @@ fn call_list(
     list_appointments(range, fixture.app.state(), fixture.app.state())
 }
 
-fn call_list_all(fixture: &Fixture) -> Result<Vec<AppointmentSummary>, AppError> {
-    list_all_appointments(fixture.app.state(), fixture.app.state())
-}
-
 fn call_create(fixture: &Fixture, input: AppointmentInput) -> Result<AppointmentSummary, AppError> {
     create_appointment(input, fixture.app.state(), fixture.app.state())
 }
@@ -206,13 +202,10 @@ fn write_commands(fixture: &Fixture, target: &AppointmentSummary) -> Outcomes {
 }
 
 fn every_command(fixture: &Fixture, target: &AppointmentSummary) -> Outcomes {
-    let mut outcomes: Outcomes = vec![
-        (
-            "list_appointments",
-            call_list(fixture, day("2026-11-12", None)).map(|_| ()),
-        ),
-        ("list_all_appointments", call_list_all(fixture).map(|_| ())),
-    ];
+    let mut outcomes: Outcomes = vec![(
+        "list_appointments",
+        call_list(fixture, day("2026-11-12", None)).map(|_| ()),
+    )];
     outcomes.extend(write_commands(fixture, target));
     outcomes
 }
@@ -267,26 +260,6 @@ fn a_read_only_user_can_list_and_every_write_is_forbidden() {
     );
     assert_eq!(stored(&fixture), vec![target]);
     assert_eq!(audit_actions(&fixture), ["create"]);
-}
-
-#[test]
-fn list_all_returns_every_appointment_whatever_its_date_for_readers_and_writers() {
-    let fixture = fixture();
-    let first = seed_appointment(&fixture);
-    let later = call_create(&fixture, booking(1, "2027-08-01T10:00")).unwrap();
-    let earlier = call_create(&fixture, booking(1, "2025-02-03T10:00")).unwrap();
-
-    for username in ["lectura", "escritor", "propietaria"] {
-        sign_in_as(&fixture, username);
-
-        let everything = call_list_all(&fixture).unwrap();
-
-        assert_eq!(
-            everything,
-            vec![earlier.clone(), first.clone(), later.clone()],
-            "{username}"
-        );
-    }
 }
 
 #[test]

@@ -83,8 +83,10 @@ export async function invokeCommand(page: Page, command: string, args: unknown):
   )
 }
 
+const SEED_YEAR = { from: '2026-01-01', to: '2026-12-31', resourceId: null } as const
+
 export async function allAppointments(page: Page): Promise<AppointmentRecord[]> {
-  const outcome = (await invokeCommand(page, 'list_all_appointments', undefined)) as {
+  const outcome = (await invokeCommand(page, 'list_appointments', { range: SEED_YEAR })) as {
     resolved: boolean
     value: AppointmentRecord[]
   }

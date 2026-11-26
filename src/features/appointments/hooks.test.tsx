@@ -1,8 +1,9 @@
 import { screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { getState, resetStore } from '@/lib/mock/store'
+import { resetStore } from '@/lib/mock/store'
 import type { AppointmentRange } from '@/lib/model'
 import { appErrorOf } from '@/lib/result'
+import { appointmentById, storedAppointments } from '@/test/appointment-fixtures'
 import { freezeDate } from '@/test/clock'
 import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
@@ -78,7 +79,7 @@ describe('mutaciones de citas', () => {
 
     await user.click(screen.getByRole('button', { name: 'crear' }))
 
-    await waitFor(() => expect(getState().appointments).toHaveLength(17))
+    await waitFor(async () => expect(await storedAppointments()).toHaveLength(17))
     await waitFor(() => {
       expect(queryClient.getQueryState(['appointments', RANGE])?.isInvalidated).toBe(true)
       expect(queryClient.getQueryState(['clientHistory', 1])?.isInvalidated).toBe(true)
@@ -101,7 +102,7 @@ describe('mutaciones de citas', () => {
 
     await user.click(screen.getByRole('button', { name: 'mover' }))
 
-    await waitFor(() => expect(getState().appointments.find((row) => row.id === 5)?.startsAt).toBe(`${DAY}T12:00`))
+    await waitFor(async () => expect((await appointmentById(5)).startsAt).toBe(`${DAY}T12:00`))
   })
 
   it('transicionar cancel cambia el estado', async () => {
@@ -109,6 +110,6 @@ describe('mutaciones de citas', () => {
 
     await user.click(screen.getByRole('button', { name: 'cancelar' }))
 
-    await waitFor(() => expect(getState().appointments.find((row) => row.id === 5)?.status).toBe('cancelled'))
+    await waitFor(async () => expect((await appointmentById(5)).status).toBe('cancelled'))
   })
 })

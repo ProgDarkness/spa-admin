@@ -142,15 +142,6 @@ describe('paridad de forma con los bindings generados', () => {
     expect(future).toMatchObject({ code: 'resourceHasFutureAppointments', field: null, entityIds: [1] })
   })
 
-  it('list_all_appointments viaja sin argumentos y devuelve resúmenes con las claves del contrato', async () => {
-    await commands.createAppointment(INPUT)
-
-    const listed = await commands.listAllAppointments()
-
-    expect(invoked.at(-1)?.cmd).toBe('list_all_appointments')
-    expect(listed.status === 'ok' && listed.data.map((summary) => Object.keys(summary).sort())).toEqual([SUMMARY_KEYS])
-  })
-
   it('sin sesión, un transition con argumentos malformados es unauthenticated y no un fallo de canal', async () => {
     session = null
 

@@ -2,9 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { commit, getState } from '@/lib/mock/store'
 import { appErrorOf } from '@/lib/result'
-import { appointmentTemplate, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { installDevIpc } from '@/test/dev-ipc'
+import { appointmentTemplate, resetWithEmptyAgenda } from '@/test/appointment-fixtures'
 import { signInAs } from '@/test/session'
 import { useCreatePayment, usePayments, useVoidPayment } from './hooks'
 
@@ -12,8 +12,7 @@ const APPOINTMENT_ID = 100
 
 beforeEach(() => {
   resetWithEmptyAgenda()
-  seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID }))
-  commit({ ...getState(), payments: [] })
+  installDevIpc({ appointments: [appointmentTemplate({ id: APPOINTMENT_ID })], payments: [] })
 })
 
 function setup() {

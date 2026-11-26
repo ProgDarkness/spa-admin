@@ -1,5 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { todayLocal } from '@/lib/datetime'
+import { createSeed } from '@/lib/mock/seed'
 import { getState, resetStore } from '@/lib/mock/store'
 import type { AppError, Appointment } from '@/lib/model'
 import { freezeDate } from '@/test/clock'
@@ -13,7 +15,7 @@ beforeEach(() => {
 })
 
 function scheduledAppointment(): Appointment {
-  const found = getState().appointments.find((row) => row.id === 5)
+  const found = createSeed(todayLocal()).appointments.find((row) => row.id === 5)
   if (!found) throw new Error('Cita seed 5 inexistente')
   return found
 }

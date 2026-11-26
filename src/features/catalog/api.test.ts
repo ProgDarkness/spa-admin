@@ -186,7 +186,6 @@ describe('createService', () => {
     expect(before.services).toBe(previousServices)
     expect(getState().services).toHaveLength(SEED_SERVICE_COUNT + 1)
     expect(getState().services.at(-1)).toEqual(serviceOf(result))
-    expect(getState().appointments).toBe(before.appointments)
   })
 
   it('convierte un fallo del canal en internal y no toca el mock', async () => {
@@ -264,27 +263,6 @@ describe('updateService', () => {
     expect(result).toMatchObject({ status: 'ok', data: { id: INACTIVE_SEED_ID, active: false } })
   })
 
-  it('no altera los snapshots de precio y duración de las citas existentes', async () => {
-    signInAs('propietaria')
-    const before = getState()
-    const affected = before.appointments.filter((appointment) => appointment.serviceId === 1)
-    expect(affected.length).toBeGreaterThan(0)
-
-    await updateService(1, { name: 'Limpieza premium', priceCents: 9_900, durationMin: 120 })
-
-    const after = getState().appointments
-    expect(after).toBe(before.appointments)
-    affected.forEach((appointment) => {
-      const current = after.find((candidate) => candidate.id === appointment.id)
-      expect(current?.priceCentsSnapshot).toBe(appointment.priceCentsSnapshot)
-      expect(current?.durationMinSnapshot).toBe(appointment.durationMinSnapshot)
-      expect(current?.endsAt).toBe(appointment.endsAt)
-    })
-    expect(getState().services[0]?.priceCents).toBe(9_900)
-  })
-})
-
-describe('setServiceActive', () => {
   it('rechaza sin sesión con unauthenticated', async () => {
     expect(await setServiceActive(1, false)).toMatchObject({ status: 'error', error: { code: 'unauthenticated' } })
   })
@@ -339,13 +317,11 @@ describe('setServiceActive', () => {
     expect(getState().services.find((service) => service.id === INACTIVE_SEED_ID)?.active).toBe(true)
   })
 
-  it('es idempotente y no toca citas', async () => {
+  it('es idempotente', async () => {
     signInAs('propietaria')
-    const before = getState()
 
     const result = await setServiceActive(1, true)
 
     expect(result).toMatchObject({ status: 'ok', data: { id: 1, active: true } })
-    expect(getState().appointments).toBe(before.appointments)
   })
 })

@@ -1,7 +1,6 @@
 import { screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { commit, getState } from '@/lib/mock/store'
-import { appointmentTemplate, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { appointmentTemplate, resetWithEmptyAgenda } from '@/test/appointment-fixtures'
 import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import { PaymentList } from './payment-list'
@@ -15,10 +14,7 @@ const APPOINTMENT_ID = 100
 
 beforeEach(() => {
   resetWithEmptyAgenda()
-  seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID }))
-  commit({
-    ...getState(),
-    payments: [
+  installDevIpc({ appointments: [appointmentTemplate({ id: APPOINTMENT_ID })], payments: [
       {
         id: 1,
         appointmentId: APPOINTMENT_ID,
@@ -32,9 +28,7 @@ beforeEach(() => {
         voidedBy: null,
         voidReason: null,
       },
-    ],
-  })
-  installDevIpc()
+    ] })
 })
 
 describe('PaymentList con métodos de pago cargando', () => {

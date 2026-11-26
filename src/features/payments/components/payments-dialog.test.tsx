@@ -2,7 +2,9 @@ import { screen, within } from '@testing-library/react'
 import { useState } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { commit, getState } from '@/lib/mock/store'
-import { appointmentTemplate, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { appointmentTemplate, resetWithEmptyAgenda } from '@/test/appointment-fixtures'
+import { paymentsOfAppointment } from '@/test/payment-fixtures'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import { PaymentsButton } from './payments-button'
 import { PaymentsDialog } from './payments-dialog'
@@ -11,8 +13,7 @@ const APPOINTMENT_ID = 100
 
 beforeEach(() => {
   resetWithEmptyAgenda()
-  seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID, status: 'cancelled' }))
-  commit({ ...getState(), payments: [] })
+  installDevIpc({ appointments: [appointmentTemplate({ id: APPOINTMENT_ID, status: 'cancelled' })], payments: [] })
 })
 
 function ControlledDialog() {
@@ -38,7 +39,7 @@ describe('PaymentsDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
 
     expect(await screen.findAllByRole('listitem')).toHaveLength(1)
-    expect(getState().payments[0]?.appointmentId).toBe(APPOINTMENT_ID)
+    expect((await paymentsOfAppointment(APPOINTMENT_ID))[0]?.appointmentId).toBe(APPOINTMENT_ID)
   })
 
   it('oculta el formulario a quien solo puede leer', async () => {

@@ -3,7 +3,6 @@ import { freezeDate } from '@/test/clock'
 import {
   LOCAL_DATE_PATTERN,
   LOCAL_DATE_TIME_PATTERN,
-  YEAR_MONTH_PATTERN,
   addDays,
   addMinutes,
   crossesMidnight,
@@ -24,8 +23,6 @@ describe('patrones', () => {
     expect(LOCAL_DATE_TIME_PATTERN.test('2026-11-12T09:00')).toBe(true)
     expect(LOCAL_DATE_TIME_PATTERN.test('2026-11-12T09:00:00')).toBe(false)
     expect(LOCAL_DATE_TIME_PATTERN.test('2026-11-12 09:00')).toBe(false)
-    expect(YEAR_MONTH_PATTERN.test('2026-11')).toBe(true)
-    expect(YEAR_MONTH_PATTERN.test('2026-11-12')).toBe(false)
   })
 })
 

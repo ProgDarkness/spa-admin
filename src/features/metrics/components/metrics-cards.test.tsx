@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { MonthlyMetrics } from '@/lib/model'
+import type { MonthlyMetrics } from '@/lib/bindings'
 import { MetricsCards } from './metrics-cards'
 
 const metrics: MonthlyMetrics = {
@@ -10,6 +10,7 @@ const metrics: MonthlyMetrics = {
   appointments: { scheduled: 3, inProgress: 7, completed: 4, cancelled: 5, noShow: 6 },
   revenueByCurrency: { USD: 0, VES: 0 },
   collectedOnNonCompletedByCurrency: { USD: 0, VES: 0 },
+  pendingByCurrency: { USD: 0, VES: 0 },
 }
 
 function valueOf(label: string): string {

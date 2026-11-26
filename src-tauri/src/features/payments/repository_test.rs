@@ -124,28 +124,6 @@ fn payments_of_an_appointment_are_ordered_by_paid_at_then_id_and_isolated() {
 }
 
 #[test]
-fn every_payment_is_listed_by_paid_at_then_id_including_voided_ones() {
-    let fixture = fixture();
-    let first = appointment_with_status(&fixture, AppointmentStatus::Completed);
-    let other = second_appointment(&fixture);
-    let actor = fixture.actor;
-
-    let listed = fixture
-        .database
-        .with_conn(|conn| {
-            let late = insert_payment(conn, &new_payment(first, "2026-11-13T08:00"), actor)?;
-            insert_payment(conn, &new_payment(other, "2026-11-12T09:00"), actor)?;
-            mark_voided(conn, late, "2026-11-13T09:00", actor, "error")?;
-            list_all_payments(conn)
-        })
-        .unwrap();
-
-    let ids: Vec<i64> = listed.iter().map(|payment| payment.id).collect();
-    assert_eq!(ids, [2, 1]);
-    assert_eq!(listed[1].void_reason.as_deref(), Some("error"));
-}
-
-#[test]
 fn listing_an_appointment_without_payments_is_empty() {
     let fixture = fixture();
     let appointment = appointment_with_status(&fixture, AppointmentStatus::Completed);

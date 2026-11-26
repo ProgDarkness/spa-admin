@@ -2,8 +2,9 @@ import { screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPaymentMethodActive } from '@/features/payment-methods/api'
 import { commit, getState } from '@/lib/mock/store'
-import { appointmentTemplate, NOW, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { appointmentTemplate, NOW, resetWithEmptyAgenda } from '@/test/appointment-fixtures'
 import { installDevIpc } from '@/test/dev-ipc'
+import { paymentsOfAppointment } from '@/test/payment-fixtures'
 import { renderWithProviders } from '@/test/render'
 import { signInAs } from '@/test/session'
 import { err } from '@/lib/result'
@@ -16,9 +17,7 @@ const TODAY = NOW.slice(0, 10)
 beforeEach(() => {
   vi.restoreAllMocks()
   resetWithEmptyAgenda()
-  seedAppointments(appointmentTemplate({ id: APPOINTMENT_ID }))
-  commit({ ...getState(), payments: [] })
-  installDevIpc()
+  installDevIpc({ appointments: [appointmentTemplate({ id: APPOINTMENT_ID })], payments: [] })
 })
 
 async function fillAmount(user: ReturnType<typeof renderWithProviders>['user'], text: string) {
@@ -52,7 +51,7 @@ describe('PaymentForm', () => {
 
   it('avisa que falta la tasa de hoy y deja la tasa vacía', async () => {
     commit({ ...getState(), rates: getState().rates.filter((rate) => rate.date !== TODAY) })
-    installDevIpc()
+    installDevIpc({ appointments: [appointmentTemplate({ id: APPOINTMENT_ID })], payments: [] })
     const { user } = renderWithProviders(<PaymentForm appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
 
     await user.selectOptions(screen.getByLabelText('Moneda'), 'VES')
@@ -72,7 +71,7 @@ describe('PaymentForm', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
 
     expect(await screen.findByRole('status')).toHaveTextContent('Pago registrado')
-    expect(getState().payments).toMatchObject([
+    expect(await paymentsOfAppointment(APPOINTMENT_ID)).toMatchObject([
       { appointmentId: APPOINTMENT_ID, methodId: 3, currency: 'USD', amountCents: 2550, rateBsPerUsdE4: null, usdEquivalentCents: 2550 },
     ])
     expect(onSaved).toHaveBeenCalledTimes(1)
@@ -93,7 +92,7 @@ describe('PaymentForm', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
 
     expect(await screen.findByRole('status')).toHaveTextContent('Pago registrado')
-    expect(getState().payments[0]).toMatchObject({ currency: 'VES', amountCents: 80000, rateBsPerUsdE4: 400000, usdEquivalentCents: 2000 })
+    expect((await paymentsOfAppointment(APPOINTMENT_ID))[0]).toMatchObject({ currency: 'VES', amountCents: 80000, rateBsPerUsdE4: 400000, usdEquivalentCents: 2000 })
   })
 
   it('muestra errores de validación por campo sin guardar', async () => {
@@ -105,12 +104,12 @@ describe('PaymentForm', () => {
 
     expect(await screen.findByText('Ingresa un monto mayor que cero con hasta 2 decimales')).toBeInTheDocument()
     expect(screen.getByText('Selecciona un método de pago')).toBeInTheDocument()
-    expect(getState().payments).toEqual([])
+    expect(await paymentsOfAppointment(APPOINTMENT_ID)).toEqual([])
   })
 
   it('muestra el error de dominio rateMissing al enviar VES sin ninguna tasa', async () => {
     commit({ ...getState(), rates: getState().rates.filter((rate) => rate.date !== TODAY) })
-    installDevIpc()
+    installDevIpc({ appointments: [appointmentTemplate({ id: APPOINTMENT_ID })], payments: [] })
     const { user } = renderWithProviders(<PaymentForm appointmentId={APPOINTMENT_ID} />, { as: 'recepcion' })
     await screen.findByRole('option', { name: 'Zelle' })
 
@@ -121,7 +120,7 @@ describe('PaymentForm', () => {
 
     expect(await screen.findByText('Falta la tasa de hoy; registra la tasa o indícala manualmente')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(getState().payments).toEqual([])
+    expect(await paymentsOfAppointment(APPOINTMENT_ID)).toEqual([])
   })
 
   it.each([

@@ -17,7 +17,7 @@ import {
   resourceIdentitiesOf,
   serviceIdentitiesOf,
 } from './dev-seed-expectations'
-import { DEV_BROWSER_IPC_SENTINEL, installDevBrowserIpc } from './dev-browser-ipc'
+import { DEV_BROWSER_BACKEND_CACHE, DEV_BROWSER_IPC_SENTINEL, installDevBrowserIpc } from './dev-browser-ipc'
 
 type TauriWindow = { __TAURI_INTERNALS__?: unknown }
 
@@ -32,6 +32,7 @@ beforeEach(() => {
   clearMocks()
   delete (window as TauriWindow).__TAURI_INTERNALS__
   Reflect.deleteProperty(window, DEV_BROWSER_IPC_SENTINEL)
+  Reflect.deleteProperty(window, DEV_BROWSER_BACKEND_CACHE)
 })
 
 afterEach(() => {
@@ -176,6 +177,25 @@ describe('installDevBrowserIpc', () => {
     expect(clientIdentitiesOf(clients)).toEqual(EXPECTED_DEV_CLIENTS)
     expect(EXPECTED_DEV_CLIENTS.map((client) => client.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
     expect(EXPECTED_DEV_CLIENTS.filter((client) => client.deleted).map((client) => client.id)).toEqual([9])
+  })
+
+  it('una reinstalación con el store ya sembrado conserva las citas creadas', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    installDevBrowserIpc()
+    await invoke('login', OWNER_CREDENTIALS)
+    const created = (await invoke('create_appointment', {
+      input: { clientId: 1, serviceId: 1, resourceId: 1, startsAt: '2026-11-20T10:00', notes: null },
+    })) as { id: number }
+    clearMocks()
+    delete (window as TauriWindow).__TAURI_INTERNALS__
+
+    const reinstalled = installDevBrowserIpc()
+
+    const listed = (await invoke('list_appointments', {
+      range: { from: '2026-11-20', to: '2026-11-20', resourceId: null },
+    })) as { id: number }[]
+    expect(reinstalled).toBe(true)
+    expect(listed.map((row) => row.id)).toEqual([created.id])
   })
 
   it('marca window con el centinela al instalarse', () => {

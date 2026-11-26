@@ -4,6 +4,7 @@ pub mod auth;
 pub mod catalog;
 pub mod client_history;
 pub mod clients;
+pub mod metrics;
 pub mod named_records;
 pub mod payment_methods;
 pub mod payments;

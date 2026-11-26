@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { getState } from '@/lib/mock/store'
+import { signInAs } from './session'
 import { err, ok } from '@/lib/result'
 import {
   ACTIVE_CLIENT,
@@ -13,6 +13,7 @@ import {
   inputTemplate,
   resetWithEmptyAgenda,
   seedAppointments,
+  storedAppointments,
 } from './appointment-fixtures'
 
 beforeEach(() => {
@@ -20,9 +21,11 @@ beforeEach(() => {
 })
 
 describe('resetWithEmptyAgenda', () => {
-  it('congela la fecha y deja la agenda vacía', () => {
+  it('congela la fecha y deja la agenda vacía', async () => {
+    signInAs('recepcion')
+
     expect(new Date().getDate()).toBe(12)
-    expect(getState().appointments).toEqual([])
+    expect(await storedAppointments()).toEqual([])
   })
 })
 
@@ -74,15 +77,18 @@ describe('inputTemplate', () => {
 })
 
 describe('seedAppointments y appointmentById', () => {
-  it('reemplaza las citas del store y permite recuperarlas por id', () => {
+  it('reemplaza las citas del backend y permite recuperarlas por id', async () => {
+    signInAs('recepcion')
     seedAppointments(appointmentTemplate({ id: 1 }), appointmentTemplate({ id: 2 }))
 
-    expect(getState().appointments.map((row) => row.id)).toEqual([1, 2])
-    expect(appointmentById(2).id).toBe(2)
+    expect((await storedAppointments()).map((row) => row.id)).toEqual([1, 2])
+    expect((await appointmentById(2)).id).toBe(2)
   })
 
-  it('lanza si la cita no existe', () => {
-    expect(() => appointmentById(999)).toThrow('Cita inexistente 999')
+  it('lanza si la cita no existe', async () => {
+    signInAs('recepcion')
+
+    await expect(appointmentById(999)).rejects.toThrow('Cita inexistente 999')
   })
 })
 

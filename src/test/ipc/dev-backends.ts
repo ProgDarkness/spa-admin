@@ -13,6 +13,7 @@ import type { IpcBackend } from './auth-backend'
 import { createCatalogIpcBackend } from './catalog-backend'
 import { createClientHistoryIpcBackend } from './client-history-backend'
 import { createClientsIpcBackend } from './clients-backend'
+import { createMetricsIpcBackend } from './metrics-backend'
 import { createPaymentMethodsIpcBackend } from './payment-methods-backend'
 import { createPaymentsIpcBackend } from './payments-backend'
 import { createRatesIpcBackend } from './rates-backend'
@@ -77,5 +78,6 @@ export function createDevBackends({ auth, session, seed, now }: DevBackendsOptio
         ...clock,
       }),
     (next) => createClientHistoryIpcBackend(next, { session, clients, appointments, services, resources, payments }),
+    (next) => createMetricsIpcBackend(next, { session, appointments, payments }),
   )
 }

@@ -42,16 +42,15 @@ export const commands = {
 	updateClient: (update: ClientUpdate, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("update_client", { update }, options)),
 	setClientDeleted: (deletion: ClientDeletion, options?: InvokeOptions) => typedError<ClientSummary, AppError>(__TAURI_INVOKE("set_client_deleted", { deletion }, options)),
 	listAppointments: (range: AppointmentRange, options?: InvokeOptions) => typedError<AppointmentSummary[], AppError>(__TAURI_INVOKE("list_appointments", { range }, options)),
-	listAllAppointments: (options?: InvokeOptions) => typedError<AppointmentSummary[], AppError>(__TAURI_INVOKE("list_all_appointments", undefined, options)),
 	createAppointment: (input: AppointmentInput, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("create_appointment", { input }, options)),
 	moveAppointment: (movement: AppointmentMove, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("move_appointment", { movement }, options)),
 	transitionAppointment: (request: AppointmentTransitionRequest, options?: InvokeOptions) => typedError<AppointmentSummary, AppError>(__TAURI_INVOKE("transition_appointment", { request }, options)),
 	listFutureAppointmentsOfResource: (id: number, options?: InvokeOptions) => typedError<FutureAppointment[], AppError>(__TAURI_INVOKE("list_future_appointments_of_resource", { id }, options)),
 	listPayments: (appointmentId: number, options?: InvokeOptions) => typedError<PaymentSummary[], AppError>(__TAURI_INVOKE("list_payments", { appointmentId }, options)),
-	listAllPayments: (options?: InvokeOptions) => typedError<PaymentSummary[], AppError>(__TAURI_INVOKE("list_all_payments", undefined, options)),
 	createPayment: (input: PaymentInput, options?: InvokeOptions) => typedError<PaymentSummary, AppError>(__TAURI_INVOKE("create_payment", { input }, options)),
 	voidPayment: (request: PaymentVoidRequest, options?: InvokeOptions) => typedError<PaymentSummary, AppError>(__TAURI_INVOKE("void_payment", { request }, options)),
 	getClientHistory: (clientId: number, options?: InvokeOptions) => typedError<ClientHistory, AppError>(__TAURI_INVOKE("get_client_history", { clientId }, options)),
+	getMonthlyMetrics: (month: string, options?: InvokeOptions) => typedError<MonthlyMetrics, AppError>(__TAURI_INVOKE("get_monthly_metrics", { month }, options)),
 };
 
 /* Types */
@@ -68,6 +67,14 @@ export type AppError = {
 };
 
 export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "notFound" | "nationalIdTaken" | "clientDeletedReactivate" | "overlap" | "crossesMidnight" | "invalidTransition" | "resourceInactive" | "resourceHasFutureAppointments" | "rateMissing" | "alreadyVoided" | "internal";
+
+export type AppointmentCounts = {
+	scheduled: number,
+	inProgress: number,
+	completed: number,
+	cancelled: number,
+	noShow: number,
+};
 
 export type AppointmentInput = {
 	clientId: number,
@@ -204,6 +211,16 @@ export type FutureAppointment = {
 export type LoginCredentials = {
 	username: string,
 	password: string,
+};
+
+export type MonthlyMetrics = {
+	month: string,
+	newClients: number,
+	recurringClients: number,
+	appointments: AppointmentCounts,
+	revenueByCurrency: AmountsByCurrency,
+	collectedOnNonCompletedByCurrency: AmountsByCurrency,
+	pendingByCurrency: AmountsByCurrency,
 };
 
 export type NewRole = {

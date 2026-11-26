@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { MonthlyMetrics } from '@/lib/model'
+import type { MonthlyMetrics } from '@/lib/bindings'
 
 type Stat = { label: string; value: number }
 

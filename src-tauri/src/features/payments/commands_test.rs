@@ -39,10 +39,6 @@ fn call_list(fixture: &AppFixture) -> Result<Vec<PaymentSummary>, AppError> {
     list_payments(APPOINTMENT, fixture.app.state(), fixture.app.state())
 }
 
-fn call_list_all(fixture: &AppFixture) -> Result<Vec<PaymentSummary>, AppError> {
-    list_all_payments(fixture.app.state(), fixture.app.state())
-}
-
 fn call_create(fixture: &AppFixture, input: PaymentInput) -> Result<PaymentSummary, AppError> {
     create_payment(input, fixture.app.state(), fixture.app.state())
 }
@@ -62,7 +58,7 @@ fn seed_payment(fixture: &AppFixture) -> PaymentSummary {
 
 fn stored_payments(fixture: &AppFixture) -> Vec<PaymentSummary> {
     database(fixture)
-        .with_conn(repository::list_all_payments)
+        .with_conn(|conn| repository::list_payments_of_appointment(conn, APPOINTMENT))
         .unwrap()
 }
 
@@ -82,10 +78,7 @@ fn write_commands(fixture: &AppFixture, target: &PaymentSummary) -> Outcomes {
 }
 
 fn every_command(fixture: &AppFixture, target: &PaymentSummary) -> Outcomes {
-    let mut outcomes: Outcomes = vec![
-        ("list_payments", call_list(fixture).map(|_| ())),
-        ("list_all_payments", call_list_all(fixture).map(|_| ())),
-    ];
+    let mut outcomes: Outcomes = vec![("list_payments", call_list(fixture).map(|_| ()))];
     outcomes.extend(write_commands(fixture, target));
     outcomes
 }
@@ -135,7 +128,6 @@ fn a_read_only_user_can_list_and_every_write_is_forbidden() {
     assert_all_fail_with(write_commands(&fixture, &target), AppErrorCode::Forbidden);
 
     assert_eq!(call_list(&fixture).unwrap(), vec![target.clone()]);
-    assert_eq!(call_list_all(&fixture).unwrap(), vec![target.clone()]);
     assert_eq!(stored_payments(&fixture), vec![target]);
     assert_eq!(audit_actions(&fixture), ["create"]);
 }

@@ -145,7 +145,7 @@ Mecanismo:
 ### 12. Acoplamientos
 
 - **Cerrados:** `payments` ya no depende del espejo de citas. `client-history` ya no depende del espejo de citas, ni del cálculo en el front.
-- **Abierto:** `metrics` sigue leyendo el espejo de citas y el de pagos hasta la Fase 7.
+- **Cerrado en Fase 7 (ADR 0011):** `metrics` ya no lee los espejos de citas ni de pagos.
 
 ## Consecuencias
 
@@ -157,8 +157,8 @@ Mecanismo:
 
 ## Límites
 
-- `list_all_payments` no pagina: el espejo completo viaja en cada sincronización.
-- Métricas sigue sobre espejos (citas y pagos) hasta la Fase 7.
+- `list_all_payments` no pagina: el espejo completo viaja en cada sincronización. Cerrado en Fase 7 (ADR 0011): el comando se eliminó.
+- Métricas sobre espejos (citas y pagos): cerrado en Fase 7 (ADR 0011).
 - El simulado de pagos no valida el minuto local. La validación de reloj solo se prueba en Rust.
 - `cargo test --release --no-run` no compila. Es deuda preexistente, por `insert_user` y `NewUser` en `features/auth` (36 errores, verificados en esta fase).
 - El nombre del test `the_cap_is_one_hundred_million_dollars_in_cents` (`src-tauri/src/features/payments/rules_test.rs`) no coincide con su valor: 10^11 céntimos son 1.000 millones de unidades de moneda, no 100 millones.

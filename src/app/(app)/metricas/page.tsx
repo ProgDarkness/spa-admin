@@ -22,7 +22,11 @@ function MetricsReport({ month }: { month: YearMonth }) {
   return (
     <div className="grid gap-6">
       <MetricsCards metrics={data} />
-      <RevenueByCurrency revenue={data.revenueByCurrency} collectedOnNonCompleted={data.collectedOnNonCompletedByCurrency} />
+      <RevenueByCurrency
+        revenue={data.revenueByCurrency}
+        collectedOnNonCompleted={data.collectedOnNonCompletedByCurrency}
+        pending={data.pendingByCurrency}
+      />
     </div>
   )
 }

@@ -12,6 +12,7 @@ import {
   INACTIVE_SERVICE,
   MISSING_ID,
   appointmentById,
+  storedAppointments,
   appointmentTemplate,
   dataOf,
   errorOf,
@@ -33,8 +34,6 @@ function withoutRefreshedMirrors(state: StoreState): Omit<StoreState, RefreshedM
 
 function expectRecordsUntouched(before: StoreState): void {
   expect(withoutRefreshedMirrors(getState())).toEqual(withoutRefreshedMirrors(before))
-  expect(getState().appointments).toBe(before.appointments)
-  expect(getState().payments).toBe(before.payments)
 }
 
 beforeEach(resetWithEmptyAgenda)
@@ -134,7 +133,7 @@ describe('createAppointment', () => {
       durationMinSnapshot: FACIAL_DURATION_MIN,
       notes: 'primera vez',
     })
-    expect(appointmentById(created.id)).toEqual(created)
+    expect(await appointmentById(created.id)).toEqual(created)
   })
 
   it('endsAt usa la duración del servicio elegido', async () => {
@@ -149,13 +148,11 @@ describe('createAppointment', () => {
   it('asigna un id nuevo sin tocar las citas previas', async () => {
     signInAs('recepcion')
     seedAppointments(appointmentTemplate({ id: 7 }))
-    const previousRows = getState().appointments
 
     const created = dataOf(await createAppointment(inputTemplate()))
 
     expect(created.id).toBe(8)
-    expect(getState().appointments).not.toBe(previousRows)
-    expect(previousRows).toHaveLength(1)
+    expect((await storedAppointments()).map((row) => row.id)).toEqual([7, 8])
   })
 
   it('23:00 con 60 min termina a las 00:00 y se permite', async () => {

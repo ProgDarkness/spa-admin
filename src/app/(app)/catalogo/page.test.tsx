@@ -2,6 +2,7 @@ import { mockIPC } from '@tauri-apps/api/mocks'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getState, resetStore } from '@/lib/mock/store'
+import { storedAppointments } from '@/test/appointment-fixtures'
 import { freezeDate } from '@/test/clock'
 import { renderWithProviders } from '@/test/render'
 import { unauthenticatedError } from '@/test/ipc/ipc-errors'
@@ -76,8 +77,8 @@ describe('CatalogPage propietaria', () => {
   })
 
   it('edita un servicio y no altera los snapshots de las citas existentes', async () => {
-    const appointmentsBefore = getState().appointments
     const { user } = renderWithProviders(<CatalogPage />, { as: 'propietaria' })
+    const appointmentsBefore = await storedAppointments()
     await user.click(await screen.findByRole('button', { name: 'Editar Limpieza facial (ejemplo)' }))
     const dialog = await screen.findByRole('dialog', { name: 'Editar servicio' })
     expect(within(dialog).getByLabelText('Precio (USD)')).toHaveValue('35.00')
@@ -87,8 +88,9 @@ describe('CatalogPage propietaria', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }))
 
     await waitFor(() => expect(getState().services[0]?.priceCents).toBe(9_900))
-    expect(getState().appointments).toBe(appointmentsBefore)
-    expect(getState().appointments.filter((appointment) => appointment.serviceId === 1).every((appointment) => appointment.priceCentsSnapshot === 3_500)).toBe(true)
+    const appointmentsAfter = await storedAppointments()
+    expect(appointmentsAfter).toEqual(appointmentsBefore)
+    expect(appointmentsAfter.filter((appointment) => appointment.serviceId === 1).every((appointment) => appointment.priceCentsSnapshot === 3_500)).toBe(true)
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 

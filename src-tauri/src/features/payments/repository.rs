@@ -94,14 +94,6 @@ pub fn list_payments_of_appointment(
     Ok(rows)
 }
 
-pub fn list_all_payments(conn: &Connection) -> Result<Vec<PaymentSummary>, DbError> {
-    let mut statement = conn.prepare(&format!("{PAYMENT_SUMMARY_SQL} {CHRONOLOGICAL}"))?;
-    let rows = statement
-        .query_map([], payment_summary)?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(rows)
-}
-
 pub fn mark_voided(
     conn: &Connection,
     payment_id: i64,

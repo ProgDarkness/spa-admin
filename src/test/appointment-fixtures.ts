@@ -1,4 +1,5 @@
-import { commit, getState, resetStore } from '@/lib/mock/store'
+import { listAppointments } from '@/features/appointments/api'
+import { resetStore } from '@/lib/mock/store'
 import type { Appointment, AppointmentInput, Id, Result } from '@/lib/model'
 import { freezeDate } from './clock'
 import { installDevIpc } from './dev-ipc'
@@ -21,8 +22,7 @@ export const MISSING_ID = 999
 export function resetWithEmptyAgenda(): void {
   freezeDate(NOW)
   resetStore()
-  commit({ ...getState(), appointments: [] })
-  installDevIpc()
+  installDevIpc({ appointments: [] })
 }
 
 export function appointmentTemplate(overrides: Partial<Appointment> = {}): Appointment {
@@ -42,8 +42,7 @@ export function appointmentTemplate(overrides: Partial<Appointment> = {}): Appoi
 }
 
 export function seedAppointments(...rows: Appointment[]): void {
-  commit({ ...getState(), appointments: rows })
-  installDevIpc()
+  installDevIpc({ appointments: rows })
 }
 
 export function inputTemplate(overrides: Partial<AppointmentInput> = {}): AppointmentInput {
@@ -67,8 +66,14 @@ export function dataOf<T>(result: Result<T>): T {
   return result.data
 }
 
-export function appointmentById(id: Id): Appointment {
-  const found = getState().appointments.find((row) => row.id === id)
+const FIXTURE_YEAR = { from: '2026-01-01', to: '2026-12-31', resourceId: null } as const
+
+export async function storedAppointments(): Promise<Appointment[]> {
+  return dataOf(await listAppointments(FIXTURE_YEAR))
+}
+
+export async function appointmentById(id: Id): Promise<Appointment> {
+  const found = (await storedAppointments()).find((row) => row.id === id)
   if (!found) throw new Error(`Cita inexistente ${id}`)
   return found
 }

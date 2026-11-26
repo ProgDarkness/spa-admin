@@ -1,10 +1,9 @@
 use rusqlite::Connection;
 
-use super::model::AmountsByCurrency;
 use crate::db::DbError;
 use crate::features::appointments::model::AppointmentSummary;
 use crate::features::appointments::repository::appointment_summary;
-use crate::features::payments::model::PaymentSummary;
+use crate::features::payments::model::{AmountsByCurrency, PaymentSummary};
 use crate::features::payments::repository::payment_summary;
 
 const ENTRIES_SQL: &str = "SELECT a.id, a.client_id, a.service_id, a.resource_id, a.starts_at, \

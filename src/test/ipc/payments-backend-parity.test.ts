@@ -103,14 +103,12 @@ async function errorOf(operation: () => Promise<{ status: string; error?: unknow
 describe('paridad de forma con los bindings generados', () => {
   it('cada comando viaja con el nombre y la clave de argumento del contrato', async () => {
     await commands.listPayments(1)
-    await commands.listAllPayments()
     await commands.createPayment(USD_INPUT)
     await commands.voidPayment({ id: 1, reason: 'error' })
     await commands.getClientHistory(1)
 
     expect(invoked.map((call) => [call.cmd, call.args === undefined ? [] : Object.keys(call.args as object)])).toEqual([
       ['list_payments', ['appointmentId']],
-      ['list_all_payments', []],
       ['create_payment', ['input']],
       ['void_payment', ['request']],
       ['get_client_history', ['clientId']],
@@ -120,15 +118,13 @@ describe('paridad de forma con los bindings generados', () => {
   it('todo PaymentSummary devuelto tiene exactamente las claves del contrato', async () => {
     const created = await commands.createPayment(USD_INPUT)
     const voided = await commands.voidPayment({ id: 12, reason: 'error' })
-    const listed = await commands.listAllPayments()
     const byAppointment = await commands.listPayments(5)
 
     const summaries = [
       ...[created, voided].flatMap((outcome) => (outcome.status === 'ok' ? [outcome.data] : [])),
-      ...(listed.status === 'ok' ? listed.data : []),
       ...(byAppointment.status === 'ok' ? byAppointment.data : []),
     ]
-    expect(summaries.length).toBeGreaterThan(12)
+    expect(summaries.length).toBeGreaterThan(1)
     summaries.forEach((summary) => expect(Object.keys(summary).sort()).toEqual(PAYMENT_KEYS))
     expect(created.status === 'ok' && created.data).toMatchObject({
       paidAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
@@ -166,7 +162,7 @@ describe('paridad de forma con los bindings generados', () => {
     const twice = await errorOf(() => commands.voidPayment({ id: 1, reason: 'segunda' }))
     const missingClient = await errorOf(() => commands.getClientHistory(999))
     session = null
-    const unauthenticated = await errorOf(() => commands.listAllPayments())
+    const unauthenticated = await errorOf(() => commands.listPayments(1))
 
     const errors = [rateMissing, reference, validation, reason, unknown, twice, missingClient, unauthenticated]
     errors.forEach((error) => {
@@ -186,7 +182,7 @@ describe('paridad de forma con los bindings generados', () => {
   it('el rechazo del IPC crudo es el AppError y no un Error de JavaScript', async () => {
     session = null
 
-    const rejection = await invoke('list_all_payments').catch((caught: unknown) => caught)
+    const rejection = await invoke('list_payments', { appointmentId: 1 }).catch((caught: unknown) => caught)
 
     expect(rejection).not.toBeInstanceOf(Error)
     expect(rejection).toMatchObject({ code: 'unauthenticated' })

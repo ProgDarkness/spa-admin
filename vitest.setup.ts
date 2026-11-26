@@ -2,13 +2,13 @@ import '@testing-library/jest-dom/vitest'
 import { clearMocks } from '@tauri-apps/api/mocks'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
-import { createSeed } from '@/lib/mock/seed'
+import { createSeed, stateOf } from '@/lib/mock/seed'
 import { todayLocal } from '@/lib/datetime'
 import { resetStore, setStoreSeeder } from '@/lib/mock/store'
 import { resetNavigationMock } from '@/test/navigation'
 import { installDevIpc } from '@/test/dev-ipc'
 
-setStoreSeeder(createSeed)
+setStoreSeeder((today) => stateOf(createSeed(today)))
 resetStore()
 
 vi.mock('next/navigation', () => import('@/test/navigation'))

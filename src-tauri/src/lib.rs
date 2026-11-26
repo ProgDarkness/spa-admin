@@ -17,8 +17,7 @@ pub mod setup;
 mod test_support;
 
 use features::appointments::commands::{
-    create_appointment, list_all_appointments, list_appointments, move_appointment,
-    transition_appointment,
+    create_appointment, list_appointments, move_appointment, transition_appointment,
 };
 use features::auth::audit_commands::list_audit;
 use features::auth::commands::{
@@ -32,12 +31,11 @@ use features::client_history::commands::get_client_history;
 use features::clients::commands::{
     create_client, get_client, list_clients, set_client_deleted, update_client,
 };
+use features::metrics::commands::get_monthly_metrics;
 use features::payment_methods::commands::{
     create_payment_method, list_payment_methods, set_payment_method_active, update_payment_method,
 };
-use features::payments::commands::{
-    create_payment, list_all_payments, list_payments, void_payment,
-};
+use features::payments::commands::{create_payment, list_payments, void_payment};
 use features::rates::commands::{get_rate, list_rates, upsert_rate};
 use features::resources::commands::{
     create_resource, list_future_appointments_of_resource, list_resources, set_resource_active,
@@ -92,16 +90,15 @@ fn command_catalog<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
             update_client,
             set_client_deleted,
             list_appointments,
-            list_all_appointments,
             create_appointment,
             move_appointment,
             transition_appointment,
             list_future_appointments_of_resource,
             list_payments,
-            list_all_payments,
             create_payment,
             void_payment,
-            get_client_history
+            get_client_history,
+            get_monthly_metrics
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .disable_serde_phases()

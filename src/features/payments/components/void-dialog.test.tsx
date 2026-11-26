@@ -1,11 +1,11 @@
 import { screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { commit, getState } from '@/lib/mock/store'
 import type { Payment } from '@/lib/model'
 import { formatCents } from '@/lib/money'
 import { AppErrorException, err } from '@/lib/result'
-import { appointmentTemplate, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { appointmentTemplate, resetWithEmptyAgenda } from '@/test/appointment-fixtures'
 import { installDevIpc } from '@/test/dev-ipc'
+import { paymentsOfAppointment } from '@/test/payment-fixtures'
 import { renderWithProviders } from '@/test/render'
 import * as paymentsApi from '../api'
 import { VoidDialog } from './void-dialog'
@@ -31,9 +31,7 @@ const REASON_REQUIRED = 'Indica el motivo de la anulación'
 beforeEach(() => {
   vi.restoreAllMocks()
   resetWithEmptyAgenda()
-  seedAppointments(appointmentTemplate({ id: 100 }))
-  commit({ ...getState(), payments: [PAYMENT] })
-  installDevIpc()
+  installDevIpc({ appointments: [appointmentTemplate({ id: 100 })], payments: [PAYMENT] })
 })
 
 async function openDialog() {
@@ -60,7 +58,7 @@ describe('VoidDialog', () => {
     expect(await screen.findByText(REASON_REQUIRED)).toBeInTheDocument()
     expect(spy).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
-    expect(getState().payments[0]?.voidedAt).toBeNull()
+    expect((await paymentsOfAppointment(PAYMENT.appointmentId))[0]?.voidedAt).toBeNull()
   })
 
   it('un motivo de solo espacios se rechaza igual que vacío', async () => {
@@ -91,8 +89,8 @@ describe('VoidDialog', () => {
     await user.click(screen.getByRole('button', { name: CONFIRM }))
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
-    expect(getState().payments[0]).toMatchObject({ voidReason: 'Cobro duplicado' })
-    expect(getState().payments[0]?.voidedAt).not.toBeNull()
+    expect((await paymentsOfAppointment(PAYMENT.appointmentId))[0]).toMatchObject({ voidReason: 'Cobro duplicado' })
+    expect((await paymentsOfAppointment(PAYMENT.appointmentId))[0]?.voidedAt).not.toBeNull()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
@@ -105,7 +103,7 @@ describe('VoidDialog', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No tienes permiso para anular pagos')
     expect(onClose).not.toHaveBeenCalled()
-    expect(getState().payments[0]?.voidedAt).toBeNull()
+    expect((await paymentsOfAppointment(PAYMENT.appointmentId))[0]?.voidedAt).toBeNull()
   })
 
   it('si el api lanza un error inesperado muestra el mensaje genérico', async () => {

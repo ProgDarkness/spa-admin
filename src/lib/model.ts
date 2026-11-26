@@ -133,21 +133,6 @@ export type ClientHistory = {
   pendingByCurrency: AmountsByCurrency
   vesUsdEquivalentOfCompleted: Cents
 }
-export type AppointmentCounts = {
-  scheduled: number
-  inProgress: number
-  completed: number
-  cancelled: number
-  noShow: number
-}
-export type MonthlyMetrics = {
-  month: YearMonth
-  newClients: number
-  recurringClients: number
-  appointments: AppointmentCounts
-  revenueByCurrency: AmountsByCurrency
-  collectedOnNonCompletedByCurrency: AmountsByCurrency
-}
 
 export type AppErrorCode =
   | 'unauthenticated'

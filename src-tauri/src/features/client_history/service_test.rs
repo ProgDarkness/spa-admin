@@ -6,11 +6,11 @@ use crate::features::appointments::fixture_test::{
 use crate::features::appointments::model::AppointmentStatus::{
     Cancelled, Completed, InProgress, NoShow, Scheduled,
 };
-use crate::features::client_history::model::AmountsByCurrency;
 use crate::features::payments::fixture_test::{
     add_other_client, appointment_on, fixture, pay, try_pay_at, try_void_at, usd, ves, DAY_RATE,
     OTHER_CLIENT,
 };
+use crate::features::payments::model::AmountsByCurrency;
 
 const CORPORAL: i64 = 3;
 

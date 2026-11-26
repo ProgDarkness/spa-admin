@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { deferred } from '@/test/deferred'
 import { createMirrorSync, visibleRows } from './mirror-sync'
 import type { Result } from './model'
@@ -10,76 +10,6 @@ function recorder(): { applied: (readonly Row[])[]; replace: (rows: readonly Row
   const applied: (readonly Row[])[] = []
   return { applied, replace: (rows) => void applied.push(rows) }
 }
-
-describe('createMirrorSync.listUntilApplied', () => {
-  it('aplica y devuelve los datos en el primer intento cuando nada compite', async () => {
-    const sync = createMirrorSync()
-    const { applied, replace } = recorder()
-    const rows: Row[] = [{ id: 1, active: true }]
-
-    const result = await sync.listUntilApplied(async () => ok(rows), replace)
-
-    expect(result).toEqual(ok(rows))
-    expect(applied).toEqual([rows])
-  })
-
-  it('reintenta cuando una mutación vuelve obsoleta la lista y aplica la lectura nueva', async () => {
-    const sync = createMirrorSync()
-    const { applied, replace } = recorder()
-    const slow = deferred<Result<Row[]>>()
-    const fresh: Row[] = [{ id: 1, active: true }, { id: 9, active: true }]
-    const operation = vi.fn<() => Promise<Result<Row[]>>>().mockReturnValueOnce(slow.promise).mockResolvedValue(ok(fresh))
-
-    const pending = sync.listUntilApplied(operation, replace)
-    sync.reflectMutation((row: Row) => row)({ id: 9, active: true })
-    slow.resolve(ok([{ id: 1, active: true }]))
-    const result = await pending
-
-    expect(operation).toHaveBeenCalledTimes(2)
-    expect(applied).toEqual([fresh])
-    expect(result).toEqual(ok(fresh))
-  })
-
-  it('tras tres intentos obsoletos devuelve un error interno controlado sin aplicar', async () => {
-    const sync = createMirrorSync()
-    const { applied, replace } = recorder()
-    const mutate = sync.reflectMutation((row: Row) => row)
-    const operation = vi.fn(async (): Promise<Result<Row[]>> => {
-      mutate({ id: 9, active: true })
-      return ok([])
-    })
-
-    const result = await sync.listUntilApplied(operation, replace)
-
-    expect(operation).toHaveBeenCalledTimes(3)
-    expect(applied).toEqual([])
-    expect(result.status === 'error' && result.error.code).toBe('internal')
-  })
-
-  it('no reintenta cuando la operación falla y devuelve ese error', async () => {
-    const sync = createMirrorSync()
-    const { applied, replace } = recorder()
-    const failure: Result<Row[]> = { status: 'error', error: { code: 'forbidden', message: 'x', field: null, entityIds: null } }
-    const operation = vi.fn(async () => failure)
-
-    const result = await sync.listUntilApplied(operation, replace)
-
-    expect(result).toBe(failure)
-    expect(operation).toHaveBeenCalledTimes(1)
-    expect(applied).toEqual([])
-  })
-
-  it('convierte una excepción en error interno sin reintentar', async () => {
-    const sync = createMirrorSync()
-    const { replace } = recorder()
-    const operation = vi.fn(async (): Promise<Result<Row[]>> => Promise.reject(new Error('caído')))
-
-    const result = await sync.listUntilApplied(operation, replace)
-
-    expect(result.status === 'error' && result.error.code).toBe('internal')
-    expect(operation).toHaveBeenCalledTimes(1)
-  })
-})
 
 describe('createMirrorSync.list', () => {
   it('aplica el reemplazo y devuelve los datos cuando nada compite', async () => {

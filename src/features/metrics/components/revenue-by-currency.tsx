@@ -6,6 +6,7 @@ const CURRENCIES: readonly Currency[] = ['USD', 'VES']
 export type RevenueByCurrencyProps = {
   revenue: AmountsByCurrency
   collectedOnNonCompleted: AmountsByCurrency
+  pending: AmountsByCurrency
 }
 
 function AmountList({ amounts }: { amounts: AmountsByCurrency }) {
@@ -21,7 +22,7 @@ function AmountList({ amounts }: { amounts: AmountsByCurrency }) {
   )
 }
 
-export function RevenueByCurrency({ revenue, collectedOnNonCompleted }: RevenueByCurrencyProps) {
+export function RevenueByCurrency({ revenue, collectedOnNonCompleted, pending }: RevenueByCurrencyProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <section aria-labelledby="revenue-heading" className="grid gap-3 rounded-md border border-border bg-card p-6">
@@ -38,6 +39,15 @@ export function RevenueByCurrency({ revenue, collectedOnNonCompleted }: RevenueB
           Pagos de citas canceladas o no asistidas; no cuentan como ingreso.
         </p>
         <AmountList amounts={collectedOnNonCompleted} />
+      </section>
+      <section aria-labelledby="pending-heading" className="grid gap-3 rounded-md border border-border bg-card p-6 md:col-span-2">
+        <h2 id="pending-heading" className="font-serif text-lg font-medium">
+          Cobrado por adelantado (citas pendientes)
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Señas de citas programadas o en curso; no cuentan como ingreso.
+        </p>
+        <AmountList amounts={pending} />
       </section>
     </div>
   )

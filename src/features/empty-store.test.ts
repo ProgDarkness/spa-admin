@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { installRustLikeBackend } from '@/test/rust-like-backend'
-import { listAppointments, syncAppointmentsMirror } from '@/features/appointments/api'
+import { listAppointments } from '@/features/appointments/api'
 import { currentSession, login } from '@/features/auth/api'
 import { listServices } from '@/features/catalog/api'
 import { listClients } from '@/features/clients/api'
 import { getMonthlyMetrics } from '@/features/metrics/api'
 import { listPaymentMethods } from '@/features/payment-methods/api'
-import { syncPaymentsMirror } from '@/features/payments/api'
 import { listRates } from '@/features/rates/api'
 import { listResources } from '@/features/resources/api'
 import { DEV_PASSWORD } from '@/test/ipc/auth-backend'
@@ -48,8 +47,6 @@ describe('store vacío en producción', () => {
       listPaymentMethods({ includeInactive: true }),
       listRates(),
       listAppointments({ from: '2026-11-01', to: '2026-11-30', resourceId: null }),
-      syncAppointmentsMirror(),
-      syncPaymentsMirror(),
     ])
 
     expect(results.map((result) => (result.status === 'error' ? result.error : result.status))).toEqual(Array(results.length).fill('ok'))

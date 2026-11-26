@@ -82,20 +82,6 @@ pub fn list_payments(
 
 #[tauri::command]
 #[specta::specta]
-pub fn list_all_payments(
-    db: State<'_, Database>,
-    session: State<'_, SessionState>,
-) -> Result<Vec<PaymentSummary>, AppError> {
-    Ok(
-        db.with_conn_mapped(|conn| -> Result<Vec<PaymentSummary>, PaymentError> {
-            authorize_read(conn, &session)?;
-            Ok(repository::list_all_payments(conn)?)
-        })?,
-    )
-}
-
-#[tauri::command]
-#[specta::specta]
 pub fn create_payment(
     input: PaymentInput,
     db: State<'_, Database>,

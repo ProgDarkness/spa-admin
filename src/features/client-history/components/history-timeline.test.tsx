@@ -1,9 +1,9 @@
 import { screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { commit, getState } from '@/lib/mock/store'
 import type { ClientHistoryEntry, Payment } from '@/lib/model'
 import { formatCents } from '@/lib/money'
-import { appointmentTemplate, resetWithEmptyAgenda, seedAppointments } from '@/test/appointment-fixtures'
+import { appointmentTemplate, resetWithEmptyAgenda } from '@/test/appointment-fixtures'
+import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
 import { HistoryTimeline } from './history-timeline'
 
@@ -32,8 +32,7 @@ function entry(overrides: Partial<ClientHistoryEntry>): ClientHistoryEntry {
 
 beforeEach(() => {
   resetWithEmptyAgenda()
-  seedAppointments(appointmentTemplate({ id: 100 }), appointmentTemplate({ id: 101 }))
-  commit({ ...getState(), payments: [] })
+  installDevIpc({ appointments: [appointmentTemplate({ id: 100 }), appointmentTemplate({ id: 101 })], payments: [] })
 })
 
 describe('HistoryTimeline', () => {

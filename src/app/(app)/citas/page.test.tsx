@@ -1,6 +1,9 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { commit, getState, resetStore } from '@/lib/mock/store'
+import { todayLocal } from '@/lib/datetime'
+import { createSeed } from '@/lib/mock/seed'
+import { resetStore } from '@/lib/mock/store'
+import { appointmentById, storedAppointments } from '@/test/appointment-fixtures'
 import { freezeDate } from '@/test/clock'
 import { installDevIpc } from '@/test/dev-ipc'
 import { renderWithProviders } from '@/test/render'
@@ -23,13 +26,11 @@ async function goToTomorrow(user: ReturnType<typeof renderWithProviders>['user']
 async function failCancellationOfLuis(user: ReturnType<typeof renderWithProviders>['user']) {
   await goToTomorrow(user)
   const cancelButton = await screen.findByRole('button', { name: 'Cancelar cita de Luis Martínez' })
-  const original = getState()
-  commit({ ...original, appointments: original.appointments.filter((row) => row.id !== 5) })
-  installDevIpc()
+  const seeded = createSeed(todayLocal()).appointments
+  installDevIpc({ appointments: seeded.filter((row) => row.id !== 5) })
   await user.click(cancelButton)
   expect(await screen.findByRole('alert')).toBeInTheDocument()
-  commit(original)
-  installDevIpc()
+  installDevIpc({ appointments: seeded })
 }
 
 async function expectAlertCleared() {
@@ -114,7 +115,7 @@ describe('AppointmentsPage', () => {
 
     expect(await cabinColumn('Cabina 2').findByRole('article', { name: 'Cita de María González a las 10:30' })).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(getState().appointments).toHaveLength(17)
+    expect(await storedAppointments()).toHaveLength(17)
   })
 
   it('muestra el solape devuelto por el api sin cerrar el formulario', async () => {
@@ -132,7 +133,7 @@ describe('AppointmentsPage', () => {
 
     expect(await within(dialog).findByText('El recurso ya tiene una cita en ese horario')).toBeInTheDocument()
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Citas en conflicto: #5')
-    expect(getState().appointments).toHaveLength(16)
+    expect(await storedAppointments()).toHaveLength(16)
   })
 
   it('cancela una cita y libera su franja', async () => {
@@ -141,7 +142,7 @@ describe('AppointmentsPage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Cancelar cita de Luis Martínez' }))
 
-    await waitFor(() => expect(getState().appointments.find((row) => row.id === 5)?.status).toBe('cancelled'))
+    await waitFor(async () => expect((await appointmentById(5)).status).toBe('cancelled'))
     const card = await screen.findByRole('article', { name: 'Cita de Luis Martínez a las 16:00' })
     expect(card).toHaveTextContent('Cancelada')
     expect(screen.queryByRole('button', { name: 'Cancelar cita de Luis Martínez' })).not.toBeInTheDocument()
@@ -159,7 +160,7 @@ describe('AppointmentsPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Mover' }))
 
     expect(await cabinColumn('Cabina 1').findByRole('article', { name: 'Cita de Luis Martínez a las 11:00' })).toBeInTheDocument()
-    expect(getState().appointments.find((row) => row.id === 5)?.endsAt).toBe('2026-11-13T12:00')
+    expect((await appointmentById(5)).endsAt).toBe('2026-11-13T12:00')
   })
 
   it('el usuario de solo lectura ve la agenda sin acciones de escritura', async () => {
@@ -206,7 +207,7 @@ describe('AppointmentsPage alerta de acción fallida', () => {
     fireEvent.change(within(dialog).getByLabelText('Fecha y hora'), { target: { value: '2026-11-13T10:30' } })
     await user.click(within(dialog).getByRole('button', { name: 'Crear cita' }))
 
-    await waitFor(() => expect(getState().appointments).toHaveLength(17))
+    await waitFor(async () => expect(await storedAppointments()).toHaveLength(17))
     await expectAlertCleared()
   })
 
@@ -220,7 +221,7 @@ describe('AppointmentsPage alerta de acción fallida', () => {
     fireEvent.change(within(dialog).getByLabelText('Fecha y hora'), { target: { value: '2026-11-13T11:00' } })
     await user.click(within(dialog).getByRole('button', { name: 'Mover' }))
 
-    await waitFor(() => expect(getState().appointments.find((row) => row.id === 5)?.endsAt).toBe('2026-11-13T12:00'))
+    await waitFor(async () => expect((await appointmentById(5)).endsAt).toBe('2026-11-13T12:00'))
     await expectAlertCleared()
   })
 
@@ -230,7 +231,7 @@ describe('AppointmentsPage alerta de acción fallida', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Cancelar cita de Luis Martínez' }))
 
-    await waitFor(() => expect(getState().appointments.find((row) => row.id === 5)?.status).toBe('cancelled'))
+    await waitFor(async () => expect((await appointmentById(5)).status).toBe('cancelled'))
     await expectAlertCleared()
   })
 
