@@ -51,6 +51,9 @@ export const commands = {
 	voidPayment: (request: PaymentVoidRequest, options?: InvokeOptions) => typedError<PaymentSummary, AppError>(__TAURI_INVOKE("void_payment", { request }, options)),
 	getClientHistory: (clientId: number, options?: InvokeOptions) => typedError<ClientHistory, AppError>(__TAURI_INVOKE("get_client_history", { clientId }, options)),
 	getMonthlyMetrics: (month: string, options?: InvokeOptions) => typedError<MonthlyMetrics, AppError>(__TAURI_INVOKE("get_monthly_metrics", { month }, options)),
+	exportBackup: (passphrase: string, options?: InvokeOptions) => typedError<BackupExported | null, AppError>(__TAURI_INVOKE("export_backup", { passphrase }, options)),
+	restoreBackup: (passphrase: string, options?: InvokeOptions) => typedError<RestoreResult | null, AppError>(__TAURI_INVOKE("restore_backup", { passphrase }, options)),
+	getBackupStatus: (options?: InvokeOptions) => typedError<BackupStatus, AppError>(__TAURI_INVOKE("get_backup_status", undefined, options)),
 };
 
 /* Types */
@@ -66,7 +69,7 @@ export type AppError = {
 	entityIds: number[] | null,
 };
 
-export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "notFound" | "nationalIdTaken" | "clientDeletedReactivate" | "overlap" | "crossesMidnight" | "invalidTransition" | "resourceInactive" | "resourceHasFutureAppointments" | "rateMissing" | "alreadyVoided" | "internal";
+export type AppErrorCode = "invalidCredentials" | "validation" | "unauthenticated" | "forbidden" | "sessionLocked" | "notFound" | "nationalIdTaken" | "clientDeletedReactivate" | "overlap" | "crossesMidnight" | "invalidTransition" | "resourceInactive" | "resourceHasFutureAppointments" | "rateMissing" | "alreadyVoided" | "backupUnreadable" | "backupNotRecognized" | "backupFromNewerApp" | "internal";
 
 export type AppointmentCounts = {
 	scheduled: number,
@@ -141,6 +144,16 @@ export type AuditPage = {
 export type AuditQuery = {
 	beforeId: number | null,
 	limit: number,
+};
+
+export type BackupExported = {
+	fileName: string,
+	createdAt: string,
+};
+
+export type BackupStatus = {
+	lastBackupAt: string | null,
+	isDue: boolean,
 };
 
 export type ClientDeletion = {
@@ -345,6 +358,11 @@ export type ResourceUpdate = {
 	id: number,
 	name: string,
 	kind: ResourceKind,
+};
+
+export type RestoreResult = {
+	sourceSchemaVersion: number,
+	schemaVersion: number,
 };
 
 export type RolePermissionsUpdate = {

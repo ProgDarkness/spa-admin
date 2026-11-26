@@ -16,6 +16,8 @@ pub mod setup;
 #[cfg(test)]
 mod test_support;
 
+use tauri_plugin_dialog::DialogExt;
+
 use features::appointments::commands::{
     create_appointment, list_appointments, move_appointment, transition_appointment,
 };
@@ -24,6 +26,7 @@ use features::auth::commands::{
     current_session, login, logout, record_activity, setup_owner, setup_status, unlock,
 };
 use features::auth::recover::recover_password;
+use features::backup::commands::{export_backup, get_backup_status, restore_backup};
 use features::catalog::commands::{
     create_service, list_services, set_service_active, update_service,
 };
@@ -98,7 +101,10 @@ fn command_catalog<R: tauri::Runtime>() -> tauri_specta::Builder<R> {
             create_payment,
             void_payment,
             get_client_history,
-            get_monthly_metrics
+            get_monthly_metrics,
+            export_backup,
+            restore_backup,
+            get_backup_status
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .disable_serde_phases()
@@ -110,7 +116,35 @@ fn start<R: tauri::Runtime>(
     context: tauri::Context<R>,
     setup: impl FnOnce(&mut tauri::App<R>) -> Result<(), Box<dyn std::error::Error>> + Send + 'static,
 ) -> tauri::Result<()> {
-    with_commands(builder).setup(setup).run(context)
+    with_commands(builder)
+        .plugin(tauri_plugin_dialog::init())
+        .setup(setup)
+        .run(context)
+}
+
+pub(crate) const STARTUP_FAILURE_TITLE: &str = "Spa no pudo iniciar";
+pub(crate) const STARTUP_FAILURE_MESSAGE: &str = "La aplicación no pudo abrir sus datos y se cerrará. Consulte docs/manual-usuario.md: allí se explica cómo apartar la carpeta de datos y restaurar un respaldo en el primer arranque.";
+
+fn guarded_setup<R: tauri::Runtime>(
+    setup: impl FnOnce(&mut tauri::App<R>) -> Result<(), Box<dyn std::error::Error>> + Send + 'static,
+    on_failure: impl FnOnce(&tauri::AppHandle<R>) + Send + 'static,
+) -> impl FnOnce(&mut tauri::App<R>) -> Result<(), Box<dyn std::error::Error>> + Send + 'static {
+    move |app| {
+        if let Err(failure) = setup(app) {
+            eprintln!("application setup failed: {failure}");
+            on_failure(app.handle());
+        }
+        Ok(())
+    }
+}
+
+fn report_startup_failure<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let handle = app.clone();
+    app.dialog()
+        .message(STARTUP_FAILURE_MESSAGE)
+        .title(STARTUP_FAILURE_TITLE)
+        .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+        .show(move |_| handle.exit(1));
 }
 
 fn startup_failure_message(error: &tauri::Error) -> String {
@@ -123,7 +157,11 @@ fn app_context<R: tauri::Runtime>() -> tauri::Context<R> {
 
 pub fn run() {
     let context = app_context();
-    if let Err(error) = start(tauri::Builder::default(), context, setup::init) {
+    if let Err(error) = start(
+        tauri::Builder::default(),
+        context,
+        guarded_setup(setup::init, report_startup_failure),
+    ) {
         eprintln!("{}", startup_failure_message(&error));
         std::process::exit(1);
     }

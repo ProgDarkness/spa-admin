@@ -178,6 +178,9 @@ fn bindings_return_the_expected_payload_per_command() {
     assert_eq!(returns_of("setup_status"), "SetupStatus");
     assert_eq!(returns_of("setup_owner"), "OwnerSetupResult");
     assert_eq!(returns_of("list_users"), "UserSummary[]");
+    assert_eq!(returns_of("export_backup"), "BackupExported | null");
+    assert_eq!(returns_of("restore_backup"), "RestoreResult | null");
+    assert_eq!(returns_of("get_backup_status"), "BackupStatus");
 }
 
 #[test]
@@ -219,6 +222,9 @@ fn bindings_expose_the_session_status_and_error_code_variants() {
             "resourceHasFutureAppointments",
             "rateMissing",
             "alreadyVoided",
+            "backupUnreadable",
+            "backupNotRecognized",
+            "backupFromNewerApp",
             "internal"
         ]
     );

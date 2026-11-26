@@ -285,3 +285,54 @@ fn with_conn_mapped_converts_a_panic_into_the_caller_error_and_rolls_back() {
         database.with_conn(|conn| Ok(conn.query_row("SELECT 1", [], |row| row.get(0))?));
     assert_eq!(usable.unwrap(), 1);
 }
+
+#[test]
+fn with_conn_mut_can_replace_the_connection_for_later_callers() {
+    let (_dir, path) = fresh_path();
+    let key = key_of("a");
+    create_with_row(&path, &key);
+    let database = Database::new(Connection::open_in_memory().unwrap());
+
+    database
+        .with_conn_mut(|conn| {
+            *conn = open_encrypted(&path, &key)?;
+            Ok::<(), DbError>(())
+        })
+        .unwrap();
+
+    let value = database.with_conn(|conn| Ok(read_row(conn))).unwrap();
+    assert_eq!(value, "hello");
+}
+
+#[test]
+fn with_conn_mut_returns_the_operation_error_and_keeps_the_connection() {
+    let database = Database::new(Connection::open_in_memory().unwrap());
+    database
+        .with_conn(|conn| Ok(conn.execute_batch("CREATE TABLE t(v TEXT)")?))
+        .unwrap();
+
+    let outcome: Result<(), DbError> = database.with_conn_mut(|_| Err(DbError::InvalidInstant));
+
+    assert!(matches!(outcome, Err(DbError::InvalidInstant)));
+    assert!(database.with_conn(|conn| Ok(count_master(conn)?)).is_ok());
+}
+
+#[test]
+fn with_conn_mut_turns_a_panic_into_an_error_and_rolls_back_the_open_transaction() {
+    let database = Database::new(Connection::open_in_memory().unwrap());
+    database
+        .with_conn(|conn| Ok(conn.execute_batch("CREATE TABLE t(v TEXT)")?))
+        .unwrap();
+
+    let outcome: Result<(), DbError> = database.with_conn_mut(|conn| {
+        conn.execute_batch("BEGIN; INSERT INTO t VALUES ('x')")
+            .unwrap();
+        panic!("boom");
+    });
+
+    assert!(matches!(outcome, Err(DbError::OperationPanicked)));
+    let rows: i64 = database
+        .with_conn(|conn| Ok(conn.query_row("SELECT count(*) FROM t", [], |row| row.get(0))?))
+        .unwrap();
+    assert_eq!(rows, 0);
+}

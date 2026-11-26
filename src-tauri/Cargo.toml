@@ -23,11 +23,13 @@ rusqlite = { version = "=0.43.0", features = ["bundled-sqlcipher-vendored-openss
 keyring = "=4.2.0"
 keyring-core = "=1.0.1"
 getrandom = "=0.4.3"
-argon2 = { version = "=0.6.0", features = ["password-hash", "getrandom"] }
+argon2 = { version = "=0.6.0", features = ["password-hash", "getrandom", "zeroize"] }
 hex = "=0.4.3"
 zeroize = { version = "=1.9.1", features = ["derive"] }
 unicode-normalization = "=0.1.26"
 serde_json = "=1.0.154"
+tauri-plugin-dialog = "=2.8.4"
+chacha20poly1305 = "=0.11.0"
 
 [dev-dependencies]
 tauri = { version = "=2.12.5", features = ["test"] }

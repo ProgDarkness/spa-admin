@@ -40,6 +40,21 @@ impl Database {
         }
     }
 
+    pub fn with_conn_mut<T, E: From<DbError>>(
+        &self,
+        operation: impl FnOnce(&mut Connection) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let mut guard = self.acquire();
+        let outcome = catch_unwind(AssertUnwindSafe(|| operation(&mut guard)));
+        match outcome {
+            Ok(result) => result,
+            Err(_) => {
+                abandon_open_transaction(&guard);
+                Err(E::from(DbError::OperationPanicked))
+            }
+        }
+    }
+
     pub fn with_tx<T, E: From<DbError>>(
         &self,
         operation: impl FnOnce(&Transaction<'_>) -> Result<T, E>,

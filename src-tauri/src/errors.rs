@@ -18,6 +18,9 @@ pub enum AppErrorCode {
     ResourceHasFutureAppointments,
     RateMissing,
     AlreadyVoided,
+    BackupUnreadable,
+    BackupNotRecognized,
+    BackupFromNewerApp,
     Internal,
 }
 
@@ -56,6 +59,10 @@ const ALREADY_VOIDED_MESSAGE: &str = "El pago ya fue anulado";
 const PAYMENT_NOT_FOUND_MESSAGE: &str = "El pago no existe";
 const APPOINTMENT_MISSING_MESSAGE: &str = "La cita no existe";
 const METHOD_MISSING_MESSAGE: &str = "El método de pago no existe";
+const BACKUP_UNREADABLE_MESSAGE: &str = "La frase no coincide o el archivo está dañado";
+const BACKUP_NOT_RECOGNIZED_MESSAGE: &str = "El archivo no es un respaldo reconocido";
+const BACKUP_FROM_NEWER_APP_MESSAGE: &str =
+    "El respaldo fue creado con una versión más nueva de la aplicación";
 const RATE_FIELD: &str = "rateBsPerUsdE4";
 const NATIONAL_ID_FIELD: &str = "nationalId";
 const STARTS_AT_FIELD: &str = "startsAt";
@@ -190,6 +197,24 @@ impl AppError {
 
     pub fn payment_not_found() -> Self {
         Self::without_details(AppErrorCode::NotFound, PAYMENT_NOT_FOUND_MESSAGE)
+    }
+
+    pub fn backup_unreadable() -> Self {
+        Self::without_details(AppErrorCode::BackupUnreadable, BACKUP_UNREADABLE_MESSAGE)
+    }
+
+    pub fn backup_not_recognized() -> Self {
+        Self::without_details(
+            AppErrorCode::BackupNotRecognized,
+            BACKUP_NOT_RECOGNIZED_MESSAGE,
+        )
+    }
+
+    pub fn backup_from_newer_app() -> Self {
+        Self::without_details(
+            AppErrorCode::BackupFromNewerApp,
+            BACKUP_FROM_NEWER_APP_MESSAGE,
+        )
     }
 
     pub fn internal() -> Self {

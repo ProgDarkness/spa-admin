@@ -13,6 +13,10 @@ use crate::features::auth::heartbeat::spawn_heartbeat;
 use crate::features::auth::password::PasswordPolicy;
 use crate::features::auth::service::{AuthError, SessionState};
 use crate::features::auth::throttle::LoginThrottle;
+use crate::features::backup::dialogs::BackupDialogs;
+use crate::features::backup::errors::BackupError;
+use crate::features::backup::model::BackupSource;
+use crate::features::backup::recovery::recover_interrupted_restore;
 use crate::keystore::{init_native_store, load_or_create, KeyStore, KeyStoreError};
 
 pub const DATABASE_FILE_NAME: &str = "spa.db";
@@ -27,6 +31,8 @@ pub enum SetupError {
     Db(#[from] DbError),
     #[error("database snapshot unavailable")]
     Snapshot(#[from] SnapshotError),
+    #[error("backup recovery unavailable")]
+    Backup(#[from] BackupError),
     #[error("password policy unavailable")]
     Auth(#[from] AuthError),
     #[error("seed password too short")]
@@ -97,6 +103,7 @@ fn bootstrap_with(
     fs::create_dir_all(data_dir)?;
     restrict_to_owner(data_dir, DIRECTORY_MODE)?;
     let database_path = data_dir.join(DATABASE_FILE_NAME);
+    recover_interrupted_restore(&database_path, store)?;
     let key = load_or_create(store, database_path.exists())?;
     let mut conn = open_encrypted(&database_path, &key)?;
     restrict_to_owner(&database_path, DATABASE_MODE)?;
@@ -133,6 +140,11 @@ fn install<R: Runtime>(
         clock_rollback,
     } = bootstrap(data_dir, store)?;
     app.manage(database);
+    app.manage(BackupSource {
+        database_path: data_dir.join(DATABASE_FILE_NAME),
+        key_store: store.clone(),
+    });
+    app.manage(BackupDialogs::native(app.handle().clone()));
     app.manage(ClockRollbackNotice(clock_rollback));
     app.manage(Arc::new(passwords));
     app.manage(LoginThrottle::default());

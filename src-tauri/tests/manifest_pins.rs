@@ -25,3 +25,16 @@ fn unpinned_dependencies() -> Vec<String> {
 fn every_direct_dependency_is_pinned_with_exact_version() {
     assert_eq!(unpinned_dependencies(), Vec::<String>::new());
 }
+
+fn dependency_line(name: &str) -> &'static str {
+    MANIFEST
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with(&format!("{name} =")))
+        .unwrap_or_default()
+}
+
+#[test]
+fn argon2_wipes_its_memory_blocks_with_the_zeroize_feature() {
+    assert!(dependency_line("argon2").contains("\"zeroize\""));
+}

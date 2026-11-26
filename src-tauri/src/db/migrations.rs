@@ -23,6 +23,15 @@ pub fn migrate(conn: &mut Connection) -> Result<(), DbError> {
     apply(conn, &MIGRATIONS)
 }
 
+#[cfg(test)]
+pub(crate) fn migrate_to(conn: &mut Connection, version: u32) -> Result<(), DbError> {
+    let reachable = MIGRATIONS
+        .iter()
+        .take_while(|(candidate, _)| *candidate <= version)
+        .count();
+    apply(conn, &MIGRATIONS[..reachable])
+}
+
 pub fn supported_version() -> u32 {
     MIGRATIONS.last().map_or(0, |(version, _)| *version)
 }

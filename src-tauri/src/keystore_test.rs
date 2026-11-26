@@ -58,3 +58,83 @@ fn load_or_create_propagates_store_error_without_writing() {
         Err(keyring_core::Error::NoEntry)
     ));
 }
+
+fn other_key() -> DbKey {
+    DbKey::from_hex("cd".repeat(32)).unwrap()
+}
+
+fn pending_entry_of(store: &KeyStore) -> keyring_core::Entry {
+    keyring_core::Entry::new(&store.service, PENDING_KEY_ACCOUNT).unwrap()
+}
+
+#[test]
+fn a_pending_key_is_stored_apart_from_the_main_key() {
+    let store = isolated_store();
+    store.write(&sample_key()).unwrap();
+
+    store.write_pending(&other_key()).unwrap();
+
+    assert_eq!(
+        store.read_pending().unwrap().unwrap().as_hex(),
+        "cd".repeat(32)
+    );
+    assert_eq!(store.read().unwrap().unwrap().as_hex(), "ab".repeat(32));
+}
+
+#[test]
+fn reading_a_pending_key_that_was_never_written_returns_none() {
+    let store = isolated_store();
+
+    assert!(store.read_pending().unwrap().is_none());
+}
+
+#[test]
+fn deleting_the_pending_key_removes_it_and_is_idempotent() {
+    let store = isolated_store();
+    store.write_pending(&other_key()).unwrap();
+
+    store.delete_pending().unwrap();
+    store.delete_pending().unwrap();
+
+    assert!(store.read_pending().unwrap().is_none());
+}
+
+#[test]
+fn promoting_the_pending_key_replaces_the_main_key_and_clears_the_pending_one() {
+    let store = isolated_store();
+    store.write(&sample_key()).unwrap();
+    store.write_pending(&other_key()).unwrap();
+
+    store.promote_pending().unwrap();
+
+    assert_eq!(store.read().unwrap().unwrap().as_hex(), "cd".repeat(32));
+    assert!(store.read_pending().unwrap().is_none());
+}
+
+#[test]
+fn promoting_without_a_pending_key_fails_and_keeps_the_main_key() {
+    let store = isolated_store();
+    store.write(&sample_key()).unwrap();
+
+    let outcome = store.promote_pending();
+
+    assert!(matches!(outcome, Err(KeyStoreError::MissingPending)));
+    assert_eq!(store.read().unwrap().unwrap().as_hex(), "ab".repeat(32));
+}
+
+#[test]
+fn a_malformed_pending_value_is_reported_and_never_promoted() {
+    let store = isolated_store();
+    store.write(&sample_key()).unwrap();
+    pending_entry_of(&store).set_password("not-a-key").unwrap();
+
+    assert!(matches!(
+        store.read_pending(),
+        Err(KeyStoreError::Malformed)
+    ));
+    assert!(matches!(
+        store.promote_pending(),
+        Err(KeyStoreError::Malformed)
+    ));
+    assert_eq!(store.read().unwrap().unwrap().as_hex(), "ab".repeat(32));
+}

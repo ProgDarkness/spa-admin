@@ -50,6 +50,9 @@
     "allow-create-payment",
     "allow-void-payment",
     "allow-get-client-history",
-    "allow-get-monthly-metrics"
+    "allow-get-monthly-metrics",
+    "allow-export-backup",
+    "allow-restore-backup",
+    "allow-get-backup-status"
   ]
 }

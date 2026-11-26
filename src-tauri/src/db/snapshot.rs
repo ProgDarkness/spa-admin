@@ -56,6 +56,19 @@ fn snapshot_at(
     Ok(target)
 }
 
+pub(crate) fn all_snapshots(database_path: &Path) -> io::Result<Vec<PathBuf>> {
+    let prefix = format!("{}.", file_name_of(database_path)?);
+    let directory = database_path.parent().unwrap_or_else(|| Path::new("."));
+    let mut snapshots = fs::read_dir(directory)?
+        .map(|entry| entry.map(|found| found.path()))
+        .collect::<io::Result<Vec<PathBuf>>>()?
+        .into_iter()
+        .filter(|path| is_snapshot_name(path, &prefix))
+        .collect::<Vec<PathBuf>>();
+    snapshots.sort();
+    Ok(snapshots)
+}
+
 fn file_name_of(path: &Path) -> io::Result<String> {
     path.file_name()
         .and_then(OsStr::to_str)
@@ -80,7 +93,7 @@ fn copy_and_sync(source: &Path, destination: &mut File) -> io::Result<()> {
 }
 
 #[cfg(unix)]
-fn create_private(path: &Path) -> io::Result<File> {
+pub(crate) fn create_private(path: &Path) -> io::Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
     OpenOptions::new()
         .write(true)
@@ -90,7 +103,7 @@ fn create_private(path: &Path) -> io::Result<File> {
 }
 
 #[cfg(not(unix))]
-fn create_private(path: &Path) -> io::Result<File> {
+pub(crate) fn create_private(path: &Path) -> io::Result<File> {
     OpenOptions::new().write(true).create_new(true).open(path)
 }
 

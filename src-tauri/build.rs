@@ -49,6 +49,9 @@ const APP_COMMANDS: &[&str] = &[
     "void_payment",
     "get_client_history",
     "get_monthly_metrics",
+    "export_backup",
+    "restore_backup",
+    "get_backup_status",
 ];
 const WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
 
