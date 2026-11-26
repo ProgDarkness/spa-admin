@@ -362,3 +362,64 @@ fn start_survives_a_failing_setup_by_reporting_it_instead_of_panicking() {
     assert!(outcome.is_ok());
     assert_eq!(reports.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
+
+fn exit_witness() -> (
+    std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    impl FnOnce() + Send + 'static,
+) {
+    let exits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let witness = exits.clone();
+    (exits, move || {
+        witness.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    })
+}
+
+#[test]
+fn the_app_exits_once_the_failure_dialog_is_dismissed() {
+    let (exits, exit) = exit_witness();
+    let presented = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let witness = presented.clone();
+
+    present_then_exit(
+        move || witness.store(true, std::sync::atomic::Ordering::SeqCst),
+        exit,
+    )
+    .join()
+    .unwrap();
+
+    assert!(presented.load(std::sync::atomic::Ordering::SeqCst));
+    assert_eq!(exits.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[test]
+fn the_app_exits_even_when_the_failure_dialog_cannot_be_shown() {
+    let (exits, exit) = exit_witness();
+
+    present_then_exit(|| panic!("no display available"), exit)
+        .join()
+        .unwrap();
+
+    assert_eq!(exits.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[test]
+fn the_app_does_not_exit_before_the_failure_dialog_returns() {
+    let (exits, exit) = exit_witness();
+    let (release, wait_for_release) = std::sync::mpsc::channel::<()>();
+    let exits_seen_while_open = exits.clone();
+
+    let handle = present_then_exit(
+        move || {
+            wait_for_release.recv().unwrap();
+        },
+        exit,
+    );
+
+    assert_eq!(
+        exits_seen_while_open.load(std::sync::atomic::Ordering::SeqCst),
+        0
+    );
+    release.send(()).unwrap();
+    handle.join().unwrap();
+    assert_eq!(exits.load(std::sync::atomic::Ordering::SeqCst), 1);
+}

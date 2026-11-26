@@ -13,6 +13,7 @@ use crate::features::auth::heartbeat::spawn_heartbeat;
 use crate::features::auth::password::PasswordPolicy;
 use crate::features::auth::service::{AuthError, SessionState};
 use crate::features::auth::throttle::LoginThrottle;
+use crate::features::backup::background::BackupBackground;
 use crate::features::backup::dialogs::BackupDialogs;
 use crate::features::backup::errors::BackupError;
 use crate::features::backup::model::BackupSource;
@@ -145,6 +146,7 @@ fn install<R: Runtime>(
         key_store: store.clone(),
     });
     app.manage(BackupDialogs::native(app.handle().clone()));
+    app.manage(BackupBackground::native(app.handle().clone()));
     app.manage(ClockRollbackNotice(clock_rollback));
     app.manage(Arc::new(passwords));
     app.manage(LoginThrottle::default());

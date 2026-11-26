@@ -255,3 +255,27 @@ fn backup_error_codes_are_distinct() {
     assert_ne!(codes[1], codes[2]);
     assert_ne!(codes[0], codes[2]);
 }
+
+#[test]
+fn an_unfinished_restore_tells_the_user_to_restart_and_keeps_the_internal_code() {
+    let value = serialized(AppError::backup_rollback_failed());
+    assert_eq!(value["code"], "internal");
+    assert_eq!(
+        value["message"],
+        "La restauración quedó a medias; reinicie la aplicación para completarla o recuperar el estado anterior"
+    );
+    assert_eq!(value["field"], json!(null));
+    assert_eq!(value["entityIds"], json!(null));
+}
+
+#[test]
+fn an_oversized_database_explains_the_backup_size_limit_and_keeps_the_internal_code() {
+    let value = serialized(AppError::backup_too_large());
+    assert_eq!(value["code"], "internal");
+    assert_eq!(
+        value["message"],
+        "La base de datos supera el tamaño máximo admitido para un respaldo"
+    );
+    assert_eq!(value["field"], json!(null));
+    assert_eq!(value["entityIds"], json!(null));
+}

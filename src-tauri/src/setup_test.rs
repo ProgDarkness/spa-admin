@@ -331,6 +331,7 @@ fn install_manages_the_backup_source_and_the_native_dialogs() {
         store.read().unwrap().unwrap().as_hex()
     );
     assert!(app.try_state::<BackupDialogs>().is_some());
+    assert!(app.try_state::<BackupBackground>().is_some());
 }
 
 #[test]
@@ -359,6 +360,7 @@ fn install_manages_nothing_when_the_bootstrap_fails() {
     assert!(outcome.is_err());
     assert!(app.try_state::<BackupSource>().is_none());
     assert!(app.try_state::<BackupDialogs>().is_none());
+    assert!(app.try_state::<BackupBackground>().is_none());
     assert!(app.try_state::<Database>().is_none());
     assert!(app.try_state::<SessionState>().is_none());
     assert!(app.try_state::<LoginThrottle>().is_none());

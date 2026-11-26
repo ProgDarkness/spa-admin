@@ -163,6 +163,20 @@ describe('SetupOwnerForm', () => {
     expect(window.sessionStorage.length).toBe(0)
   })
 
+  it('ofrece restaurar desde un respaldo hacia la pantalla de primer arranque', () => {
+    renderForm()
+
+    expect(screen.getByRole('link', { name: 'Restaurar desde un respaldo' })).toHaveAttribute('href', '/setup/restaurar')
+  })
+
+  it('oculta el enlace de restauración al mostrar el código de recuperación', async () => {
+    const { user } = renderForm()
+    await fillForm(user)
+    await screen.findByText(formatRecoveryCode(0))
+
+    expect(screen.queryByRole('link', { name: 'Restaurar desde un respaldo' })).not.toBeInTheDocument()
+  })
+
   it('no permite continuar sin marcar la casilla', async () => {
     const { user, onComplete } = renderForm()
     await fillForm(user)

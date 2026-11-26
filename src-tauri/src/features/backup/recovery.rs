@@ -17,6 +17,7 @@ pub fn recover_interrupted_restore(
         let Some(copy) = previous.take() else {
             return Ok(());
         };
+        discard_with_sidecars(database_path)?;
         fs::rename(copy, database_path)?;
     }
     let main = store.read()?;
@@ -66,6 +67,7 @@ fn roll_back_to(
     }
     let failed = path_for(database_path, &stamp_now()?, Leftover::Failed);
     fs::rename(database_path, failed)?;
+    discard_with_sidecars(database_path)?;
     fs::rename(previous, database_path)?;
     store.delete_pending()?;
     clean_up(database_path, store)

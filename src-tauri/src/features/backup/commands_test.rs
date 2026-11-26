@@ -109,6 +109,7 @@ fn command_app(
     app.manage(session);
     app.manage(source);
     app.manage(dialogs);
+    app.manage(BackupBackground::native(app.handle().clone()));
     CommandApp {
         app,
         _dir: dir,
@@ -138,8 +139,8 @@ fn export_cheap(app: &CommandApp, passphrase: &str) -> Result<Option<BackupExpor
     tauri::async_runtime::block_on(export_flow(
         &app.app.state::<Database>(),
         &app.app.state::<SessionState>(),
-        &app.app.state::<BackupSource>(),
         &app.app.state::<BackupDialogs>(),
+        &app.app.state::<BackupBackground>(),
         KdfParams::LOWEST_ACCEPTED,
         passphrase.to_string(),
     ))
@@ -149,6 +150,7 @@ fn export_cheap(app: &CommandApp, passphrase: &str) -> Result<Option<BackupExpor
 fn restore_command(app: &CommandApp, passphrase: &str) -> Result<Option<RestoreResult>, AppError> {
     tauri::async_runtime::block_on(restore_backup(
         passphrase.to_string(),
+        app.app.state(),
         app.app.state(),
         app.app.state(),
         app.app.state(),
@@ -440,4 +442,33 @@ fn the_status_is_due_until_a_backup_is_exported() {
     );
     assert!(!after.is_due);
     assert_eq!(after.last_backup_at.map(|at| at.len()), Some(19));
+}
+
+#[test]
+fn the_restore_swap_runs_off_the_thread_that_polls_the_command() {
+    let (_source, file) = backup_from_marker_source();
+    let fixture = backup_fixture();
+    sign_in_as(&fixture, OWNER);
+    let app = command_app(fixture, None, Some(file));
+    let swap_threads: Arc<Mutex<Vec<std::thread::ThreadId>>> = Arc::default();
+    let recorder = swap_threads.clone();
+    let inject: SwapInjection = Arc::new(move |_| {
+        recorder.lock().unwrap().push(std::thread::current().id());
+        Ok(())
+    });
+
+    tauri::async_runtime::block_on(restore_flow(
+        &app.app.state::<Database>(),
+        &app.app.state::<SessionState>(),
+        &app.app.state::<BackupSource>(),
+        &app.app.state::<BackupDialogs>(),
+        &app.app.state::<BackupBackground>(),
+        PASSPHRASE.to_string(),
+        inject,
+    ))
+    .unwrap();
+
+    let threads = swap_threads.lock().unwrap();
+    assert!(!threads.is_empty());
+    assert!(threads.iter().all(|id| *id != std::thread::current().id()));
 }

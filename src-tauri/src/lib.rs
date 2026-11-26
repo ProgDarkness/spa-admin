@@ -138,13 +138,32 @@ fn guarded_setup<R: tauri::Runtime>(
     }
 }
 
+fn present_then_exit(
+    present: impl FnOnce() + Send + 'static,
+    exit: impl FnOnce() + Send + 'static,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(present)).is_err() {
+            eprintln!("startup failure dialog could not be shown");
+        }
+        exit();
+    })
+}
+
 fn report_startup_failure<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
-    let handle = app.clone();
-    app.dialog()
-        .message(STARTUP_FAILURE_MESSAGE)
-        .title(STARTUP_FAILURE_TITLE)
-        .kind(tauri_plugin_dialog::MessageDialogKind::Error)
-        .show(move |_| handle.exit(1));
+    let dialog_owner = app.clone();
+    let exit_handle = app.clone();
+    present_then_exit(
+        move || {
+            dialog_owner
+                .dialog()
+                .message(STARTUP_FAILURE_MESSAGE)
+                .title(STARTUP_FAILURE_TITLE)
+                .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+                .blocking_show();
+        },
+        move || exit_handle.exit(1),
+    );
 }
 
 fn startup_failure_message(error: &tauri::Error) -> String {

@@ -69,6 +69,7 @@ describe('marcadores literales del bundle', () => {
     'createPaymentsIpcBackend',
     'createClientHistoryIpcBackend',
     'createMetricsIpcBackend',
+    'createBackupIpcBackend',
     'createDevBackends',
     'composeBackends',
     'createAuthIpcBackend',

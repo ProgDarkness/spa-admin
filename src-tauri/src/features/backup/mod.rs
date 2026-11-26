@@ -1,3 +1,4 @@
+pub mod background;
 pub mod commands;
 pub mod crypto;
 pub mod dialogs;

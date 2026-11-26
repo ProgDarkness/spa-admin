@@ -1,8 +1,10 @@
 use std::io;
+use std::sync::Arc;
 
 use tauri::State;
 use zeroize::Zeroizing;
 
+use super::background::BackupBackground;
 use super::crypto::{seal, BackupPassphrase};
 use super::dialogs::BackupDialogs;
 use super::errors::BackupError;
@@ -12,10 +14,12 @@ use super::naming::{default_file_name_at, local_stamp_now, with_backup_extension
 use super::restore::stage_restore;
 use super::service::{authorize, read_export_snapshot, write_export};
 use super::status;
-use super::swap::{authorize_restore, swap_in};
+use super::swap::{authorize_restore, swap_in, SwapStep};
 use crate::db::Database;
 use crate::errors::AppError;
 use crate::features::auth::service::SessionState;
+
+pub(crate) type SwapInjection = Arc<dyn Fn(SwapStep) -> io::Result<()> + Send + Sync>;
 
 fn background_failure(failure: tauri::Error) -> BackupError {
     BackupError::Io(io::Error::other(failure.to_string()))
@@ -35,8 +39,8 @@ async fn seal_in_background(
 pub(crate) async fn export_flow(
     db: &Database,
     session: &SessionState,
-    source: &BackupSource,
     dialogs: &BackupDialogs,
+    background: &BackupBackground,
     kdf: KdfParams,
     passphrase: String,
 ) -> Result<Option<BackupExported>, BackupError> {
@@ -47,10 +51,13 @@ pub(crate) async fn export_flow(
         return Ok(None);
     };
     let destination = with_backup_extension(chosen)?;
-    let snapshot = read_export_snapshot(db, session, source)?;
-    let sealed =
-        seal_in_background(passphrase, kdf, snapshot.schema_version, snapshot.plaintext).await?;
-    write_export(db, session, &destination, snapshot.schema_version, &sealed).map(Some)
+    let snapshot = background.run(read_export_snapshot).await?;
+    let schema_version = snapshot.schema_version;
+    let sealed = seal_in_background(passphrase, kdf, schema_version, snapshot.plaintext).await?;
+    background
+        .run(move |db, session, _| write_export(db, session, &destination, schema_version, &sealed))
+        .await
+        .map(Some)
 }
 
 pub(crate) async fn restore_flow(
@@ -58,7 +65,9 @@ pub(crate) async fn restore_flow(
     session: &SessionState,
     source: &BackupSource,
     dialogs: &BackupDialogs,
+    background: &BackupBackground,
     passphrase: String,
+    inject: SwapInjection,
 ) -> Result<Option<RestoreResult>, BackupError> {
     db.with_conn_mapped(|conn| authorize_restore(conn, session).map(|_| ()))?;
     let passphrase = BackupPassphrase::new(passphrase)?;
@@ -71,7 +80,10 @@ pub(crate) async fn restore_flow(
     })
     .await
     .map_err(background_failure)??;
-    swap_in(db, session, source, staged, &|_| Ok(())).map(Some)
+    background
+        .run(move |db, session, source| swap_in(db, session, source, staged, &*inject))
+        .await
+        .map(Some)
 }
 
 #[tauri::command]
@@ -80,14 +92,14 @@ pub async fn export_backup(
     passphrase: String,
     db: State<'_, Database>,
     session: State<'_, SessionState>,
-    source: State<'_, BackupSource>,
     dialogs: State<'_, BackupDialogs>,
+    background: State<'_, BackupBackground>,
 ) -> Result<Option<BackupExported>, AppError> {
     Ok(export_flow(
         &db,
         &session,
-        &source,
         &dialogs,
+        &background,
         KdfParams::EXPORT,
         passphrase,
     )
@@ -102,8 +114,18 @@ pub async fn restore_backup(
     session: State<'_, SessionState>,
     source: State<'_, BackupSource>,
     dialogs: State<'_, BackupDialogs>,
+    background: State<'_, BackupBackground>,
 ) -> Result<Option<RestoreResult>, AppError> {
-    Ok(restore_flow(&db, &session, &source, &dialogs, passphrase).await?)
+    Ok(restore_flow(
+        &db,
+        &session,
+        &source,
+        &dialogs,
+        &background,
+        passphrase,
+        Arc::new(|_| Ok(())),
+    )
+    .await?)
 }
 
 #[tauri::command]

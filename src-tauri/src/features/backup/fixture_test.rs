@@ -179,6 +179,31 @@ pub(crate) fn snapshot_of(target: &BackupFixture) -> Untouched {
     }
 }
 
+const JOURNAL_MAGIC: [u8; 8] = [0xd9, 0xd5, 0x05, 0xf9, 0x20, 0xa1, 0x63, 0xd7];
+const JOURNAL_SECTOR_BYTES: usize = 512;
+const JOURNAL_PAGE_BYTES: usize = 4096;
+const JOURNAL_CHECKSUM_STRIDE: usize = 200;
+const JOURNAL_PAGE_FILL: u8 = 0xAB;
+
+pub(crate) fn hot_journal_truncating_to_one_page() -> Vec<u8> {
+    let checksum_samples = ((JOURNAL_PAGE_BYTES - 1) / JOURNAL_CHECKSUM_STRIDE) as u32;
+    let checksum = u32::from(JOURNAL_PAGE_FILL) * checksum_samples;
+    let mut journal = vec![0u8; JOURNAL_SECTOR_BYTES];
+    journal[..8].copy_from_slice(&JOURNAL_MAGIC);
+    journal[8..12].copy_from_slice(&1u32.to_be_bytes());
+    journal[16..20].copy_from_slice(&1u32.to_be_bytes());
+    journal[20..24].copy_from_slice(&(JOURNAL_SECTOR_BYTES as u32).to_be_bytes());
+    journal[24..28].copy_from_slice(&(JOURNAL_PAGE_BYTES as u32).to_be_bytes());
+    journal.extend_from_slice(&1u32.to_be_bytes());
+    journal.extend(std::iter::repeat_n(JOURNAL_PAGE_FILL, JOURNAL_PAGE_BYTES));
+    journal.extend_from_slice(&checksum.to_be_bytes());
+    journal
+}
+
+pub(crate) fn sidecar_path(path: &std::path::Path, suffix: &str) -> PathBuf {
+    PathBuf::from(format!("{}{suffix}", path.display()))
+}
+
 pub(crate) fn assert_untouched(target: &BackupFixture, before: &Untouched) {
     assert_eq!(database_bytes(target), before.database);
     assert_eq!(stored_key_bytes(target), before.key);

@@ -22,7 +22,7 @@ use crate::features::auth::service::SessionState;
 use crate::keystore::KeyStoreError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SwapStep {
+pub(crate) enum SwapStep {
     SavePendingKey,
     CloseLiveConnection,
     MoveCurrentAside,
@@ -78,7 +78,7 @@ struct Swap<'a> {
     inject: Inject<'a>,
 }
 
-pub fn swap_in(
+pub(crate) fn swap_in(
     db: &Database,
     session: &SessionState,
     source: &BackupSource,
@@ -241,6 +241,7 @@ impl Swap<'_> {
 
     fn restore_previous_database(&self) -> Result<(), BackupError> {
         self.announce(SwapStep::RollbackRestoreDatabase)?;
+        discard_with_sidecars(self.database_path())?;
         Ok(fs::rename(&self.previous_path, self.database_path())?)
     }
 
@@ -260,7 +261,10 @@ impl Swap<'_> {
     }
 
     fn clean_up(&self) {
-        report_cleanup("previous database", fs::remove_file(&self.previous_path));
+        report_cleanup(
+            "previous database",
+            discard_with_sidecars(&self.previous_path),
+        );
         report_cleanup("pending key", self.source.key_store.delete_pending());
         match all_snapshots(self.database_path()) {
             Ok(snapshots) => snapshots
@@ -284,3 +288,7 @@ fn close_live(live: &mut Connection) -> Result<(), BackupError> {
 #[cfg(test)]
 #[path = "swap_test.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "swap_sidecar_test.rs"]
+mod sidecar_tests;

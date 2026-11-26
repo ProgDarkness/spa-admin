@@ -49,8 +49,6 @@ fn infrastructure_failures_do_not_leak_details() {
         BackupError::Io(io::Error::other("/secret/path")),
         BackupError::KeyStore(KeyStoreError::Malformed),
         BackupError::Crypto,
-        BackupError::TooLarge,
-        BackupError::RollbackFailed,
     ];
 
     for failure in failures {
@@ -64,4 +62,22 @@ fn a_failed_rollback_has_a_fixed_message_that_leaks_nothing() {
         BackupError::RollbackFailed.to_string(),
         "restore could not be undone"
     );
+}
+
+#[test]
+fn an_oversized_database_reaches_the_user_with_its_own_message() {
+    assert_eq!(
+        AppError::from(BackupError::TooLarge),
+        AppError::backup_too_large()
+    );
+    assert_ne!(AppError::backup_too_large(), AppError::internal());
+}
+
+#[test]
+fn a_failed_rollback_reaches_the_user_as_an_unfinished_restore() {
+    assert_eq!(
+        AppError::from(BackupError::RollbackFailed),
+        AppError::backup_rollback_failed()
+    );
+    assert_ne!(AppError::backup_rollback_failed(), AppError::internal());
 }

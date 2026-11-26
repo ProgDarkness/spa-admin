@@ -5,11 +5,14 @@ import type {
   PaymentMethodSummary,
   PaymentSummary,
   ResourceSummary,
+  SessionView,
+  SetupStatus,
   ServiceSummary,
 } from '@/lib/bindings'
 import type { Appointment, Client, ExchangeRate, Payment, PaymentMethod, Resource, Service, SessionUser } from '@/lib/model'
 import { createAppointmentsIpcBackend } from './appointments-backend'
 import type { IpcBackend } from './auth-backend'
+import { createBackupIpcBackend, type BackupAuditRow } from './backup-backend'
 import { createCatalogIpcBackend } from './catalog-backend'
 import { createClientHistoryIpcBackend } from './client-history-backend'
 import { createClientsIpcBackend } from './clients-backend'
@@ -49,6 +52,7 @@ export function createDevBackends({ auth, session, seed, now }: DevBackendsOptio
   const paymentMethods = createSharedRows<PaymentMethodSummary>()
   const rates = createSharedRows<RateSummary>()
   const payments = createSharedRows<PaymentSummary>()
+  const audit = createSharedRows<BackupAuditRow>()
   const clock = now ? { now } : {}
   return composeBackends(
     auth,
@@ -79,5 +83,14 @@ export function createDevBackends({ auth, session, seed, now }: DevBackendsOptio
       }),
     (next) => createClientHistoryIpcBackend(next, { session, clients, appointments, services, resources, payments }),
     (next) => createMetricsIpcBackend(next, { session, appointments, payments }),
+    (next) =>
+      createBackupIpcBackend(next, {
+        session,
+        isLocked: () => (auth('current_session', undefined) as SessionView | null)?.status === 'locked',
+        needsOwner: () => (auth('setup_status', undefined) as SetupStatus).needsOwner,
+        endSession: () => auth('logout', undefined),
+        audit,
+        ...clock,
+      }),
   )
 }

@@ -43,6 +43,14 @@ impl From<BackupError> for AppError {
             BackupError::Unreadable => AppError::backup_unreadable(),
             BackupError::Validation { field } => AppError::validation(field),
             BackupError::Auth(inner) => AppError::from(inner),
+            BackupError::TooLarge => {
+                eprintln!("{LOG_SCOPE}: {:?}", BackupError::TooLarge);
+                AppError::backup_too_large()
+            }
+            BackupError::RollbackFailed => {
+                eprintln!("{LOG_SCOPE}: {:?}", BackupError::RollbackFailed);
+                AppError::backup_rollback_failed()
+            }
             internal => {
                 eprintln!("{LOG_SCOPE}: {internal:?}");
                 AppError::internal()

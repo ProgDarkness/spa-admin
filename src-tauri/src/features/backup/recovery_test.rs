@@ -6,8 +6,9 @@ use super::*;
 use crate::db::{open_encrypted, DbError, DbKey};
 use crate::features::backup::crypto::BackupPassphrase;
 use crate::features::backup::fixture_test::{
-    add_user, backup_fixture, current_backup_file, database_bytes, execute, sign_in_as,
-    source_with_marker, stored_key_bytes, BackupFixture, MARKER_USER, OWNER, PASSPHRASE,
+    add_user, backup_fixture, current_backup_file, database_bytes, execute,
+    hot_journal_truncating_to_one_page, sidecar_path, sign_in_as, source_with_marker,
+    stored_key_bytes, BackupFixture, MARKER_USER, OWNER, PASSPHRASE,
 };
 use crate::features::backup::leftovers::{find, path_for, Leftover};
 use crate::features::backup::restore::stage_restore;
@@ -366,4 +367,43 @@ fn case_d_with_a_restore_cut_after_install_and_an_unchanged_key_keeps_the_restor
     assert_eq!(data_dir_names(&target), ["spa.db"]);
     assert!(target.source.key_store.read_pending().unwrap().is_none());
     assert!(backup_audit_rows_on_disk(&target).is_empty());
+}
+
+#[test]
+fn rolling_back_discards_the_hot_journal_of_the_failed_database_before_the_old_one_returns() {
+    let (_source, target, original) =
+        interrupted_at(&[SwapStep::VerifyAndAudit, SwapStep::Rollback]);
+    let database = target.source.database_path.clone();
+    fs::write(&database, b"basura que no abre").unwrap();
+    let journal = sidecar_path(&database, "-journal");
+    fs::write(&journal, hot_journal_truncating_to_one_page()).unwrap();
+    let previous = find(&database, Leftover::Prev).unwrap().remove(0);
+    let main = target.source.key_store.read().unwrap();
+
+    roll_back_to(
+        &database,
+        &previous,
+        main.as_ref(),
+        &target.source.key_store,
+    )
+    .unwrap();
+
+    assert!(!journal.exists());
+    assert!(database_bytes(&target) == original);
+    assert_eq!(user_named(&target, OWNER), 1);
+    assert_eq!(user_named(&target, MARKER_USER), 0);
+}
+
+#[test]
+fn case_a_discards_a_hot_journal_orphaned_beside_the_missing_database() {
+    let (_source, target, original) =
+        interrupted_at(&[SwapStep::InstallRestored, SwapStep::Rollback]);
+    let journal = sidecar_path(&target.source.database_path, "-journal");
+    fs::write(&journal, hot_journal_truncating_to_one_page()).unwrap();
+
+    recover(&target).unwrap();
+
+    assert!(!journal.exists());
+    assert!(database_bytes(&target) == original);
+    assert_eq!(user_named(&target, OWNER), 1);
 }

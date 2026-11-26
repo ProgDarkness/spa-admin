@@ -29,11 +29,11 @@ fn passphrase() -> BackupPassphrase {
     BackupPassphrase::new(PASSPHRASE.to_string()).unwrap()
 }
 
-fn no_failure(_: SwapStep) -> io::Result<()> {
+pub(super) fn no_failure(_: SwapStep) -> io::Result<()> {
     Ok(())
 }
 
-fn failing_at(steps: &'static [SwapStep]) -> impl Fn(SwapStep) -> io::Result<()> {
+pub(super) fn failing_at(steps: &'static [SwapStep]) -> impl Fn(SwapStep) -> io::Result<()> {
     move |step| {
         if steps.contains(&step) {
             Err(io::Error::other("injected"))
@@ -43,7 +43,7 @@ fn failing_at(steps: &'static [SwapStep]) -> impl Fn(SwapStep) -> io::Result<()>
     }
 }
 
-fn restore(
+pub(super) fn restore(
     target: &BackupFixture,
     file: &std::path::Path,
     inject: &dyn Fn(SwapStep) -> io::Result<()>,
@@ -58,14 +58,14 @@ fn restore(
     )
 }
 
-struct Scenario {
-    source: BackupFixture,
-    target: BackupFixture,
-    file: std::path::PathBuf,
-    before: Untouched,
+pub(super) struct Scenario {
+    pub(super) source: BackupFixture,
+    pub(super) target: BackupFixture,
+    pub(super) file: std::path::PathBuf,
+    pub(super) before: Untouched,
 }
 
-fn scenario() -> Scenario {
+pub(super) fn scenario() -> Scenario {
     let source = source_with_marker();
     let target = backup_fixture();
     sign_in_as(&target, OWNER);
@@ -96,7 +96,7 @@ fn marker_count(target: &BackupFixture) -> i64 {
     count_users(target, &format!("username = '{MARKER_USER}'"))
 }
 
-fn assert_old_state_intact_and_served(target: &BackupFixture, before: &Untouched) {
+pub(super) fn assert_old_state_intact_and_served(target: &BackupFixture, before: &Untouched) {
     assert_untouched(target, before);
     assert!(find(&target.source.database_path, Leftover::Prev)
         .unwrap()
@@ -724,4 +724,25 @@ fn an_untouched_staged_file_is_accepted() {
     swap_staged(&scenario, staged).unwrap();
 
     assert_eq!(marker_count(&scenario.target), 1);
+}
+
+#[test]
+fn a_same_size_rewrite_with_the_modification_time_put_back_evades_the_fingerprint_but_not_the_verification(
+) {
+    let (scenario, staged) = staged_scenario();
+    let metadata = fs::metadata(&staged.restoring_path).unwrap();
+    let original_modified = metadata.modified().unwrap();
+    fs::write(&staged.restoring_path, vec![0u8; metadata.len() as usize]).unwrap();
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&staged.restoring_path)
+        .unwrap()
+        .set_modified(original_modified)
+        .unwrap();
+
+    assert!(staged.require_unchanged().is_ok());
+    let outcome = swap_staged(&scenario, staged);
+
+    assert!(outcome.is_err());
+    assert_old_state_intact_and_served(&scenario.target, &scenario.before);
 }

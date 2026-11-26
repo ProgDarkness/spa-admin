@@ -68,8 +68,10 @@ fn stage_restore_within(
     size_limit: u64,
 ) -> Result<StagedRestore, BackupError> {
     require_acceptable_size(fs::metadata(backup_path)?.len())?;
-    let contents = read_bounded(fs::File::open(backup_path)?, size_limit)?;
-    let opened = open(passphrase, &contents)?;
+    let opened = {
+        let contents = read_bounded(fs::File::open(backup_path)?, size_limit)?;
+        open(passphrase, &contents)?
+    };
     let (key_bytes, database_bytes) = opened
         .plaintext
         .split_at_checked(DB_KEY_BYTES)
