@@ -92,7 +92,7 @@ Resultados obtenidos en esta rama durante la sesión de documentación (WSL). Lo
 - [ ] `cargo deny --locked check` sin advisories nuevos (si aparece uno, se escala, no se ignora). Pendiente.
 - [ ] Real keyring en CI Windows, macOS y Ubuntu, incluido el caso `pending`. Pendiente.
 - [ ] Export y restauración en el binario real, en Windows y macOS, con el checklist de `docs/qa/checklist-instalacion.md` (verificaciones 7 y 8). Pendiente.
-- [ ] `release.yml` con `workflow_dispatch`: artefactos NSIS, MSI y DMG; `SHA256SUMS`; `lipo -info` con `x86_64` y `arm64`. Pendiente.
+- [ ] `release.yml` con `workflow_dispatch`: artefactos NSIS, MSI y DMG; `SHA256SUMS`; `lipo -archs` con `x86_64` y `arm64`; job `assemble` con exactamente un `.exe`, un `.msi` y un `.dmg`. Pendiente. Acción del usuario: ruleset de etiquetas `v*` y required reviewers en el environment `release` (ver ADR 0012, "Endurecimiento del release").
 - [ ] Instalación desde el draft en Windows y macOS limpios, con hash, aviso del sistema y primer arranque. Pendiente (no verificable por el agente).
 
 ## Deuda conocida

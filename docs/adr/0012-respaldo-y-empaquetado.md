@@ -141,10 +141,19 @@ Códigos `AppErrorCode` nuevos: `backupUnreadable`, `backupNotRecognized`, `back
 
 ### DB11. Flujo de release (estado: pendiente de verificar)
 
-- No es `tauri-action`. Motivo: el job de build no debe tener token de escritura; solo el job `publish` (ubuntu, `contents: write`) crea el release con `gh`.
-- Diseño: `permissions: {}` global; push de etiquetas `v*.*.*` publica como draft; `workflow_dispatch` construye sin publicar; job `verify` compara las tres versiones con la etiqueta y comprueba que `GITHUB_SHA` es ancestro de `origin/main`; build Windows con `--bundles nsis,msi`; build macOS con `--target universal-apple-darwin --bundles dmg`; `SHA256SUMS` con `sha256sum *`; `gh release create v<versión> --draft --target $GITHUB_SHA`.
+- No es `tauri-action`. Motivo: el job de build no debe tener token de escritura; solo el job `publish` (ubuntu-24.04, `contents: write`, `environment: release`) crea el release con `gh`.
+- Diseño: `permissions: {}` global; runners fijados (`windows-2025`, `macos-15`, `ubuntu-24.04`); push de etiquetas `v*.*.*` publica como draft; `workflow_dispatch` construye y ensambla sin publicar; job `verify` compara las tres versiones con la etiqueta y comprueba que `GITHUB_SHA` es ancestro de `origin/main`; build Windows con `--bundles nsis,msi`; build macOS con `--target universal-apple-darwin --bundles dmg` y verificación `lipo -archs` (palabras completas `x86_64` y `arm64`); el job de build no usa caché de dependencias; job `assemble` (push y dispatch) exige exactamente un `.exe`, un `.msi` y un `.dmg`, los copia a una carpeta plana y genera `SHA256SUMS` con lista explícita de archivos y rutas relativas planas; sube el artifact `release-assets`; `publish` (solo push, depende de `assemble`) ejecuta `gh release create v<versión> --draft --verify-tag --target $GITHUB_SHA` con esos archivos.
 - Estado en el repositorio: en la rama, `.github/workflows/` solo contiene `ci.yml`; el `release.yml`, `scripts/release-version.ts` (en árbol de trabajo, sin commit) y las acciones pinneadas aún no están verificadas con una ejecución real.
 - Repo público: el release se crea siempre como draft. Nunca se publica desde el flujo automatizado. La publicación es una acción manual del propietario.
+
+#### Endurecimiento del release
+
+- **Environment `release` (M1).** `publish` declara `environment: release`; GitHub lo crea solo en la primera ejecución. El workflow no configura protecciones. Acción pendiente del usuario: crear un ruleset de etiquetas `v*` (restringir creación, actualización y borrado) y añadir required reviewers al environment `release`, de modo que ningún push de etiqueta publique sin aprobación humana.
+- **Sin caché de dependencias en build (M2).** Se quitó `Swatinem/rust-cache` del job `build` de release: una caché de rama por defecto envenenada podría terminar en los instaladores publicados.
+- **Estructura del artefacto (L2).** `assemble` valida el conjunto exacto de instaladores y `SHA256SUMS` también en `workflow_dispatch`, así el dry run ejercita todo menos `gh release create`.
+- **`--verify-tag` (L3).** `gh release create` falla si la etiqueta no existe en el remoto, en lugar de crearla.
+- **Artefactos de dispatch.** Los artifacts de una ejecución por `workflow_dispatch` (`installers-*`, `release-assets`) son descargables por cualquier usuario autenticado con acceso de lectura al repositorio durante 7 días de retención.
+- **Sin attestations.** No se usan attestations de procedencia (`actions/attest-build-provenance`): sin firma de código ni verificación del lado del usuario en la guía, añadirían una garantía que nadie comprobaría; queda fuera de alcance y se reconsiderará junto con la firma de desarrollador (D17).
 
 ### DB12. Fallo de arranque (`src-tauri/src/lib.rs`, `setup.rs`)
 
